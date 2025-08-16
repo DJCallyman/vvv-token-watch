@@ -1,0 +1,3 @@
+# Error Log for VVV Token Watch
+# Format: [TIMESTAMP] LEVEL: Message
+# Example: [2025-08-16 14:30:00] ERROR: Failed to connect to Venice API
