@@ -1,115 +1,92 @@
 # Implementation Plan
 
 [Overview]
-Add multi-currency support (USD and AUD) to the token price viewer while enhancing UI usability through dynamic layout improvements and user-configurable parameters.
-
-This implementation addresses the hardcoded USD-only display by creating a flexible currency system that maintains the application's dark theme aesthetic while significantly improving data visibility. The changes will allow users to simultaneously monitor token values in both USD and AUD, with proper localization formatting and dynamic holding amount configuration. These improvements maintain backward compatibility with existing functionality while introducing new user-facing features that enhance the practical utility of the application for Australian users.
+Migrate the Venice AI Models & CoinGecko Price Viewer application from Tkinter to PySide6 to modernize the UI framework while preserving all functionality and visual styling. This refactoring will improve maintainability, leverage Qt's robust features, and provide better cross-platform consistency.
 
 [Types]  
-Define structured data types for currency management and UI state.
+Define Qt-specific type aliases for clarity in signal/slot communication.
 
-Detailed type definitions:
-- `CurrencyConfig`: Named tuple containing currency_code (str), symbol (str), and label (str)
-- `PriceData`: Dictionary structure with keys for 'usd' and 'aud' containing price and total_value
-- `UIState`: Tracking variables for current holding amount and active currency display mode
+```python
+# Type definitions for signal communication
+from typing import TypedDict, Union, Callable
+
+class APIResult(TypedDict):
+    success: bool
+    data: Union[dict, list, None]
+    error: Union[str, None]
+```
 
 [Files]
-Refactor currency handling across multiple application components.
+Document file modifications required for the migration.
 
-Detailed breakdown:
-- **New files to be created**:
-  - `assorted_coding/vvv_token_watch/currency_utils.py`: Contains currency formatting and conversion logic
-  - `assorted_coding/vvv_token_watch/ui_components.py`: Modular UI components for currency display
-
-- **Existing files to be modified**:
-  - `assorted_coding/vvv_token_watch/combined_app.py`:
-    * Update configuration section with multi-currency support
-    * Refactor price display creation and update logic
-    * Add dynamic holding amount input field
-    * Implement dual-currency formatting
-    * Enhance status messaging with currency context
-
-- **Configuration file updates**:
-  - Add `COINGECKO_CURRENCIES = ['usd', 'aud']` to configuration
-  - Replace hardcoded `COINGECKO_VS_CURRENCY` with multi-currency parameter
+- **Modified**: `vvv_token_watch/combined_app.py` (complete framework replacement)
+- **New**: `vvv_token_watch/qt_utils.py` (optional helper module for Qt-specific utilities)
+- **Modified**: `vvv_token_watch/requirements.txt` (add PySide6 dependency)
 
 [Functions]
-Implement new currency handling functions while modifying existing price update logic.
+Document function modifications and additions.
 
-Detailed breakdown:
-- **New functions**:
-  - `format_currency(value: float, currency: str) -> str` (currency_utils.py)
-    * Returns properly formatted currency string with symbol and decimal places
-    * Handles AUD-specific formatting (A$) vs USD ($)
-  - `create_currency_display(parent, currency_config)` (ui_components.py)
-    * Creates standardized UI component for a single currency display
-  - `update_holding_amount(event)` (combined_app.py)
-    * Validates and processes user input for holding amount
+### New Functions
+- `setup_main_window()`: Initialize Qt application structure
+- `create_price_display_layout()`: Build CoinGecko price section with Qt widgets
+- `create_model_viewer_layout()`: Rebuild model viewer with QScrollArea
+- `setup_signals()`: Connect Qt signals/slots for event handling
+- `apply_qss_styles()`: Apply styling via Qt Style Sheets
 
-- **Modified functions**:
-  - `get_coingecko_price()` (combined_app.py)
-    * Updated to request multiple currencies: `vs_currencies=usd,aud`
-    * Returns dictionary with prices for all configured currencies
-  - `update_price_label()` (combined_app.py)
-    * Processes multiple currency values
-    * Updates both USD and AUD display components
-    * Handles partial API failures (e.g., one currency succeeds while other fails)
-  - `_create_price_display()` (combined_app.py)
-    * Redesigned layout with dual-currency display
-    * Added input field for dynamic holding amount
-    * Implemented visual separation between currency displays
+### Modified Functions
+- `_create_price_display()` → `create_price_display_layout()`: Complete rewrite using QVBoxLayout/QHBoxLayout
+- `_create_model_viewer()` → `create_model_viewer_layout()`: Replace Tkinter canvas with QScrollArea
+- `process_api_queue()` → `handle_api_result()`: Convert to signal/slot pattern
+- `_bind_mouse_wheel()` → Remove (handled automatically by QScrollArea)
 
 [Classes]
-Enhance CombinedViewerApp with multi-currency capabilities.
+Document class modifications and additions.
 
-Detailed breakdown:
-- **Modified classes**:
-  - `CombinedViewerApp` (combined_app.py)
-    * Added `self.currencies = ['usd', 'aud']` configuration
-    * Added `self.holding_amount_var = tk.StringVar(value=str(COINGECKO_HOLDING_AMOUNT))`
-    * Added `self.price_data = {'usd': {'price': None, 'total': None}, 'aud': {'price': None, 'total': None}}`
-    * Added new UI elements:
-      - Dual-currency display frames with clear visual separation
-      - Entry field for holding amount with validation
-      - Currency-specific status indicators
-    * Modified initialization to set up multi-currency UI components
-    * Enhanced error handling to differentiate between currency-specific failures
+### Modified Class
+**CombinedViewerApp** (now inherits from `QMainWindow` instead of Tkinter root)
+
+Key changes:
+- Replace Tkinter geometry managers with Qt layout system
+- Implement custom signal for thread-safe API communication:
+  ```python
+  class WorkerSignals(QObject):
+      result = Signal(dict)
+  ```
+- Replace ttk widgets with Qt equivalents:
+  - `ttk.Frame` → `QFrame`
+  - `ttk.Label` → `QLabel`
+  - `ttk.Button` → `QPushButton`
+  - `ttk.Combobox` → `QComboBox`
+- Replace manual scrollbar management with `QScrollArea`
+
+### New Classes
+**ModelDisplayWidget** (QFrame subclass for individual model cards)
+- Handles layout and styling of model information
+- Implements mouse event handling for interaction
 
 [Dependencies]
-No new external dependencies required.
+Document dependency modifications.
 
-Details:
-- CoinGecko API already supports multiple currencies in single request
-- Existing tkinter and requests libraries sufficient for implementation
-- No version changes needed for current dependencies
+- Add `PySide6>=6.7.0` to requirements.txt
+- Remove Tkinter-specific dependencies (none explicitly listed, but implied)
 
 [Testing]
-Verify multi-currency functionality through targeted test cases.
+Document testing approach.
 
-Test file requirements:
-- **New test cases**:
-  - Verify both USD and AUD values display when API returns both
-  - Confirm proper formatting for AUD (A$) vs USD ($)
-  - Validate holding amount input accepts valid numbers only
-  - Test partial API failure (one currency succeeds, other fails)
-  - Check layout maintains integrity at minimum window size
-
-- **Existing test modifications**:
-  - Update price display tests to handle dual-currency output
-  - Modify status message assertions to include currency context
-  - Enhance UI layout tests to verify new component positioning
+- Verify all API functionality works identically
+- Confirm visual appearance matches original (colors, spacing, layout)
+- Test mouse wheel scrolling in model viewer
+- Validate thread safety during API calls
+- Check configuration loading and error handling
 
 [Implementation Order]
-Sequential implementation ensures stable intermediate states.
+Document the logical implementation sequence.
 
-Numbered steps:
-1. Create currency utility module with formatting functions
-2. Update configuration section with multi-currency parameters
-3. Modify CoinGecko API call to request multiple currencies
-4. Implement data structures for storing multiple currency values
-5. Redesign price display UI with dual-currency layout
-6. Add dynamic holding amount input field with validation
-7. Update price update logic to handle multiple currencies
-8. Implement error handling for partial currency failures
-9. Enhance status messages with currency-specific information
-10. Verify layout responsiveness across window sizes
+1. Set up basic Qt application structure with window and main layout
+2. Migrate price display section with currency formatting
+3. Implement model viewer with QScrollArea and dynamic content
+4. Convert threading model to Qt signals/slots
+5. Apply Qt Style Sheets to match original visual design
+6. Test and debug edge cases (empty states, API errors)
+7. Update documentation and requirements
+8. Final validation and documentation update
