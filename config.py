@@ -14,9 +14,10 @@ class Config:
     # CoinGecko Configuration
     COINGECKO_TOKEN_ID = os.getenv('COINGECKO_TOKEN_ID', 'venice-token')
     COINGECKO_CURRENCIES = os.getenv('COINGECKO_CURRENCIES', 'usd,aud').split(',')
-    COINGECKO_HOLDING_AMOUNT = float(os.getenv('COINGECKO_HOLDING_AMOUNT', '2500'))
+    COINGECKO_HOLDING_AMOUNT = float(os.getenv('COINGECKO_HOLDING_AMOUNT', '2750'))
     COINGECKO_REFRESH_INTERVAL_MS = int(os.getenv('COINGECKO_REFRESH_INTERVAL_MS', '60000'))
     COINGECKO_INITIAL_DELAY_MS = int(os.getenv('COINGECKO_INITIAL_DELAY_MS', '500'))
+    THEME_MODE = os.getenv('THEME_MODE', 'dark')
     
     # Validation
     @classmethod
