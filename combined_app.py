@@ -1,19 +1,30 @@
-import tkinter as tk
-from tkinter import ttk
-from tkinter import messagebox
-import requests
-import warnings
-import urllib3
+import sys
 import json
 import threading
 import traceback
-import sys
 import time
-import queue  # Import the queue module
-from currency_utils import format_currency
-from config import Config
-import logging
+import queue
 from datetime import datetime
+from typing import Dict, Any, Optional
+import logging
+import requests
+import warnings
+import urllib3
+
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+                                 QLabel, QPushButton, QComboBox, QFrame, QScrollArea,
+                                 QScrollBar, QGridLayout, QSpacerItem, QSizePolicy,
+                                 QErrorMessage, QMessageBox, QStatusBar, QTabWidget,
+                                 QGroupBox, QTextEdit, QLineEdit, QSplitter)
+from PySide6.QtCore import Qt, Signal, QObject, QThread, QTimer, QSize
+from PySide6.QtGui import QFont, QPalette, QColor, QCloseEvent, QDoubleValidator
+
+# Add the project directory to Python path
+sys.path.insert(0, '/Users/djcal/GIT/assorted-code')
+
+# Import local modules using absolute imports
+from vvv_token_watch.currency_utils import format_currency
+from vvv_token_watch.config import Config
 
 # --- Suppress Warnings (Use with caution) ---
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
@@ -27,28 +38,84 @@ logging.basicConfig(
 )
 
 # --- Color Constants ---
-COLOR_BOOL_YES = "green"
-COLOR_BOOL_NO = "red"
+COLOR_BOOL_YES = "#00FF00"
+COLOR_BOOL_NO = "#FF0000"
 COLOR_PRICE_LABEL = "#FFFFFF"
 COLOR_STATUS_LABEL = "#AAAAAA"
 COLOR_ERROR_LABEL = "#FF6B6B"
+COLOR_BACKGROUND = "#2E2E2E"
+COLOR_FRAME_BACKGROUND = "#3C3C3C"
 
-# --- GUI Application Class ---
-class CombinedViewerApp:
-    def __init__(self, master):
+class WorkerSignals(QObject):
+    """Signals for worker threads to communicate with main thread"""
+    result = Signal(dict)
+
+class APIWorker(QThread):
+    """Worker thread for API calls"""
+    def __init__(self, url: str, headers: Dict[str, str], params: Optional[Dict] = None):
+        super().__init__()
+        self.url = url
+        self.headers = headers
+        self.params = params
+        self.signals = WorkerSignals()
+
+    def run(self):
+        """Execute the API request in a separate thread"""
+        result = {'success': False, 'data': None, 'error': None}
+        try:
+            response = requests.get(self.url, headers=self.headers, params=self.params, timeout=20)
+            response.raise_for_status()
+            data = response.json()
+            if data and 'data' in data:
+                result['success'] = True
+                result['data'] = data
+            else:
+                result['error'] = "API response missing 'data' key or is empty."
+                logging.error(result['error'])
+        except requests.exceptions.RequestException as e:
+            result['error'] = f"API Connection Error: {e}"
+            logging.error(result['error'])
+        
+        self.signals.result.emit(result)
+
+class StylePresetWorker(QThread):
+    """Worker thread for fetching style presets"""
+    def __init__(self, url: str, headers: Dict[str, str]):
+        super().__init__()
+        self.url = url
+        self.headers = headers
+        self.signals = WorkerSignals()
+
+    def run(self):
+        """Fetch style presets in a separate thread"""
+        result = {'success': False, 'data': [], 'error': None}
+        try:
+            response = requests.get(self.url, headers=self.headers, timeout=20)
+            response.raise_for_status()
+            style_presets = response.json()
+            if style_presets and 'data' in style_presets:
+                result['success'] = True
+                result['data'] = style_presets['data']
+        except requests.exceptions.RequestException as e:
+            result['error'] = f"Style Preset API Error: {e}"
+            logging.error(result['error'])
+
+        self.signals.result.emit(result)
+
+class CombinedViewerApp(QMainWindow):
+    def __init__(self, parent=None):
+        super().__init__(parent)
         print("DEBUG: Initializing CombinedViewerApp...")
         
         # Validate configuration before starting
         is_valid, error_msg = Config.validate()
         if not is_valid:
-            messagebox.showerror("Configuration Error", error_msg)
+            QMessageBox.critical(self, "Configuration Error", error_msg)
             sys.exit(1)
             
-        self.master = master
-        master.title("Venice AI Models & CoinGecko Price Viewer")
-        master.geometry("850x750")
-        master.configure(bg='#2E2E2E')
-
+        self.setWindowTitle("Venice AI Models & CoinGecko Price Viewer")
+        self.setMinimumSize(850, 750)
+        
         self.models_data = None
         self.model_types = ["all"]
         self.price_data = {
@@ -57,258 +124,360 @@ class CombinedViewerApp:
         }
         self.holding_amount = Config.COINGECKO_HOLDING_AMOUNT
         
-        # --- Create a queue for thread communication ---
-        self.api_queue = queue.Queue()
-
-        # --- Themed Styles ---
-        style = ttk.Style()
-        style.configure("TFrame", background='#2E2E2E')
-        style.configure("TLabel", background='#2E2E2E', foreground=COLOR_PRICE_LABEL)
-        style.configure("TButton", padding=5)
-        style.configure("TCombobox", padding=5)
-        style.configure("Key.TLabel", font=("TkDefaultFont", 10, "bold"), background='#2E2E2E', foreground=COLOR_PRICE_LABEL)
-        style.configure("Section.TLabel", font=("TkDefaultFont", 10, "italic"), padding=(0, 5, 0, 1), background='#2E2E2E', foreground=COLOR_PRICE_LABEL)
-        style.configure("Status.TLabel", font=("Helvetica", 10), background='#2E2E2E', foreground=COLOR_STATUS_LABEL)
-        style.configure("Price.TLabel", font=("Helvetica", 28, "bold"), background='#2E2E2E', foreground=COLOR_PRICE_LABEL)
-        style.configure("Holding.TLabel", font=("Helvetica", 14), background='#2E2E2E', foreground=COLOR_PRICE_LABEL)
-        style.configure("TokenName.TLabel", font=("Helvetica", 16, "bold"), background='#2E2E2E', foreground=COLOR_PRICE_LABEL)
-        style.configure("Vertical.TScrollbar", background='#555555', troughcolor='#2E2E2E', bordercolor='#2E2E2E', arrowcolor=COLOR_PRICE_LABEL)
-        style.map("Vertical.TScrollbar",
-            background=[('active', '#777777')],
-            arrowcolor=[('pressed', 'black'), ('active', 'white')]
-        )
-
-        # --- Main Paned Window ---
-        # --- Status Bar ---
-        self.status_var = tk.StringVar(value="Ready. Click 'Connect' for models. Price updates automatically.")
-        status_bar = ttk.Label(master, textvariable=self.status_var, relief=tk.SUNKEN, anchor=tk.W, style="Status.TLabel")
-        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
-
-        main_pane = tk.PanedWindow(master, orient=tk.VERTICAL, sashwidth=8, bg='#2E2E2E', bd=0)
-        main_pane.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
-
-        # --- Top Frame for Price Display ---
-        price_frame = ttk.Frame(main_pane, padding="10", style="TFrame")
-        main_pane.add(price_frame, height=250, minsize=130)
-        self._create_price_display(price_frame)
-
-        # --- Bottom Frame for Model Viewer ---
-        model_frame = ttk.Frame(main_pane, padding="10", style="TFrame")
-        main_pane.add(model_frame, stretch="always")
-        self._create_model_viewer(model_frame)
-
-        print("DEBUG: UI elements created.")
-
-        # --- Initial Actions ---
-        self.master.after(Config.COINGECKO_INITIAL_DELAY_MS, self.update_price_label)
-        self.process_api_queue() # Start the queue processor
-
+        # Create central widget and main layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Create status bar
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        self.status_bar.showMessage("Ready. Click 'Connect' for models. Price updates automatically.")
+        
+        # Create splitter for price and model sections
+        self.main_splitter = QSplitter(Qt.Vertical)
+        main_layout.addWidget(self.main_splitter)
+        
+        # Create price display section
+        self._create_price_display()
+        
+        # Create model viewer section
+        self._create_model_viewer()
+        
+        # Set initial splitter sizes to match original proportions
+        self.main_splitter.setSizes([250, self.height() - 250])
+        
+        # Initialize holding entry with proper value format after it's created
+        self.holding_entry.setText(str(int(Config.COINGECKO_HOLDING_AMOUNT)) if Config.COINGECKO_HOLDING_AMOUNT.is_integer() else f"{Config.COINGECKO_HOLDING_AMOUNT:.2f}")
+        
+        # Initial actions
+        QTimer.singleShot(Config.COINGECKO_INITIAL_DELAY_MS, self.update_price_label)
+        
         print("DEBUG: CombinedViewerApp initialization complete.")
-
-    def process_api_queue(self):
-        """
-        Process items from the API queue. This runs in the main GUI thread.
-        """
-        try:
-            message = self.api_queue.get_nowait()
-            callback, data = message
-            callback(data)
-        except queue.Empty:
-            pass # No messages to process
-        finally:
-            self.master.after(100, self.process_api_queue)
-
-    # --- UI Creation Helpers ---
-    def _create_price_display(self, parent_frame):
+    
+    def _create_price_display(self):
         """Creates the CoinGecko price display widgets."""
-        parent_frame.columnconfigure(0, weight=1)
-        parent_frame.columnconfigure(1, weight=1)
+        price_widget = QWidget()
+        price_widget.setObjectName("price_widget")
+        price_widget.setStyleSheet(f"background-color: {COLOR_BACKGROUND};")
+        price_layout = QVBoxLayout(price_widget)
+        price_layout.setSpacing(10)
+        price_layout.setContentsMargins(10, 10, 10, 10)
         
+        # Token name
         token_name_text = Config.COINGECKO_TOKEN_ID.replace('-', ' ').capitalize()
-        self.token_name_label = ttk.Label(parent_frame, text=token_name_text, style="TokenName.TLabel")
-        self.token_name_label.grid(row=0, column=0, columnspan=2, pady=5)
+        self.token_name_label = QLabel(token_name_text)
+        self.token_name_label.setObjectName("token_name_label")
+        font = QFont()
+        font.setPointSize(16)
+        font.setBold(True)
+        self.token_name_label.setFont(font)
+        self.token_name_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        self.token_name_label.setAlignment(Qt.AlignCenter)
+        price_layout.addWidget(self.token_name_label)
         
-        holding_frame = ttk.Frame(parent_frame, style="TFrame")
-        holding_frame.grid(row=1, column=0, columnspan=2, pady=5)
-        ttk.Label(holding_frame, text="Holding Amount:", style="TLabel").pack(side=tk.LEFT, padx=(0, 5))
-        self.holding_var = tk.StringVar(value=str(Config.COINGECKO_HOLDING_AMOUNT))
-        self.holding_entry = ttk.Entry(holding_frame, textvariable=self.holding_var, width=10)
-        self.holding_entry.pack(side=tk.LEFT)
-        ttk.Label(holding_frame, text="tokens", style="TLabel").pack(side=tk.LEFT, padx=(5, 0))
-        self.holding_entry.bind('<Return>', self.update_holding_amount)
-        self.holding_entry.bind('<FocusOut>', self.update_holding_amount)
+        # Holding amount
+        holding_frame = QFrame()
+        holding_frame.setObjectName("holding_frame")
+        holding_frame.setStyleSheet(f"background-color: {COLOR_BACKGROUND};")
+        holding_layout = QHBoxLayout(holding_frame)
+        holding_layout.setContentsMargins(0, 0, 0, 0)
         
-        self.loading_var = tk.StringVar(value="")
-        self.loading_label = ttk.Label(parent_frame, textvariable=self.loading_var, style="Status.TLabel")
-        self.loading_label.grid(row=4, column=0, columnspan=2, pady=5)
+        holding_label = QLabel("Holding Amount:")
+        holding_label.setObjectName("holding_label")
+        holding_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        holding_layout.addWidget(holding_label)
         
-        usd_frame = ttk.LabelFrame(parent_frame, text=" USD ", padding=10, style="TLabelframe")
-        usd_frame.grid(row=2, column=0, padx=5, pady=5, sticky="nsew")
-        usd_frame.columnconfigure(0, weight=1)
+        self.holding_var = ""
+        self.holding_entry = QLineEdit(str(Config.COINGECKO_HOLDING_AMOUNT))
+        self.holding_entry.setObjectName("holding_entry")
+        self.holding_entry.setFixedWidth(80)
+        self.holding_entry.setStyleSheet("border: 1px solid #555555; border-radius: 3px; padding: 2px;")
+        self.holding_entry.textChanged.connect(self._on_holding_text_changed)
+        self.holding_entry.editingFinished.connect(self.update_holding_amount)
+        self.holding_entry.setValidator(QDoubleValidator(0.0, 1000000.0, 2))
+        holding_layout.addWidget(self.holding_entry)
         
-        self.usd_price_label = ttk.Label(usd_frame, text="Loading...", style="Price.TLabel")
-        self.usd_price_label.grid(row=0, column=0, pady=(0, 5))
+        token_label = QLabel("tokens")
+        token_label.setObjectName("token_label")
+        token_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        holding_layout.addWidget(token_label)
         
-        self.usd_holding_label = ttk.Label(usd_frame, text="Holding: Calculating...", style="Holding.TLabel")
-        self.usd_holding_label.grid(row=1, column=0, pady=(0, 5))
+        price_layout.addWidget(holding_frame, alignment=Qt.AlignCenter)
         
-        aud_frame = ttk.LabelFrame(parent_frame, text=" AUD ", padding=10, style="TLabelframe")
-        aud_frame.grid(row=2, column=1, padx=5, pady=5, sticky="nsew")
-        aud_frame.columnconfigure(0, weight=1)
+        # Loading indicator
+        self.loading_var = ""
+        self.loading_label = QLabel("")
+        self.loading_label.setObjectName("loading_label")
+        self.loading_label.setStyleSheet(f"color: {COLOR_STATUS_LABEL};")
+        self.loading_label.setAlignment(Qt.AlignCenter)
+        price_layout.addWidget(self.loading_label)
         
-        self.aud_price_label = ttk.Label(aud_frame, text="Loading...", style="Price.TLabel")
-        self.aud_price_label.grid(row=0, column=0, pady=(0, 5))
+        # Price frames
+        prices_frame = QFrame()
+        prices_frame.setObjectName("prices_frame")
+        prices_frame.setStyleSheet(f"background-color: {COLOR_BACKGROUND};")
+        prices_layout = QHBoxLayout(prices_frame)
+        prices_layout.setSpacing(10)
         
-        self.aud_holding_label = ttk.Label(aud_frame, text="Holding: Calculating...", style="Holding.TLabel")
-        self.aud_holding_label.grid(row=1, column=0, pady=(0, 5))
+        # USD Frame
+        usd_frame = QGroupBox(" USD ")
+        usd_frame.setObjectName("usd_frame")
+        usd_frame.setStyleSheet(f"""
+            QGroupBox {{
+                background-color: {COLOR_BACKGROUND};
+                border: 1px solid #555555;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding: 10px;
+                color: {COLOR_PRICE_LABEL};
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 0 5px;
+                background-color: {COLOR_BACKGROUND};
+            }}
+        """)
+        usd_layout = QVBoxLayout(usd_frame)
         
-        self.price_status_label = ttk.Label(parent_frame, text="Initializing...", style="Status.TLabel")
-        self.price_status_label.grid(row=3, column=0, columnspan=2, pady=5)
-
-    def update_holding_amount(self, event=None):
+        price_font = QFont()
+        price_font.setPointSize(28)
+        price_font.setBold(True)
+        
+        self.usd_price_label = QLabel("Loading...")
+        self.usd_price_label.setObjectName("usd_price_label")
+        self.usd_price_label.setFont(price_font)
+        self.usd_price_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        self.usd_price_label.setAlignment(Qt.AlignCenter)
+        usd_layout.addWidget(self.usd_price_label)
+        
+        holding_font = QFont()
+        holding_font.setPointSize(14)
+        
+        self.usd_holding_label = QLabel("Holding: Calculating...")
+        self.usd_holding_label.setObjectName("usd_holding_label")
+        self.usd_holding_label.setFont(holding_font)
+        self.usd_holding_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        self.usd_holding_label.setAlignment(Qt.AlignCenter)
+        usd_layout.addWidget(self.usd_holding_label)
+        
+        prices_layout.addWidget(usd_frame)
+        
+        # AUD Frame
+        aud_frame = QGroupBox(" AUD ")
+        aud_frame.setObjectName("aud_frame")
+        aud_frame.setStyleSheet(f"""
+            QGroupBox {{
+                background-color: {COLOR_BACKGROUND};
+                border: 1px solid #555555;
+                border-radius: 5px;
+                margin-top: 10px;
+                padding: 10px;
+                color: {COLOR_PRICE_LABEL};
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 0 5px;
+                background-color: {COLOR_BACKGROUND};
+            }}
+        """)
+        aud_layout = QVBoxLayout(aud_frame)
+        
+        self.aud_price_label = QLabel("Loading...")
+        self.aud_price_label.setObjectName("aud_price_label")
+        self.aud_price_label.setFont(price_font)
+        self.aud_price_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        self.aud_price_label.setAlignment(Qt.AlignCenter)
+        aud_layout.addWidget(self.aud_price_label)
+        
+        self.aud_holding_label = QLabel("Holding: Calculating...")
+        self.aud_holding_label.setObjectName("aud_holding_label")
+        self.aud_holding_label.setFont(holding_font)
+        self.aud_holding_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        self.aud_holding_label.setAlignment(Qt.AlignCenter)
+        aud_layout.addWidget(self.aud_holding_label)
+        
+        prices_layout.addWidget(aud_frame)
+        
+        price_layout.addWidget(prices_frame)
+        
+        # Price status
+        self.price_status_label = QLabel("Initializing...")
+        self.price_status_label.setObjectName("price_status_label")
+        self.price_status_label.setStyleSheet(f"color: {COLOR_STATUS_LABEL};")
+        self.price_status_label.setAlignment(Qt.AlignCenter)
+        price_layout.addWidget(self.price_status_label)
+        
+        # Add to splitter
+        self.main_splitter.addWidget(price_widget)
+        self.main_splitter.setSizes([250, self.height() - 250])
+    
+    def _on_holding_text_changed(self, text):
+        """Handle text changes in the holding entry"""
+        self.holding_var = text
+    
+    def update_holding_amount(self):
         """Validates and processes user input for holding amount."""
         try:
-            new_amount = float(self.holding_var.get())
+            new_amount = float(self.holding_entry.text())
             if new_amount <= 0:
                 raise ValueError("Amount must be positive")
             self.holding_amount = new_amount
             for currency in Config.COINGECKO_CURRENCIES:
                 if self.price_data[currency]['price'] is not None:
                     self.price_data[currency]['total'] = self.price_data[currency]['price'] * self.holding_amount
-            self.usd_price_label.config(text=format_currency(self.price_data['usd']['price'], 'usd'), foreground=COLOR_PRICE_LABEL)
-            self.usd_holding_label.config(text=f"Holding: {format_currency(self.price_data['usd']['total'], 'usd')}", foreground=COLOR_PRICE_LABEL)
-            self.aud_price_label.config(text=format_currency(self.price_data['aud']['price'], 'aud'), foreground=COLOR_PRICE_LABEL)
-            self.aud_holding_label.config(text=f"Holding: {format_currency(self.price_data['aud']['total'], 'aud')}", foreground=COLOR_PRICE_LABEL)
-            self.price_status_label.config(
-                text=f"Holding amount updated to {new_amount:.2f}. Price updates automatically.",
-                foreground=COLOR_STATUS_LABEL
-            )
+            
+            # Update USD display
+            if self.price_data['usd']['price'] is not None:
+                self.usd_price_label.setText(format_currency(self.price_data['usd']['price'], 'usd'))
+                self.usd_price_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+                self.usd_holding_label.setText(f"Holding: {format_currency(self.price_data['usd']['total'], 'usd')}")
+                self.usd_holding_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+            else:
+                self.usd_price_label.setText("Loading...")
+                self.usd_holding_label.setText("Holding: Calculating...")
+            
+            # Update AUD display
+            if self.price_data['aud']['price'] is not None:
+                self.aud_price_label.setText(format_currency(self.price_data['aud']['price'], 'aud'))
+                self.aud_price_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+                self.aud_holding_label.setText(f"Holding: {format_currency(self.price_data['aud']['total'], 'aud')}")
+                self.aud_holding_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+            else:
+                self.aud_price_label.setText("Loading...")
+                self.aud_holding_label.setText("Holding: Calculating...")
+            
+            # Update status
+            self.price_status_label.setText(f"Holding amount updated to {new_amount:.2f}. Price updates automatically.")
+            self.price_status_label.setStyleSheet(f"color: {COLOR_STATUS_LABEL};")
+            
         except ValueError:
-            self.holding_var.set(str(self.holding_amount))
-            self.price_status_label.config(
-                text="Invalid holding amount. Must be a positive number.",
-                foreground=COLOR_ERROR_LABEL
-            )
-
-    # --- SCROLLING AND MODEL VIEWER METHODS (REVISED) ---
-
-    def _create_model_viewer(self, parent_frame):
+            self.holding_entry.setText(str(int(self.holding_amount)) if self.holding_amount.is_integer() else f"{self.holding_amount:.2f}")
+            self.price_status_label.setText("Invalid holding amount. Must be a positive number.")
+            self.price_status_label.setStyleSheet(f"color: {COLOR_ERROR_LABEL};")
+            # Ensure price display is updated with current valid holding amount
+            self._update_price_display()
+    
+    def _update_price_display(self):
+        """Update price display based on current price_data and holding_amount"""
+        # Update USD display
+        if self.price_data['usd']['price'] is not None:
+            self.usd_price_label.setText(format_currency(self.price_data['usd']['price'], 'usd'))
+            self.usd_price_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+            self.usd_holding_label.setText(f"Holding: {format_currency(self.price_data['usd']['total'], 'usd')}")
+            self.usd_holding_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        else:
+            self.usd_price_label.setText("Loading...")
+            self.usd_holding_label.setText("Holding: Calculating...")
+        
+        # Update AUD display
+        if self.price_data['aud']['price'] is not None:
+            self.aud_price_label.setText(format_currency(self.price_data['aud']['price'], 'aud'))
+            self.aud_price_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+            self.aud_holding_label.setText(f"Holding: {format_currency(self.price_data['aud']['total'], 'aud')}")
+            self.aud_holding_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        else:
+            self.aud_price_label.setText("Loading...")
+            self.aud_holding_label.setText("Holding: Calculating...")
+    
+    def _create_model_viewer(self):
         """Creates the Venice AI model viewer widgets with proper scrolling."""
-        parent_frame.rowconfigure(1, weight=1)
-        parent_frame.columnconfigure(0, weight=1)
+        model_widget = QWidget()
+        model_widget.setObjectName("model_widget")
+        model_widget.setStyleSheet(f"background-color: {COLOR_BACKGROUND};")
+        model_layout = QVBoxLayout(model_widget)
+        model_layout.setContentsMargins(10, 10, 10, 10)
         
-        control_frame = ttk.Frame(parent_frame, padding="5", style="TFrame")
-        control_frame.grid(row=0, column=0, pady=(0,5), sticky="ew")
+        # Control frame
+        control_frame = QFrame()
+        control_frame.setObjectName("control_frame")
+        control_frame.setStyleSheet(f"background-color: {COLOR_BACKGROUND};")
+        control_layout = QHBoxLayout(control_frame)
+        control_layout.setContentsMargins(5, 5, 5, 5)
         
-        self.connect_button = ttk.Button(control_frame, text="Connect Models", command=self.connect_thread)
-        self.connect_button.pack(side=tk.LEFT, padx=5)
+        self.connect_button = QPushButton("Connect Models")
+        self.connect_button.setObjectName("connect_button")
+        self.connect_button.clicked.connect(self.connect_thread)
+        control_layout.addWidget(self.connect_button)
         
-        ttk.Label(control_frame, text="Filter by Type:", style="TLabel").pack(side=tk.LEFT, padx=(10, 2))
+        type_label = QLabel("Filter by Type:")
+        type_label.setObjectName("type_label")
+        type_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        control_layout.addWidget(type_label)
         
-        self.model_type_var = tk.StringVar(value="all")
-        self.type_combobox = ttk.Combobox(control_frame, textvariable=self.model_type_var, state=tk.DISABLED, values=self.model_types, width=15, style="TCombobox")
-        self.type_combobox.pack(side=tk.LEFT, padx=5)
+        self.model_type_var = "all"
+        self.type_combobox = QComboBox()
+        self.type_combobox.setObjectName("type_combobox")
+        self.type_combobox.addItems(self.model_types)
+        self.type_combobox.setCurrentText("all")
+        self.type_combobox.currentTextChanged.connect(self._on_type_changed)
+        self.type_combobox.setEnabled(False)
+        control_layout.addWidget(self.type_combobox)
         
-        self.display_button = ttk.Button(control_frame, text="Display Models", command=self.display_selected_models_action, state=tk.DISABLED)
-        self.display_button.pack(side=tk.LEFT, padx=5)
+        self.display_button = QPushButton("Display Models")
+        self.display_button.setObjectName("display_button")
+        self.display_button.clicked.connect(self.display_selected_models_action)
+        self.display_button.setEnabled(False)
+        control_layout.addWidget(self.display_button)
         
-        self.view_styles_button = ttk.Button(control_frame, text="View Style Presets", command=self.view_style_presets_action, state=tk.DISABLED)
-        self.view_styles_button.pack(side=tk.LEFT, padx=5)
+        self.view_styles_button = QPushButton("View Style Presets")
+        self.view_styles_button.setObjectName("view_styles_button")
+        self.view_styles_button.clicked.connect(self.view_style_presets_action)
+        self.view_styles_button.setEnabled(False)
+        control_layout.addWidget(self.view_styles_button)
         
-        # Create the scrollable container
-        display_container = ttk.Frame(parent_frame, borderwidth=1, relief=tk.SUNKEN, style="TFrame")
-        display_container.grid(row=1, column=0, sticky="nsew")
-        display_container.grid_rowconfigure(0, weight=1)
-        display_container.grid_columnconfigure(0, weight=1)
+        model_layout.addWidget(control_frame)
         
-        # Canvas with proper configuration
-        self.canvas = tk.Canvas(display_container, borderwidth=0, background='#3C3C3C', highlightthickness=0)
-        self.canvas.grid(row=0, column=0, sticky="nsew")
+        # Scroll area for model display
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setObjectName("scroll_area")
+        self.scroll_area.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: {COLOR_FRAME_BACKGROUND};
+                border: 1px solid #555555;
+                border-radius: 5px;
+            }}
+            QScrollBar:vertical {{
+                background: #2E2E2E;
+                width: 15px;
+                border-radius: 7px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: #555555;
+                min-height: 20px;
+                border-radius: 7px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: #777777;
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+        """)
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         
-        # Scrollbar
-        vsb = ttk.Scrollbar(display_container, orient="vertical", command=self.canvas.yview, style="Vertical.TScrollbar")
-        vsb.grid(row=0, column=1, sticky="ns")
+        self.display_frame = QWidget()
+        self.display_frame.setObjectName("display_frame")
+        self.display_frame.setStyleSheet(f"background-color: {COLOR_FRAME_BACKGROUND};")
+        self.display_layout = QVBoxLayout(self.display_frame)
+        self.display_layout.setSpacing(10)
+        self.display_layout.setContentsMargins(5, 5, 5, 5)
         
-        # Configure canvas scrolling
-        self.canvas.configure(yscrollcommand=vsb.set)
+        self.scroll_area.setWidget(self.display_frame)
+        model_layout.addWidget(self.scroll_area)
         
-        # Create the display frame that holds the content
-        self.display_frame = ttk.Frame(self.canvas, padding=(5, 5), style="TFrame")
-        self.canvas_window = self.canvas.create_window((0, 0), window=self.display_frame, anchor="nw")
-        
-        # Bind events
-        self.display_frame.bind("<Configure>", self.on_frame_configure)
-        self.canvas.bind("<Configure>", self.on_canvas_configure)
-        
-        # Set up mouse wheel scrolling - this is the key fix
-        self._bind_mouse_wheel()
-
-    def _bind_mouse_wheel(self):
-        """Binds mouse wheel events to the canvas using bind_all for better cross-platform compatibility."""
-        # Use bind_all to capture events globally, ensuring they're not intercepted by child widgets
-        if sys.platform == "darwin":  # macOS
-            self.master.bind_all("<MouseWheel>", self._on_mousewheel)
-        elif sys.platform.startswith('linux'):  # Linux
-            self.master.bind_all("<Button-4>", self._on_mousewheel)
-            self.master.bind_all("<Button-5>", self._on_mousewheel)
-        else:  # Windows
-            self.master.bind_all("<MouseWheel>", self._on_mousewheel)
-
-    def _bind_children_to_scroll(self, widget):
-        """Recursively binds mouse wheel events to a widget and all its children."""
-        # Bind the scroll events to this widget
-        widget.bind("<MouseWheel>", self._on_mousewheel)
-        widget.bind("<Button-4>", self._on_mousewheel)
-        widget.bind("<Button-5>", self._on_mousewheel)
-        
-        # Important: Also bind mouse enter to manage focus
-        widget.bind("<Enter>", lambda e: self.canvas.focus_set())
-        
-        # Recursively bind all children
-        for child in widget.winfo_children():
-            self._bind_children_to_scroll(child)
-
-    def _on_mousewheel(self, event):
-        """Enhanced mouse wheel handler that works across all platforms."""
-        # Make sure the canvas can scroll
-        if not self.canvas.winfo_exists():
-            return "break"
-        
-        # Get the current scroll region
-        bbox = self.canvas.bbox("all")
-        if not bbox:
-            return "break"
-        
-        # Calculate scroll amount based on platform
-        if sys.platform == "darwin":  # macOS
-            # Use fixed scroll amount for trackpad (1 line per gesture)
-            scroll_amount = 1 if event.delta < 0 else -1
-            self.canvas.yview_scroll(scroll_amount, "units")
-        elif sys.platform.startswith('linux'):  # Linux
-            if event.num == 4:
-                self.canvas.yview_scroll(-1, "units")
-            elif event.num == 5:
-                self.canvas.yview_scroll(1, "units")
-        else:  # Windows
-            # Windows provides delta in multiples of 120
-            delta = -1 * int(event.delta / 120)
-            self.canvas.yview_scroll(delta, "units")
-        
-        # Prevent the event from propagating further to parent widgets
-        return "break"
-
-    def on_canvas_configure(self, event):
-        """Handle canvas resize events."""
-        # Update the canvas window width to match canvas width
-        canvas_width = event.width
-        self.canvas.itemconfig(self.canvas_window, width=canvas_width)
-
-    def on_frame_configure(self, event=None):
-        """Updates the scroll region of the canvas."""
-        # Update the scroll region to encompass all items
-        self.canvas.configure(scrollregion=self.canvas.bbox("all"))
-
-    # --- CoinGecko Price Logic (Unchanged) ---
+        # Add to splitter
+        self.main_splitter.addWidget(model_widget)
+        self.main_splitter.setSizes([250, self.height() - 250])
+    
+    def _on_type_changed(self, text):
+        """Handle type combobox changes"""
+        self.model_type_var = text
+    
     def get_coingecko_price(self):
         """Fetch prices for all configured currencies from CoinGecko API."""
         url = f"https://api.coingecko.com/api/v3/simple/price"
@@ -340,10 +509,10 @@ class CombinedViewerApp:
                     time.sleep(2 ** attempt)
                 else:
                     return None
-
+    
     def update_price_label(self):
         """Updates price display for all configured currencies."""
-        self.loading_var.set("Updating prices...")
+        self.loading_label.setText("Updating prices...")
         
         price_data = self.get_coingecko_price()
         
@@ -360,226 +529,297 @@ class CombinedViewerApp:
                     total_str = format_currency(self.price_data[currency]['total'], currency)
                     
                     if currency == 'usd':
-                        self.usd_price_label.config(text=price_str, foreground=COLOR_PRICE_LABEL)
-                        self.usd_holding_label.config(text=f"Holding: {total_str}", foreground=COLOR_PRICE_LABEL)
+                        self.usd_price_label.setText(price_str)
+                        self.usd_price_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+                        self.usd_holding_label.setText(f"Holding: {total_str}")
+                        self.usd_holding_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
                     elif currency == 'aud':
-                        self.aud_price_label.config(text=price_str, foreground=COLOR_PRICE_LABEL)
-                        self.aud_holding_label.config(text=f"Holding: {total_str}", foreground=COLOR_PRICE_LABEL)
+                        self.aud_price_label.setText(price_str)
+                        self.aud_price_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+                        self.aud_holding_label.setText(f"Holding: {total_str}")
+                        self.aud_holding_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
                     
                     status_messages.append(f"{currency.upper()}: {price_str}")
                 else:
                     failed_currencies.append(currency)
                     if currency == 'usd':
-                        self.usd_price_label.config(text="N/A", foreground=COLOR_ERROR_LABEL)
-                        self.usd_holding_label.config(text="Holding: N/A", foreground=COLOR_ERROR_LABEL)
+                        self.usd_price_label.setText("N/A")
+                        self.usd_price_label.setStyleSheet(f"color: {COLOR_ERROR_LABEL};")
+                        self.usd_holding_label.setText("Holding: N/A")
+                        self.usd_holding_label.setStyleSheet(f"color: {COLOR_ERROR_LABEL};")
                     elif currency == 'aud':
-                        self.aud_price_label.config(text="N/A", foreground=COLOR_ERROR_LABEL)
-                        self.aud_holding_label.config(text="Holding: N/A", foreground=COLOR_ERROR_LABEL)
+                        self.aud_price_label.setText("N/A")
+                        self.aud_price_label.setStyleSheet(f"color: {COLOR_ERROR_LABEL};")
+                        self.aud_holding_label.setText("Holding: N/A")
+                        self.aud_holding_label.setStyleSheet(f"color: {COLOR_ERROR_LABEL};")
                     status_messages.append(f"{currency.upper()}: Error")
             
             if failed_currencies:
                 if len(failed_currencies) == len(Config.COINGECKO_CURRENCIES):
                     status_str = "Price Update Error. Retrying..."
                     status_color = COLOR_ERROR_LABEL
-                    self.master.after(0, lambda: messagebox.showwarning("Price Update Failed", "Failed to retrieve price data from CoinGecko API. Retrying..."))
+                    QMessageBox.warning(self, "Price Update Failed", "Failed to retrieve price data from CoinGecko API. Retrying...")
                 else:
                     failed_str = ", ".join([c.upper() for c in failed_currencies])
                     status_str = f"Partial update: {failed_str} failed | {', '.join(status_messages)} | Last updated: {time.strftime('%H:%M:%S')}"
                     status_color = COLOR_ERROR_LABEL
-                    self.master.after(0, lambda: messagebox.showwarning("Partial Price Update", f"Failed to retrieve {failed_str} prices. Other prices updated successfully."))
+                    QMessageBox.warning(self, "Partial Price Update", f"Failed to retrieve {failed_str} prices. Other prices updated successfully.")
             else:
                 status_str = f"Prices updated: {', '.join(status_messages)} | Last updated: {time.strftime('%H:%M:%S')}"
                 status_color = COLOR_STATUS_LABEL
             
-            self.price_status_label.config(text=status_str, foreground=status_color)
+            self.price_status_label.setText(status_str)
+            self.price_status_label.setStyleSheet(f"color: {status_color};")
         else:
             for currency in Config.COINGECKO_CURRENCIES:
                 if currency == 'usd':
-                    self.usd_price_label.config(text="API Error", foreground=COLOR_ERROR_LABEL)
-                    self.usd_holding_label.config(text="Holding: N/A", foreground=COLOR_ERROR_LABEL)
+                    self.usd_price_label.setText("API Error")
+                    self.usd_price_label.setStyleSheet(f"color: {COLOR_ERROR_LABEL};")
+                    self.usd_holding_label.setText("Holding: N/A")
+                    self.usd_holding_label.setStyleSheet(f"color: {COLOR_ERROR_LABEL};")
                 elif currency == 'aud':
-                    self.aud_price_label.config(text="API Error", foreground=COLOR_ERROR_LABEL)
-                    self.aud_holding_label.config(text="Holding: N/A", foreground=COLOR_ERROR_LABEL)
+                    self.aud_price_label.setText("API Error")
+                    self.aud_price_label.setStyleSheet(f"color: {COLOR_ERROR_LABEL};")
+                    self.aud_holding_label.setText("Holding: N/A")
+                    self.aud_holding_label.setStyleSheet(f"color: {COLOR_ERROR_LABEL};")
             
-            self.price_status_label.config(text="Price Update Error. Retrying...", foreground=COLOR_ERROR_LABEL)
-            self.master.after(0, lambda: messagebox.showwarning("Price Update Failed", "Failed to connect to CoinGecko API. Retrying..."))
+            self.price_status_label.setText("Price Update Error. Retrying...")
+            self.price_status_label.setStyleSheet(f"color: {COLOR_ERROR_LABEL};")
+            QMessageBox.warning(self, "Price Update Failed", "Failed to connect to CoinGecko API. Retrying...")
         
-        self.loading_var.set("")
+        self.loading_label.setText("")
         
-        self.master.after(Config.COINGECKO_REFRESH_INTERVAL_MS, self.update_price_label)
-
-    # --- Venice AI Model Logic ---
-    def _connect_api_worker(self):
-        """Fetches model data from Venice AI API (runs in thread)."""
-        print("DEBUG: Thread: Starting API call for models...")
+        QTimer.singleShot(Config.COINGECKO_REFRESH_INTERVAL_MS, self.update_price_label)
+    
+    def connect_thread(self):
+        """Starts the API connection in a separate thread."""
+        self.connect_button.setEnabled(False)
+        self.display_button.setEnabled(False)
+        self.view_styles_button.setEnabled(False)
+        self.type_combobox.setEnabled(False)
+        self.clear_display_frame()
+        self.status_bar.showMessage("Connecting to Venice API...")
+        
+        # Ensure scroll area is reset
+        self.scroll_area.verticalScrollBar().setValue(0)
+        
+        # Clear layout
+        for i in reversed(range(self.display_layout.count())):
+            self.display_layout.takeAt(i).widget().deleteLater()
+        
+        # Add connecting label
+        connecting_label = QLabel("Connecting to Venice API...")
+        connecting_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        self.display_layout.addWidget(connecting_label, alignment=Qt.AlignCenter)
+        
+        # Create and start worker thread
         url = 'https://api.venice.ai/api/v1/models'
         headers = {'Accept': 'application/json', 'Authorization': f'Bearer {Config.VENICE_API_KEY}'}
         params = {'type': 'all'}
-        result = {'success': False, 'data': None, 'error': None}
-        try:
-            response = requests.get(url, headers=headers, params=params, timeout=20)
-            response.raise_for_status()
-            data = response.json()
-            if data and 'data' in data:
-                result['success'] = True
-                result['data'] = data
-            else:
-                result['error'] = "API response missing 'data' key or is empty."
-                logging.error(result['error'])
-        except requests.exceptions.RequestException as e:
-            result['error'] = f"Venice API Connection Error: {e}"
-            logging.error(result['error'])
         
-        self.api_queue.put((self._update_gui_after_connect, result))
-
-    def _fetch_style_presets_worker(self):
-        """Fetches style presets from Venice AI API (runs in thread)."""
-        print("DEBUG: Thread: Starting API call for style presets...")
-        url = 'https://api.venice.ai/api/v1/image/styles'
-        headers = {'Accept': 'application/json', 'Authorization': f'Bearer {Config.VENICE_API_KEY}'}
-        result = {'success': False, 'data': [], 'error': None}
-        try:
-            response = requests.get(url, headers=headers, timeout=20)
-            response.raise_for_status()
-            style_presets = response.json()
-            if style_presets and 'data' in style_presets:
-                result['success'] = True
-                result['data'] = style_presets['data']
-        except requests.exceptions.RequestException as e:
-            result['error'] = f"Style Preset API Error: {e}"
-            logging.error(result['error'])
-
-        self.api_queue.put((self._update_gui_after_fetch_style_presets, result))
-
-    def _update_gui_after_fetch_style_presets(self, result):
-        """Updates the model display frame with style presets (runs in main thread)."""
-        self.clear_display_frame()
-        
-        if result['success']:
-            style_presets = result['data']
-            ttk.Label(self.display_frame, text="Available Style Presets:", style="Section.TLabel").pack(pady=10, anchor="w")
-            text_widget = tk.Text(self.display_frame, height=15, width=80, wrap=tk.WORD, borderwidth=0, background='#3C3C3C', foreground=COLOR_PRICE_LABEL, padx=5, pady=5)
-            for preset in style_presets:
-                text_widget.insert(tk.END, preset + "\n")
-            text_widget.config(state=tk.DISABLED)
-            text_widget.pack(pady=5, fill=tk.BOTH, expand=True)
-            self.status_var.set("Displayed available style presets.")
-        else:
-            ttk.Label(self.display_frame, text="No style presets available or error occurred.", foreground="orange", style="TLabel").pack(pady=20)
-            if result['error']:
-                self._show_api_error("Style Preset API Error", result['error'])
-        
-        self.master.after(100, lambda: self._bind_children_to_scroll(self.display_frame))
-        self.master.after(150, self.on_frame_configure)
-
-    def connect_thread(self):
-        """Starts the API connection in a separate thread."""
-        self.connect_button.config(state=tk.DISABLED)
-        self.display_button.config(state=tk.DISABLED)
-        self.view_styles_button.config(state=tk.DISABLED)
-        self.type_combobox.config(state=tk.DISABLED)
-        self.clear_display_frame()
-        self.status_var.set("Connecting to Venice API...")
-        ttk.Label(self.display_frame, text="Connecting to Venice API...", style="TLabel").pack(pady=20)
-        self.on_frame_configure()
-        thread = threading.Thread(target=self._connect_api_worker, daemon=True)
-        thread.start()
-
+        self.api_worker = APIWorker(url, headers, params)
+        self.api_worker.signals.result.connect(self._update_gui_after_connect)
+        self.api_worker.start()
+    
     def view_style_presets_action(self):
         """Starts fetching style presets in a separate thread."""
         if self.models_data is None:
-             messagebox.showwarning("No Model Data", "Please connect to the Model API first.", parent=self.master)
-             return
-        self.status_var.set("Fetching Style Presets...")
+            QMessageBox.warning(self, "No Model Data", "Please connect to the Model API first.")
+            return
+            
+        self.status_bar.showMessage("Fetching Style Presets...")
         self.clear_display_frame()
-        ttk.Label(self.display_frame, text="Fetching Style Presets...", style="TLabel").pack(pady=20)
-        self.on_frame_configure()
-        thread = threading.Thread(target=self._fetch_style_presets_worker, daemon=True)
-        thread.start()
-
+        
+        # Ensure scroll area is reset
+        self.scroll_area.verticalScrollBar().setValue(0)
+        
+        # Clear layout
+        for i in reversed(range(self.display_layout.count())):
+            self.display_layout.takeAt(i).widget().deleteLater()
+        
+        # Add fetching label
+        fetching_label = QLabel("Fetching Style Presets...")
+        fetching_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        self.display_layout.addWidget(fetching_label, alignment=Qt.AlignCenter)
+        
+        # Create and start worker thread
+        url = 'https://api.venice.ai/api/v1/image/styles'
+        headers = {'Accept': 'application/json', 'Authorization': f'Bearer {Config.VENICE_API_KEY}'}
+        
+        self.style_worker = StylePresetWorker(url, headers)
+        self.style_worker.signals.result.connect(self._update_gui_after_fetch_style_presets)
+        self.style_worker.start()
+    
     def _update_gui_after_connect(self, result):
         """Updates GUI elements after the model connection attempt."""
-        self.connect_button.config(state=tk.NORMAL)
+        self.connect_button.setEnabled(True)
         self.clear_display_frame()
-
+        
+        # Ensure scroll area is reset
+        self.scroll_area.verticalScrollBar().setValue(0)
+        
+        # Clear layout
+        for i in reversed(range(self.display_layout.count())):
+            self.display_layout.takeAt(i).widget().deleteLater()
+        
         if result['success']:
             self.models_data = result['data']
             types = set(model.get('type', 'Unknown') for model in self.models_data['data'])
             types = {str(t) if t is not None else 'Unknown' for t in types}
             self.model_types = ["all"] + sorted(list(types))
             
-            self.type_combobox['values'] = self.model_types
-            self.type_combobox.set("all")
-            self.type_combobox.config(state="readonly")
-            self.display_button.config(state=tk.NORMAL)
-            self.view_styles_button.config(state=tk.NORMAL)
-            self.status_var.set("Model API Connected. Select type and 'Display Models'.")
-            ttk.Label(self.display_frame, text="Select model type and click 'Display Models'.", style="TLabel").pack(pady=20)
+            self.type_combobox.clear()
+            self.type_combobox.addItems(self.model_types)
+            self.type_combobox.setCurrentText("all")
+            self.type_combobox.setEnabled(True)
+            self.display_button.setEnabled(True)
+            self.view_styles_button.setEnabled(True)
+            self.status_bar.showMessage("Model API Connected. Select type and 'Display Models'.")
+            
+            # Add instruction label
+            instruction_label = QLabel("Select model type and click 'Display Models'.")
+            instruction_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+            self.display_layout.addWidget(instruction_label, alignment=Qt.AlignCenter)
         else:
             self.models_data = None
-            self.type_combobox['values'] = ["all"]
-            self.type_combobox.set("all")
-            self.type_combobox.config(state=tk.DISABLED)
-            self.display_button.config(state=tk.DISABLED)
-            self.view_styles_button.config(state=tk.DISABLED)
-            self.status_var.set("Model connection failed. Check logs or API key.")
-            ttk.Label(self.display_frame, text="Model Connection failed.", foreground=COLOR_ERROR_LABEL, style="TLabel").pack(pady=20)
+            self.type_combobox.clear()
+            self.type_combobox.addItem("all")
+            self.type_combobox.setCurrentText("all")
+            self.type_combobox.setEnabled(False)
+            self.display_button.setEnabled(False)
+            self.view_styles_button.setEnabled(False)
+            self.status_bar.showMessage("Model connection failed. Check logs or API key.")
+            
+            # Add error label
+            error_label = QLabel("Model Connection failed.")
+            error_label.setStyleSheet(f"color: {COLOR_ERROR_LABEL};")
+            self.display_layout.addWidget(error_label, alignment=Qt.AlignCenter)
+            
             if result['error']:
                 self._show_api_error("Venice API Connection Error", result['error'])
-
-        self.on_frame_configure()
-
-    def _show_api_error(self, title, error_message):
-         messagebox.showerror(title, error_message, parent=self.master)
-
-    def display_selected_models_action(self):
-        if self.models_data is None:
-            messagebox.showwarning("No Model Data", "Please connect to the Model API first.", parent=self.master)
-            return
-        self.display_filtered_models()
-
-    # --- Model Display Logic ---
-    def clear_display_frame(self):
-        for widget in self.display_frame.winfo_children():
-            widget.destroy()
-        self.canvas.yview_moveto(0)
-
-    def _add_separator(self, parent, row):
-        sep = ttk.Separator(parent, orient='horizontal')
-        sep.grid(row=row, column=0, columnspan=2, sticky='ew', padx=5, pady=8)
-        return row + 1
-
-    def _add_section_heading(self, parent, text, row):
-        heading = ttk.Label(parent, text=text, style="Section.TLabel")
-        heading.grid(row=row, column=0, columnspan=2, sticky='nw', padx=5, pady=(8, 1))
-        return row + 1
-
-    def _add_detail(self, parent, key, value, row):
-        key_label = ttk.Label(parent, text=f"{key}:", style="Key.TLabel")
-        key_label.grid(row=row, column=0, sticky="ne", padx=(10, 2), pady=1)
-        
-        value_text = str(value) if value is not None else "N/A"
-        value_color_opts = {}
-        if isinstance(value, bool):
-            value_text = "Yes" if value else "No"
-            value_color_opts = {'foreground': COLOR_BOOL_YES if value else COLOR_BOOL_NO}
-            
-        value_label = ttk.Label(parent, text=value_text, wraplength=550, justify=tk.LEFT, **value_color_opts)
-        value_label.grid(row=row, column=1, sticky="nw", padx=2, pady=1)
-        return row + 1
-
-    def display_filtered_models(self):
-        selected_type = self.model_type_var.get()
+    
+    def _update_gui_after_fetch_style_presets(self, result):
+        """Updates the model display frame with style presets."""
         self.clear_display_frame()
         
+        # Ensure scroll area is reset
+        self.scroll_area.verticalScrollBar().setValue(0)
+        
+        if result['success']:
+            style_presets = result['data']
+            section_label = QLabel("Available Style Presets:")
+            font = QFont()
+            font.setItalic(True)
+            font.setPointSize(10)
+            section_label.setFont(font)
+            section_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL}; padding: 10px 0px 1px 0px;")
+            self.display_layout.addWidget(section_label)
+            
+            text_widget = QTextEdit()
+            text_widget.setReadOnly(True)
+            text_widget.setStyleSheet(f"""
+                background-color: {COLOR_FRAME_BACKGROUND};
+                color: {COLOR_PRICE_LABEL};
+                border: none;
+                padding: 5px;
+            """)
+            for preset in style_presets:
+                text_widget.append(preset)
+            self.display_layout.addWidget(text_widget, 1)
+            
+            self.status_bar.showMessage("Displayed available style presets.")
+        else:
+            error_label = QLabel("No style presets available or error occurred.")
+            error_label.setStyleSheet(f"color: orange;")
+            self.display_layout.addWidget(error_label, alignment=Qt.AlignCenter)
+            if result['error']:
+                self._show_api_error("Style Preset API Error", result['error'])
+        
+        # Ensure scroll area updates
+        QTimer.singleShot(50, lambda: self.scroll_area.verticalScrollBar().setValue(0))
+    
+    def _show_api_error(self, title, error_message):
+        QMessageBox.critical(self, title, error_message)
+    
+    def display_selected_models_action(self):
+        if self.models_data is None:
+            QMessageBox.warning(self, "No Model Data", "Please connect to the Model API first.")
+            return
+        self.display_filtered_models()
+    
+    def clear_display_frame(self):
+        """Clear all widgets from the display frame."""
+        for i in reversed(range(self.display_layout.count())):
+            self.display_layout.takeAt(i).widget().deleteLater()
+        self.scroll_area.verticalScrollBar().setValue(0)
+    
+    def _add_separator(self, layout):
+        """Add a horizontal separator to the layout."""
+        separator = QFrame()
+        separator.setFrameShape(QFrame.HLine)
+        separator.setFrameShadow(QFrame.Sunken)
+        separator.setStyleSheet(f"color: #555555;")
+        layout.addWidget(separator)
+    
+    def _add_section_heading(self, layout, text, row=None):
+        """Add a section heading to the layout."""
+        heading = QLabel(text)
+        font = QFont()
+        font.setItalic(True)
+        font.setPointSize(10)
+        heading.setFont(font)
+        heading.setStyleSheet(f"color: {COLOR_PRICE_LABEL}; padding: 5px 0px 1px 0px;")
+        layout.addWidget(heading)
+        return 0
+    
+    def _add_detail(self, layout, key, value, row=None):
+        """Add a key-value detail to the layout."""
+        row_layout = QHBoxLayout()
+        row_layout.setSpacing(5)
+        
+        key_label = QLabel(f"{key}:")
+        font = QFont()
+        font.setBold(True)
+        font.setPointSize(10)
+        key_label.setFont(font)
+        key_label.setStyleSheet(f"color: {COLOR_PRICE_LABEL};")
+        key_label.setAlignment(Qt.AlignRight)
+        key_label.setFixedWidth(120)
+        row_layout.addWidget(key_label)
+        
+        value_text = str(value) if value is not None else "N/A"
+        value_color = COLOR_PRICE_LABEL
+        if isinstance(value, bool):
+            value_text = "Yes" if value else "No"
+            value_color = COLOR_BOOL_YES if value else COLOR_BOOL_NO
+        
+        value_label = QLabel(value_text)
+        value_label.setStyleSheet(f"color: {value_color};")
+        value_label.setWordWrap(True)
+        row_layout.addWidget(value_label)
+        
+        layout.addLayout(row_layout)
+        return 0
+    
+    def display_filtered_models(self):
+        """Display models filtered by selected type."""
+        selected_type = self.model_type_var
+        self.clear_display_frame()
+        
+        # Ensure scroll area is reset
+        self.scroll_area.verticalScrollBar().setValue(0)
+        
         if not self.models_data or 'data' not in self.models_data:
-             ttk.Label(self.display_frame, text="No model data available.", foreground="orange", style="TLabel").pack(pady=20)
-             self.on_frame_configure()
-             return
-             
+            error_label = QLabel("No model data available.")
+            error_label.setStyleSheet(f"color: orange;")
+            self.display_layout.addWidget(error_label, alignment=Qt.AlignCenter)
+            return
+            
         found_models = False
-        models_container = ttk.Frame(self.display_frame, style="TFrame")
-        models_container.pack(fill=tk.BOTH, expand=True)
+        models_container = QWidget()
+        container_layout = QVBoxLayout(models_container)
+        container_layout.setSpacing(10)
+        container_layout.setContentsMargins(5, 5, 5, 5)
         
         for model in self.models_data['data']:
             model_id = model.get('id', 'N/A')
@@ -589,90 +829,103 @@ class CombinedViewerApp:
                 found_models = True
                 model_spec = model.get('model_spec', {})
                 
-                model_frame = ttk.LabelFrame(models_container, text=f" {model_id} ", padding=10, style="TLabelframe")
-                model_frame.pack(pady=10, padx=5, fill=tk.X, expand=True)
-                model_frame.columnconfigure(1, weight=1)
+                # Create model frame
+                model_frame = QGroupBox(f" {model_id} ")
+                model_frame.setStyleSheet(f"""
+                    QGroupBox {{
+                        background-color: {COLOR_FRAME_BACKGROUND};
+                        border: 1px solid #555555;
+                        border-radius: 5px;
+                        margin-top: 10px;
+                        padding: 10px;
+                        color: {COLOR_PRICE_LABEL};
+                    }}
+                    QGroupBox::title {{
+                        subcontrol-origin: margin;
+                        subcontrol-position: top center;
+                        padding: 0 5px;
+                        background-color: {COLOR_FRAME_BACKGROUND};
+                    }}
+                """)
+                model_layout = QVBoxLayout(model_frame)
+                model_layout.setSpacing(5)
+                model_layout.setContentsMargins(5, 5, 5, 5)
                 
                 current_row = 0
-                current_row = self._add_detail(model_frame, "Type", model_type, current_row)
+                current_row = self._add_detail(model_layout, "Type", model_type, current_row)
                 
                 if model_type == "text":
-                    current_row = self._add_detail(model_frame, "Context Tokens", model_spec.get('availableContextTokens'), current_row)
+                    current_row = self._add_detail(model_layout, "Context Tokens", model_spec.get('availableContextTokens'), current_row)
                 
-                current_row = self._add_separator(model_frame, current_row)
+                current_row = self._add_separator(model_layout)
                 
                 if model_type == "text":
                     caps = model_spec.get('capabilities')
                     if caps:
-                        current_row = self._add_section_heading(model_frame, "Capabilities", current_row)
-                        for key, value in caps.items(): current_row = self._add_detail(model_frame, key, value, current_row)
-                        current_row = self._add_separator(model_frame, current_row)
+                        current_row = self._add_section_heading(model_layout, "Capabilities", current_row)
+                        for key, value in caps.items():
+                            current_row = self._add_detail(model_layout, key, value, current_row)
+                        current_row = self._add_separator(model_layout)
                         
                     const = model_spec.get('constraints')
                     if const:
-                        current_row = self._add_section_heading(model_frame, "Constraints", current_row)
+                        current_row = self._add_section_heading(model_layout, "Constraints", current_row)
                         for key, value in const.items():
                             if isinstance(value, dict):
-                                for sub_key, sub_value in value.items(): current_row = self._add_detail(model_frame, f"{key} ({sub_key})", sub_value, current_row)
-                            else: current_row = self._add_detail(model_frame, key, value, current_row)
-                        current_row = self._add_separator(model_frame, current_row)
+                                for sub_key, sub_value in value.items():
+                                    current_row = self._add_detail(model_layout, f"{key} ({sub_key})", sub_value, current_row)
+                            else:
+                                current_row = self._add_detail(model_layout, key, value, current_row)
+                        current_row = self._add_separator(model_layout)
                         
                 elif model_type == "image":
                     const = model_spec.get('constraints')
                     if const:
-                        current_row = self._add_section_heading(model_frame, "Constraints", current_row)
+                        current_row = self._add_section_heading(model_layout, "Constraints", current_row)
                         for key, value in const.items():
                             if key == 'steps' and isinstance(value, dict):
-                                for sub_key, sub_value in value.items(): current_row = self._add_detail(model_frame, f"{key} ({sub_key})", sub_value, current_row)
-                            else: current_row = self._add_detail(model_frame, key, value, current_row)
-                        current_row = self._add_separator(model_frame, current_row)
+                                for sub_key, sub_value in value.items():
+                                    current_row = self._add_detail(model_layout, f"{key} ({sub_key})", sub_value, current_row)
+                            else:
+                                current_row = self._add_detail(model_layout, key, value, current_row)
+                        current_row = self._add_separator(model_layout)
                         
                 elif model_type == "tts":
-                     voices = model_spec.get('voices', [])
-                     if voices:
-                         current_row = self._add_section_heading(model_frame, "Voices", current_row)
-                         current_row = self._add_detail(model_frame, "Available", ", ".join(voices), current_row)
-                         current_row = self._add_separator(model_frame, current_row)
-                         
+                    voices = model_spec.get('voices', [])
+                    if voices:
+                        current_row = self._add_section_heading(model_layout, "Voices", current_row)
+                        current_row = self._add_detail(model_layout, "Available", ", ".join(voices), current_row)
+                        current_row = self._add_separator(model_layout)
+                        
                 traits = model_spec.get('traits', [])
                 if traits:
-                     current_row = self._add_section_heading(model_frame, "Traits", current_row)
-                     current_row = self._add_detail(model_frame, "Assigned", ", ".join(traits), current_row)
-                     current_row = self._add_separator(model_frame, current_row)
-                     
+                    current_row = self._add_section_heading(model_layout, "Traits", current_row)
+                    current_row = self._add_detail(model_layout, "Assigned", ", ".join(traits), current_row)
+                    current_row = self._add_separator(model_layout)
+                    
                 other_info_exists = any(k in model_spec for k in ['modelSource', 'beta', 'offline'])
                 if other_info_exists:
-                    current_row = self._add_section_heading(model_frame, "Other Info", current_row)
-                    current_row = self._add_detail(model_frame, "Source", model_spec.get('modelSource'), current_row)
-                    current_row = self._add_detail(model_frame, "Beta", model_spec.get('beta'), current_row)
-                    current_row = self._add_detail(model_frame, "Offline", model_spec.get('offline'), current_row)
+                    current_row = self._add_section_heading(model_layout, "Other Info", current_row)
+                    current_row = self._add_detail(model_layout, "Source", model_spec.get('modelSource'), current_row)
+                    current_row = self._add_detail(model_layout, "Beta", model_spec.get('beta'), current_row)
+                    current_row = self._add_detail(model_layout, "Offline", model_spec.get('offline'), current_row)
+                    
+                container_layout.addWidget(model_frame)
                     
         if not found_models:
-            ttk.Label(self.display_frame, text=f"No models found for type: '{selected_type}'", foreground="orange", style="TLabel").pack(pady=20)
+            not_found_label = QLabel(f"No models found for type: '{selected_type}'")
+            not_found_label.setStyleSheet(f"color: orange;")
+            self.display_layout.addWidget(not_found_label, alignment=Qt.AlignCenter)
+        else:
+            self.display_layout.addWidget(models_container)
         
-        # CRITICAL: Bind scroll events to all widgets after they're created
-        # Use a slight delay to ensure all widgets are fully created and available
-        self.master.after(100, lambda: self._bind_children_to_scroll(self.display_frame))
-        
-        # Update the scroll region
-        self.master.after(150, self.on_frame_configure)
-        self.status_var.set(f"Displayed '{selected_type}' models. Price updates automatically.")
+        # Ensure scroll area updates
+        QTimer.singleShot(50, lambda: self.scroll_area.verticalScrollBar().setValue(0))
+        self.status_bar.showMessage(f"Displayed '{selected_type}' models. Price updates automatically.")
 
-# --- Run the Application ---
+# Main application
 if __name__ == "__main__":
-    print("DEBUG: Combined script starting...")
-    try:
-        root = tk.Tk()
-        s = ttk.Style()
-        try:
-            if sys.platform == "win32": s.theme_use('vista')
-            elif sys.platform == "darwin": s.theme_use('aqua')
-            else: s.theme_use('clam')
-        except tk.TclError:
-            print("DEBUG: Selected theme not available, using default.")
-        app = CombinedViewerApp(root)
-        root.mainloop()
-    except Exception as e:
-        print("\n--- UNHANDLED EXCEPTION CAUGHT ---")
-        traceback.print_exc()
-        print("--- END OF EXCEPTION ---")
+    app = QApplication(sys.argv)
+    window = CombinedViewerApp()
+    window.show()
+    sys.exit(app.exec())
