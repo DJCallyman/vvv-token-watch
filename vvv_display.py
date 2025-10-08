@@ -1,166 +1,528 @@
-import tkinter as tk
-import requests
-import time
+"""
+Display components for the vvv_token_watch application.
+Contains widgets for showing token prices, model information, and API usage metrics.
+"""
 
-# --- Configuration ---
-TOKEN_ID = 'venice-token' # CoinGecko API ID for the token.
-VS_CURRENCY = 'usd'   # Currency to display the price in.
-HOLDING_AMOUNT = 2500 # Amount of the token you hold.
-REFRESH_INTERVAL_MS = 60000 # Refresh interval in milliseconds (60 seconds).
-WINDOW_TITLE = f"{TOKEN_ID.capitalize()} Price Monitor ({VS_CURRENCY.upper()})"
-INITIAL_DELAY_MS = 100 # Small delay before the first API call
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+                              QScrollArea, QFrame, QProgressBar)
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont, QColor
+import sys
+from typing import List, Dict, Any
 
-# --- API Function ---
-def get_price(token_id, vs_currency):
+# Import the data models and worker from usage_tracker
+from .usage_tracker import APIKeyUsage, BalanceInfo
+
+class TokenDisplayWidget(QWidget):
     """
-    Fetches the current price of a token from the CoinGecko API.
-
-    Args:
-        token_id (str): The CoinGecko API ID for the token.
-        vs_currency (str): The currency to get the price in.
-
-    Returns:
-        float: The current price, or None if an error occurs.
+    Widget for displaying token price information.
+    Can display both cryptocurrency prices and Venice Credit Units (VCU).
     """
-    url = f"https://api.coingecko.com/api/v3/simple/price"
-    params = {
-        'ids': token_id,
-        'vs_currencies': vs_currency
-    }
-    try:
-        # Increased timeout slightly for potentially slower connections
-        response = requests.get(url, params=params, timeout=15)
-        response.raise_for_status()
-        data = response.json()
-
-        if token_id in data and vs_currency in data[token_id]:
-            return data[token_id][vs_currency]
+    
+    def __init__(self, token_name: str, theme_colors: Dict[str, str], is_vcu: bool = False):
+        """
+        Initialize the TokenDisplayWidget.
+        
+        Args:
+            token_name: Name of the token to display
+            theme_colors: Dictionary containing theme color values
+            is_vcu: Whether this widget is displaying VCU instead of cryptocurrency
+        """
+        super().__init__()
+        self.token_name = token_name
+        self.theme_colors = theme_colors
+        self.is_vcu = is_vcu
+        self.current_price = 0.0
+        self.price_change = 0.0
+        
+        self.init_ui()
+    
+    def init_ui(self):
+        """Initialize the user interface components."""
+        # Main layout
+        layout = QVBoxLayout()
+        layout.setSpacing(2)
+        layout.setContentsMargins(8, 8, 8, 8)
+        
+        # Token name label
+        self.name_label = QLabel(self.token_name)
+        self.name_label.setFont(QFont("Arial", 10, QFont.Bold))
+        self.name_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        self.name_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.name_label)
+        
+        # Price display
+        self.price_label = QLabel("$0.00")
+        self.price_label.setFont(QFont("Arial", 14, QFont.Bold))
+        self.price_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        self.price_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.price_label)
+        
+        # Price change indicator
+        self.change_label = QLabel("0.00%")
+        self.change_label.setFont(QFont("Arial", 9))
+        self.change_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.change_label)
+        
+        self.setLayout(layout)
+        
+        # Apply styling
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.theme_colors['card_background']};
+                border-radius: 8px;
+                border: 1px solid {self.theme_colors['border']};
+            }}
+        """)
+    
+    def update_price(self, price: float, change: float = 0.0):
+        """
+        Update the displayed price and price change.
+        
+        Args:
+            price: Current price of the token
+            change: Percentage change in price
+        """
+        self.current_price = price
+        self.price_change = change
+        
+        # Format price display
+        if self.is_vcu:
+            # VCU typically has more decimal places
+            price_text = f"{price:.4f}"
         else:
-            if token_id not in data:
-                 print(f"Error: Token ID '{token_id}' not found in CoinGecko API response.")
-            elif vs_currency not in data.get(token_id, {}):
-                 print(f"Error: Currency '{vs_currency}' not found for token '{token_id}' in API response.")
+            # Cryptocurrency prices
+            if price >= 1:
+                price_text = f"${price:.2f}"
             else:
-                 print(f"Error: Could not find price data for '{token_id}' in '{vs_currency}'.")
-            print("Response data:", data)
-            return None
+                price_text = f"${price:.6f}"
+                
+        self.price_label.setText(price_text)
+        
+        # Update change indicator
+        change_text = f"{change:+.2f}%"
+        self.change_label.setText(change_text)
+        
+        # Color coding for price change
+        if change > 0:
+            self.change_label.setStyleSheet(f"color: {self.theme_colors['positive']};")
+        elif change < 0:
+            self.change_label.setStyleSheet(f"color: {self.theme_colors['negative']};")
+        else:
+            self.change_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
 
-    except requests.exceptions.Timeout:
-        print(f"Error: Request to CoinGecko API timed out.")
-        return None
-    except requests.exceptions.RequestException as e:
-        print(f"Error fetching data from CoinGecko API: {e}")
-        return None
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-        return None
-
-# --- GUI Update Function ---
-def update_price_label():
+class ModelDisplayWidget(QWidget):
     """
-    Fetches the new price, calculates holding value, and updates the GUI labels.
-    Schedules the next update.
+    Widget for displaying model information and status.
+    Shows model name, provider, and current status indicators.
     """
-    # Ensure labels exist before trying to configure them
-    if not price_label or not status_label or not holding_value_label: # Check new label too
-         print("Error: GUI labels not ready.")
-         # Schedule the next attempt anyway
-         root.after(REFRESH_INTERVAL_MS, update_price_label)
-         return
+    
+    def __init__(self, model_info: Dict[str, Any], theme_colors: Dict[str, str]):
+        """
+        Initialize the ModelDisplayWidget.
+        
+        Args:
+            model_info: Dictionary containing model information
+            theme_colors: Dictionary containing theme color values
+        """
+        super().__init__()
+        self.model_info = model_info
+        self.theme_colors = theme_colors
+        
+        self.init_ui()
+    
+    def init_ui(self):
+        """Initialize the user interface components."""
+        # Main layout
+        layout = QVBoxLayout()
+        layout.setSpacing(4)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Model name
+        self.name_label = QLabel(self.model_info.get('name', 'Unknown Model'))
+        self.name_label.setFont(QFont("Arial", 11, QFont.Bold))
+        self.name_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        self.name_label.setAlignment(Qt.AlignLeft)
+        layout.addWidget(self.name_label)
+        
+        # Provider information
+        provider = self.model_info.get('provider', 'Unknown')
+        self.provider_label = QLabel(f"Provider: {provider}")
+        self.provider_label.setFont(QFont("Arial", 9))
+        self.provider_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        layout.addWidget(self.provider_label)
+        
+        # Status indicators
+        status_layout = QHBoxLayout()
+        
+        # Online status
+        self.online_status = QFrame()
+        self.online_status.setFixedSize(12, 12)
+        self.online_status.setStyleSheet(f"background-color: {self.theme_colors['negative']}; border-radius: 6px;")
+        status_layout.addWidget(self.online_status)
+        
+        self.online_label = QLabel("Offline")
+        self.online_label.setFont(QFont("Arial", 9))
+        self.online_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        status_layout.addWidget(self.online_label)
+        
+        # GPU status
+        self.gpu_status = QFrame()
+        self.gpu_status.setFixedSize(12, 12)
+        self.gpu_status.setStyleSheet(f"background-color: {self.theme_colors['negative']}; border-radius: 6px;")
+        status_layout.addWidget(self.gpu_status)
+        
+        self.gpu_label = QLabel("GPU: N/A")
+        self.gpu_label.setFont(QFont("Arial", 9))
+        self.gpu_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        status_layout.addWidget(self.gpu_label)
+        
+        layout.addLayout(status_layout)
+        
+        self.setLayout(layout)
+        
+        # Apply styling
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.theme_colors['card_background']};
+                border-radius: 8px;
+                border: 1px solid {self.theme_colors['border']};
+            }}
+        """)
+    
+    def update_status(self, is_online: bool, gpu_info: str = "N/A"):
+        """
+        Update the model status indicators.
+        
+        Args:
+            is_online: Whether the model is currently online
+            gpu_info: Current GPU usage information
+        """
+        # Update online status
+        color = self.theme_colors['positive'] if is_online else self.theme_colors['negative']
+        self.online_status.setStyleSheet(f"background-color: {color}; border-radius: 6px;")
+        self.online_label.setText("Online" if is_online else "Offline")
+        self.online_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        
+        # Update GPU status
+        self.gpu_label.setText(f"GPU: {gpu_info}")
 
-    print(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - Fetching price for {TOKEN_ID}...")
-    price = get_price(TOKEN_ID, VS_CURRENCY)
+class BalanceDisplayWidget(QWidget):
+    """
+    Widget for displaying overall Venice API balance information.
+    Shows current DIEM/USD balance in a clean, simple format.
+    """
 
-    if price is not None:
-        # Calculate holding value
-        total_value = price * HOLDING_AMOUNT
+    def __init__(self, theme_colors: Dict[str, str]):
+        """
+        Initialize the BalanceDisplayWidget.
 
-        # Format price and value strings
-        try:
-            price_str = f"${price:,.2f} {VS_CURRENCY.upper()}" # Show 2 decimal places
-            value_str = f"Holding: ${total_value:,.2f}" # Format total value
-        except (ValueError, TypeError):
-             price_str = f"${price} {VS_CURRENCY.upper()}" # Fallback if formatting fails
-             value_str = f"Holding: ${total_value}" # Fallback
+        Args:
+            theme_colors: Dictionary containing theme color values
+        """
+        super().__init__()
+        self.theme_colors = theme_colors
+        self.balance_info = None
 
-        status_str = f"Last updated: {time.strftime('%H:%M:%S')}"
+        self.init_ui()
 
+    def init_ui(self):
+        """Initialize the user interface components."""
+        # Main layout
+        layout = QVBoxLayout()
+        layout.setSpacing(12)
+        layout.setContentsMargins(12, 12, 12, 12)
+
+        # Title
+        title_label = QLabel("API Balance")
+        title_label.setFont(QFont("Arial", 12, QFont.Bold))
+        title_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        title_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(title_label)
+
+        # Balance display
+        balance_layout = QHBoxLayout()
+
+        # DIEM balance
+        diem_layout = QVBoxLayout()
+        diem_label = QLabel("DIEM")
+        diem_label.setFont(QFont("Arial", 10))
+        diem_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        diem_layout.addWidget(diem_label)
+
+        self.diem_balance_label = QLabel("0.0000")
+        self.diem_balance_label.setFont(QFont("Arial", 16, QFont.Bold))
+        self.diem_balance_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        diem_layout.addWidget(self.diem_balance_label)
+
+        balance_layout.addLayout(diem_layout)
+        balance_layout.addSpacing(30)
+
+        # USD balance
+        usd_layout = QVBoxLayout()
+        usd_label = QLabel("USD")
+        usd_label.setFont(QFont("Arial", 10))
+        usd_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        usd_layout.addWidget(usd_label)
+
+        self.usd_balance_label = QLabel("$0.00")
+        self.usd_balance_label.setFont(QFont("Arial", 16, QFont.Bold))
+        self.usd_balance_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        usd_layout.addWidget(self.usd_balance_label)
+
+        balance_layout.addLayout(usd_layout)
+
+        layout.addLayout(balance_layout)
+
+        # Add some spacing at the bottom
+        layout.addStretch()
+
+        self.setLayout(layout)
+
+        # Apply styling
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.theme_colors['card_background']};
+                border-radius: 8px;
+                border: 1px solid {self.theme_colors['border']};
+            }}
+        """)
+
+    def update_balance(self, balance_info: BalanceInfo):
+        """
+        Update the displayed balance information.
+
+        Args:
+            balance_info: BalanceInfo object containing current balance data
+        """
+        self.balance_info = balance_info
+
+        # Update balance displays
+        self.diem_balance_label.setText(f"{balance_info.diem:.4f}")
+        self.usd_balance_label.setText(f"${balance_info.usd:.2f}")
+
+class APIKeyUsageWidget(QWidget):
+    """
+    Widget for displaying usage information for a single API key.
+    Shows key name, ID, and usage bars for VCU/USD consumption.
+    """
+    
+    def __init__(self, api_key_usage: APIKeyUsage, theme_colors: Dict[str, str]):
+        """
+        Initialize the APIKeyUsageWidget.
+        
+        Args:
+            api_key_usage: APIKeyUsage object containing key usage data
+            theme_colors: Dictionary containing theme color values
+        """
+        super().__init__()
+        self.api_key_usage = api_key_usage
+        self.theme_colors = theme_colors
+        
+        self.init_ui()
+    
+    def init_ui(self):
+        """Initialize the user interface components."""
+        # Main layout
+        layout = QVBoxLayout()
+        layout.setSpacing(6)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Key information
+        info_layout = QHBoxLayout()
+        
+        # Key name
+        self.name_label = QLabel(self.api_key_usage.name)
+        self.name_label.setFont(QFont("Arial", 10, QFont.Bold))
+        self.name_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        info_layout.addWidget(self.name_label)
+        
+        info_layout.addStretch()
+        
+        # Key ID (truncated)
+        key_id = self.api_key_usage.id
+        display_id = f"...{key_id[-8:]}" if len(key_id) > 8 else key_id
+        self.id_label = QLabel(display_id)
+        self.id_label.setFont(QFont("Arial", 9))
+        self.id_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        info_layout.addWidget(self.id_label)
+        
+        layout.addLayout(info_layout)
+        
+        # Status indicator
+        status_layout = QHBoxLayout()
+        
+        # Active status
+        self.active_status = QFrame()
+        self.active_status.setFixedSize(10, 10)
+        color = self.theme_colors['positive'] if self.api_key_usage.is_active else self.theme_colors['negative']
+        self.active_status.setStyleSheet(f"background-color: {color}; border-radius: 5px;")
+        status_layout.addWidget(self.active_status)
+        
+        self.active_label = QLabel("Active" if self.api_key_usage.is_active else "Inactive")
+        self.active_label.setFont(QFont("Arial", 8))
+        self.active_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        status_layout.addWidget(self.active_label)
+        
+        # Created date
+        self.created_label = QLabel(f"Created: {self.api_key_usage.created_at[:10]}")
+        self.created_label.setFont(QFont("Arial", 8))
+        self.created_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        status_layout.addWidget(self.created_label)
+        
+        status_layout.addStretch()
+        
+        layout.addLayout(status_layout)
+        
+        # Usage metrics
+        usage_layout = QVBoxLayout()
+        
+        # DIEM usage
+        diem_layout = QHBoxLayout()
+        diem_label = QLabel("DIEM 7d:")
+        diem_label.setFont(QFont("Arial", 9))
+        diem_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        diem_layout.addWidget(diem_label)
+
+        self.diem_usage_label = QLabel(f"{self.api_key_usage.usage.diem:.4f}")
+        self.diem_usage_label.setFont(QFont("Arial", 9, QFont.Bold))
+        self.diem_usage_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        diem_layout.addWidget(self.diem_usage_label)
+
+        diem_layout.addStretch()
+
+        # DIEM progress bar
+        self.diem_progress = QProgressBar()
+        self.diem_progress.setRange(0, 100)
+        self.diem_progress.setValue(0)
+        self.diem_progress.setTextVisible(False)
+        diem_layout.addWidget(self.diem_progress, 2)  # 2x stretch factor
+
+        usage_layout.addLayout(diem_layout)
+        
+        # USD usage
+        usd_layout = QHBoxLayout()
+        usd_label = QLabel("USD 7d:")
+        usd_label.setFont(QFont("Arial", 9))
+        usd_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        usd_layout.addWidget(usd_label)
+        
+        self.usd_usage_label = QLabel(f"${self.api_key_usage.usage.usd:.2f}")
+        self.usd_usage_label.setFont(QFont("Arial", 9, QFont.Bold))
+        self.usd_usage_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        usd_layout.addWidget(self.usd_usage_label)
+        
+        usd_layout.addStretch()
+        
+        # USD progress bar
+        self.usd_progress = QProgressBar()
+        self.usd_progress.setRange(0, 100)
+        self.usd_progress.setValue(0)
+        self.usd_progress.setTextVisible(False)
+        usd_layout.addWidget(self.usd_progress, 2)  # 2x stretch factor
+        
+        usage_layout.addLayout(usd_layout)
+        
+        layout.addLayout(usage_layout)
+        
+        self.setLayout(layout)
+        
+        # Apply styling
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.theme_colors['card_background']};
+                border-radius: 8px;
+                border: 1px solid {self.theme_colors['border']};
+            }}
+            QProgressBar {{
+                border: 1px solid {self.theme_colors['border']};
+                border-radius: 4px;
+            }}
+            QProgressBar::chunk {{
+                background-color: {self.theme_colors['primary']};
+                border-radius: 4px;
+            }}
+        """)
+        
+        # Set initial progress values
+        self._update_progress_bars()
+    
+    def _update_progress_bars(self):
+        """Update the progress bars based on usage values."""
+        # For demonstration, we'll use arbitrary thresholds for coloring
+        # In a real implementation, these might be configurable or based on organization policies
+
+        diem_usage = self.api_key_usage.usage.diem
+        # Assuming a high usage threshold of 100 DIEM for coloring
+        diem_percent = min(100, (diem_usage / 100.0) * 100)
+        self.diem_progress.setValue(int(diem_percent))
+
+        # Color coding for DIEM usage
+        if diem_usage < 25:
+            diem_color = self.theme_colors['positive']
+        elif diem_usage < 75:
+            diem_color = self.theme_colors['warning']
+        else:
+            diem_color = self.theme_colors['negative']
+
+        self.diem_progress.setStyleSheet(f"""
+            QProgressBar {{
+                border: 1px solid {self.theme_colors['border']};
+                border-radius: 4px;
+            }}
+            QProgressBar::chunk {{
+                background-color: {diem_color};
+                border-radius: 4px;
+            }}
+        """)
+
+        usd_usage = self.api_key_usage.usage.usd
+        # Assuming a high usage threshold of $25 for coloring
+        usd_percent = min(100, (usd_usage / 25.0) * 100)
+        self.usd_progress.setValue(int(usd_percent))
+
+        # Color coding for USD usage
+        if usd_usage < 5:
+            usd_color = self.theme_colors['positive']
+        elif usd_usage < 20:
+            usd_color = self.theme_colors['warning']
+        else:
+            usd_color = self.theme_colors['negative']
+
+        self.usd_progress.setStyleSheet(f"""
+            QProgressBar {{
+                border: 1px solid {self.theme_colors['border']};
+                border-radius: 4px;
+            }}
+            QProgressBar::chunk {{
+                background-color: {usd_color};
+                border-radius: 4px;
+            }}
+        """)
+    
+    def update_usage(self, api_key_usage: APIKeyUsage):
+        """
+        Update the widget with new API key usage data.
+        
+        Args:
+            api_key_usage: New APIKeyUsage object with updated data
+        """
+        self.api_key_usage = api_key_usage
+        
         # Update labels
-        price_label.config(text=price_str)
-        holding_value_label.config(text=value_str) # Update the new holding value label
-        status_label.config(text=status_str, fg="#AAAAAA") # Reset status color on success
-        print(f"Price updated: {price_str}")
-        print(f"Holding value updated: {value_str}")
-
-    else:
-        # Update status to indicate error, keep last price/value if available
-        if price_label.cget("text") == "Loading...":
-             price_label.config(text="N/A") # Indicate not available if never loaded
-             holding_value_label.config(text="Holding: N/A") # Also set holding value to N/A
-        status_label.config(text=f"Update Error. Retrying...", fg="#FF6B6B") # Red color for error
-        print(f"Failed to update price for {TOKEN_ID}.")
-
-    # Schedule the next update using the configured interval
-    root.after(REFRESH_INTERVAL_MS, update_price_label)
-
-# --- GUI Setup ---
-root = tk.Tk()
-root.title(WINDOW_TITLE)
-root.geometry("350x200") # Increased height slightly for the new label
-root.configure(bg='#2E2E2E')
-
-# Style options
-label_font = ("Helvetica", 28, "bold")
-holding_font = ("Helvetica", 14) # Font for the holding value
-status_font = ("Helvetica", 10)
-text_color = "#FFFFFF"
-bg_color = "#2E2E2E"
-
-# Token Name Label
-token_name_label = tk.Label(
-    root,
-    text=TOKEN_ID.replace('-', ' ').capitalize(), # Replace hyphen for display
-    font=("Helvetica", 16, "bold"),
-    fg=text_color,
-    bg=bg_color,
-    pady=5
-)
-token_name_label.pack()
-
-# Price Label - Initialize placeholder
-price_label = tk.Label(
-    root,
-    text="Loading...",
-    font=label_font,
-    fg=text_color,
-    bg=bg_color,
-    pady=5 # Reduced padding slightly
-)
-price_label.pack()
-
-# Holding Value Label - NEW LABEL
-holding_value_label = tk.Label(
-    root,
-    text="Calculating...", # Initial text
-    font=holding_font,
-    fg=text_color, # White text
-    bg=bg_color,
-    pady=5
-)
-holding_value_label.pack()
-
-# Status Label - Initialize placeholder
-status_label = tk.Label(
-    root,
-    text="Initializing...",
-    font=status_font,
-    fg="#AAAAAA",
-    bg=bg_color,
-    pady=5
-)
-status_label.pack()
-
-# --- Initial Load & Main Loop ---
-# Schedule the *first* call to update_price_label shortly after mainloop starts
-root.after(INITIAL_DELAY_MS, update_price_label)
-root.mainloop()
+        self.name_label.setText(api_key_usage.name)
+        key_id = api_key_usage.id
+        display_id = f"...{key_id[-8:]}" if len(key_id) > 8 else key_id
+        self.id_label.setText(display_id)
+        
+        # Update active status
+        color = self.theme_colors['positive'] if api_key_usage.is_active else self.theme_colors['negative']
+        self.active_status.setStyleSheet(f"background-color: {color}; border-radius: 5px;")
+        self.active_label.setText("Active" if api_key_usage.is_active else "Inactive")
+        
+        # Update usage values
+        self.diem_usage_label.setText(f"{api_key_usage.usage.diem:.4f}")
+        self.usd_usage_label.setText(f"${api_key_usage.usage.usd:.2f}")
+        
+        # Update progress bars
+        self._update_progress_bars()
