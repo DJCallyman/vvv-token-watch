@@ -39,3 +39,53 @@ class Theme:
     @property
     def success(self):
         return '#00c853' if self.mode == 'dark' else '#4caf50'
+    
+    @property
+    def border(self):
+        if self.mode == 'dark':
+            return '#333333'
+        return '#cccccc'
+    
+    @property
+    def card_background(self):
+        if self.mode == 'dark':
+            return '#2d2d2d'
+        return '#f0f0f0'
+    
+    @property
+    def text_secondary(self):
+        if self.mode == 'dark':
+            return '#bbbbbb'
+        return '#666666'
+    
+    @property
+    def positive(self):
+        return '#00cc66' if self.mode == 'dark' else '#00994d'
+    
+    @property
+    def negative(self):
+        return '#ff3333' if self.mode == 'dark' else '#cc0000'
+    
+    @property
+    def primary(self):
+        return '#0078d7' if self.mode == 'dark' else '#005a9e'
+    
+    @property
+    def theme_colors(self):
+        """Return a dictionary of all theme colors for easy access."""
+        return {
+            'background': self.background,
+            'text': self.text,
+            'accent': self.accent,
+            'input_background': self.input_background,
+            'error': self.error,
+            'warning': self.warning,
+            'success': self.success,
+            'border': self.border,
+            'card_background': self.card_background,
+            'text_secondary': self.text_secondary,
+            'positive': self.positive,
+            'negative': self.negative,
+            'primary': self.primary,
+            'text_primary': self.text
+        }
