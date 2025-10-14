@@ -1,4 +1,7 @@
-from .config import Config
+try:
+    from .config import Config
+except ImportError:
+    from config import Config
 
 class Theme:
     def __init__(self, mode=None):
@@ -71,6 +74,44 @@ class Theme:
         return '#0078d7' if self.mode == 'dark' else '#005a9e'
     
     @property
+    def hero_gradient_start(self):
+        """Start color for hero card gradient background"""
+        return '#2d5aa0' if self.mode == 'dark' else '#4a90e2'
+    
+    @property
+    def hero_gradient_end(self):
+        """End color for hero card gradient background"""
+        return '#1e3a5f' if self.mode == 'dark' else '#357abd'
+    
+    @property
+    def button_background(self):
+        """Background color for buttons"""
+        return '#404040' if self.mode == 'dark' else '#f0f0f0'
+    
+    @property
+    def button_hover(self):
+        """Button hover color"""
+        return '#505050' if self.mode == 'dark' else '#e0e0e0'
+    
+    @property
+    def button_pressed(self):
+        """Button pressed color"""
+        return '#606060' if self.mode == 'dark' else '#d0d0d0'
+    
+    @property
+    def status_colors(self):
+        """Color coding system for immediate status recognition"""
+        return {
+            'active': self.positive,         # Green for active/online
+            'inactive': self.negative,       # Red for inactive/offline
+            'warning': self.warning,         # Yellow/orange for warnings
+            'neutral': self.text_secondary,  # Gray for neutral states
+            'loading': self.primary,         # Blue for loading states
+            'price_positive': '#00cc66',     # Green for positive price change
+            'price_negative': '#ff3333',     # Red for negative price change
+        }
+    
+    @property
     def theme_colors(self):
         """Return a dictionary of all theme colors for easy access."""
         return {
@@ -87,5 +128,11 @@ class Theme:
             'positive': self.positive,
             'negative': self.negative,
             'primary': self.primary,
-            'text_primary': self.text
+            'text_primary': self.text,
+            'hero_gradient_start': self.hero_gradient_start,
+            'hero_gradient_end': self.hero_gradient_end,
+            'button_background': self.button_background,
+            'button_hover': self.button_hover,
+            'button_pressed': self.button_pressed,
+            **self.status_colors
         }

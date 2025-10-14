@@ -1,0 +1,3761 @@
+{
+  "snapshots": [
+    {
+      "timestamp": "2025-10-09T00:28:15.473601",
+      "total_diem": 16.4946,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:28:45.398012",
+      "total_diem": 16.493299999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:28:53.751393",
+      "total_diem": 16.493299999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:29:16.333339",
+      "total_diem": 16.493299999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:29:47.529664",
+      "total_diem": 16.491799999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:39:54.125653",
+      "total_diem": 16.4814,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:40:22.809564",
+      "total_diem": 16.4814,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:40:55.476738",
+      "total_diem": 16.4814,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:41:25.093511",
+      "total_diem": 16.4814,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:43:07.227380",
+      "total_diem": 16.4814,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:43:38.670323",
+      "total_diem": 16.4814,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:44:10.667358",
+      "total_diem": 16.4814,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:44:38.395975",
+      "total_diem": 16.4814,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:45:09.771525",
+      "total_diem": 16.4814,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:45:39.015124",
+      "total_diem": 16.471,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:46:09.867053",
+      "total_diem": 16.4596,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:46:39.021421",
+      "total_diem": 16.4596,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:47:09.330417",
+      "total_diem": 16.4596,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:47:40.051796",
+      "total_diem": 16.4596,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:48:09.633521",
+      "total_diem": 16.4596,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:48:40.780340",
+      "total_diem": 16.4596,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:49:10.351721",
+      "total_diem": 16.4596,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:49:40.576238",
+      "total_diem": 16.4596,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:50:11.194959",
+      "total_diem": 16.4596,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:50:39.968388",
+      "total_diem": 16.4596,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:51:10.052886",
+      "total_diem": 16.4596,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:52:58.557069",
+      "total_diem": 16.4268,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:53:28.415149",
+      "total_diem": 16.4005,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:53:58.010832",
+      "total_diem": 16.4005,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:54:28.852962",
+      "total_diem": 16.4005,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:54:58.528235",
+      "total_diem": 16.4005,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:55:28.927294",
+      "total_diem": 16.4005,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T00:56:00.173551",
+      "total_diem": 16.4005,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T01:09:46.842136",
+      "total_diem": 16.3946,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T01:10:16.433466",
+      "total_diem": 16.3946,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T01:10:32.777691",
+      "total_diem": 16.3946,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T01:10:46.334835",
+      "total_diem": 16.3946,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:03:30.872280",
+      "total_diem": 14.538599999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:03:59.448912",
+      "total_diem": 14.538599999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:04:30.685680",
+      "total_diem": 14.538599999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:04:58.331770",
+      "total_diem": 14.5366,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:05:29.483110",
+      "total_diem": 14.5366,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:05:58.441249",
+      "total_diem": 14.5366,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:06:30.444937",
+      "total_diem": 14.5336,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:06:59.292237",
+      "total_diem": 14.5282,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:07:30.863792",
+      "total_diem": 14.5247,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:07:59.507861",
+      "total_diem": 14.522699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:08:32.207253",
+      "total_diem": 14.5146,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:09:19.878907",
+      "total_diem": 14.5084,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:09:50.039510",
+      "total_diem": 14.505199999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:10:20.890908",
+      "total_diem": 14.505199999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:10:50.812391",
+      "total_diem": 14.505199999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:11:20.079044",
+      "total_diem": 14.505199999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:11:50.287719",
+      "total_diem": 14.5023,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:12:19.260238",
+      "total_diem": 14.5023,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:12:49.367692",
+      "total_diem": 14.5023,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:13:19.188125",
+      "total_diem": 14.4993,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:13:49.520300",
+      "total_diem": 14.4993,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:14:21.277352",
+      "total_diem": 14.496099999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:14:52.706086",
+      "total_diem": 14.496099999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:15:19.681472",
+      "total_diem": 14.496099999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:15:49.534513",
+      "total_diem": 14.496099999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:16:21.405930",
+      "total_diem": 14.496099999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:19:27.487191",
+      "total_diem": 14.492999999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:19:57.039479",
+      "total_diem": 14.489999999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:20:08.574611",
+      "total_diem": 14.489999999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:20:26.755214",
+      "total_diem": 14.489999999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:20:57.196538",
+      "total_diem": 14.489999999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:21:27.943035",
+      "total_diem": 14.489999999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:21:56.779723",
+      "total_diem": 14.486999999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:22:28.770503",
+      "total_diem": 14.486999999999998,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:22:57.541625",
+      "total_diem": 14.484,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:23:27.384350",
+      "total_diem": 14.484,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:23:56.698057",
+      "total_diem": 14.481,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:24:26.650397",
+      "total_diem": 14.4781,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:24:57.112241",
+      "total_diem": 14.4781,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:25:27.462018",
+      "total_diem": 14.4781,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:25:56.621781",
+      "total_diem": 14.475299999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:26:26.985864",
+      "total_diem": 14.475299999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:26:57.405033",
+      "total_diem": 14.475299999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:27:26.512170",
+      "total_diem": 14.475299999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:27:56.277296",
+      "total_diem": 14.475299999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:28:27.651232",
+      "total_diem": 14.475299999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:28:57.452686",
+      "total_diem": 14.475299999999999,
+      "total_usd": 0.0,
+      "api_key_count": 14
+    },
+    {
+      "timestamp": "2025-10-09T22:29:28.380021",
+      "total_diem": 14.475299999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:29:57.664856",
+      "total_diem": 14.472499999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:30:27.916259",
+      "total_diem": 14.472499999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:30:58.041346",
+      "total_diem": 14.472499999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:31:28.901845",
+      "total_diem": 14.4696,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:31:58.492022",
+      "total_diem": 14.4696,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:32:28.195206",
+      "total_diem": 14.466899999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:32:58.802053",
+      "total_diem": 14.464899999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:33:30.395781",
+      "total_diem": 14.4619,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:33:58.621140",
+      "total_diem": 14.4619,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:34:28.103949",
+      "total_diem": 14.4619,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:34:58.408564",
+      "total_diem": 14.4619,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:35:28.102135",
+      "total_diem": 14.4619,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:36:00.050935",
+      "total_diem": 14.4619,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:36:27.913138",
+      "total_diem": 14.4589,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:36:57.951014",
+      "total_diem": 14.4589,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:37:28.433965",
+      "total_diem": 14.4589,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:37:58.641823",
+      "total_diem": 14.4589,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:38:28.357225",
+      "total_diem": 14.4589,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:38:58.839146",
+      "total_diem": 14.4589,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:39:30.088646",
+      "total_diem": 14.4589,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:39:57.988639",
+      "total_diem": 14.4589,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T22:40:29.259870",
+      "total_diem": 14.4589,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:20:25.517877",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:20:56.217914",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:21:26.862689",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:21:58.079882",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:22:27.449335",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:22:56.810501",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:23:26.837253",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:23:56.847652",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:24:27.397404",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:24:56.689201",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:25:27.358106",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:25:56.959691",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:26:26.708181",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:26:56.625604",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:27:26.973672",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:27:56.475524",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:28:27.539249",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:28:57.234345",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:29:26.943351",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:29:56.767465",
+      "total_diem": 0.6851036999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:30:26.974277",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:30:56.826863",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:31:27.044571",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:31:56.744129",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:32:27.079521",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:32:56.798659",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:33:27.020656",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:33:57.366646",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:34:27.976119",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:34:56.851848",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:35:26.853223",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:35:57.024770",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:36:26.865326",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:36:56.709963",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:37:27.302180",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:37:57.210801",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:38:27.057865",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-09T23:38:56.697693",
+      "total_diem": 0.6827023999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:28:35.048283",
+      "total_diem": 0.0272044,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:29:00.949964",
+      "total_diem": 0.0272044,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:29:31.821742",
+      "total_diem": 0.0272044,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:30:00.726743",
+      "total_diem": 0.0272044,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:30:31.272116",
+      "total_diem": 0.0277399,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:31:00.736662",
+      "total_diem": 0.0277399,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:31:31.252598",
+      "total_diem": 0.0277399,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:32:01.413844",
+      "total_diem": 0.0277399,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:32:30.750292",
+      "total_diem": 0.0277399,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:33:00.666683",
+      "total_diem": 0.0277399,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:33:31.915558",
+      "total_diem": 0.0277399,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:34:00.963574",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:34:31.901954",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:35:01.070231",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:35:31.716349",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:36:00.738554",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:36:31.170285",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:37:00.727691",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:37:31.394145",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:38:01.077604",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:38:31.318121",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:39:00.713871",
+      "total_diem": 0.5798639000000003,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:39:31.317985",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:40:00.941193",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:40:31.931149",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:41:01.118919",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:41:31.891272",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:42:02.143817",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:42:32.453846",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:43:02.051632",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:43:32.359976",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:44:02.474300",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:44:32.786366",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:45:02.884066",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:45:32.490718",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:46:02.072871",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:46:32.330635",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:47:02.286146",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:47:32.083496",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:48:01.984618",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:48:32.845445",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:49:01.910974",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:49:32.520721",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:50:02.379373",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:50:32.314693",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:51:01.929405",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:51:32.103733",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:52:02.338785",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:52:32.538706",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:53:01.730283",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:53:32.342857",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:54:01.766409",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:54:32.688792",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:55:02.148196",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:55:32.154675",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:56:01.901175",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:56:32.488762",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:57:01.863960",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:57:32.169134",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:58:02.179520",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:58:32.560930",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:59:01.869407",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-10T23:59:32.358997",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:00:02.122507",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:00:32.996081",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:01:02.993426",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:01:33.255912",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:02:02.890837",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:02:33.342755",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:03:03.206141",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:03:33.633457",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:04:03.064615",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:04:33.623040",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:05:03.627582",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:05:33.465449",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:06:02.703597",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:06:33.319973",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:07:02.825929",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:07:33.750708",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:08:02.849814",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:08:32.870865",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:09:03.211222",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:09:33.761754",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:10:03.051393",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:10:33.167528",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:11:02.991244",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:11:33.448359",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:12:03.165734",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:12:33.071482",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:13:02.853262",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:13:34.245675",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:30:34.236733",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:45:20.322915",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T00:45:48.876958",
+      "total_diem": 0.029863899999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T01:36:01.165350",
+      "total_diem": 0.035678900000000006,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T01:36:30.049949",
+      "total_diem": 0.035678900000000006,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T01:37:00.664856",
+      "total_diem": 0.035678900000000006,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T02:08:30.249004",
+      "total_diem": 0.035678900000000006,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T02:14:18.203151",
+      "total_diem": 0.035678900000000006,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T02:14:48.798387",
+      "total_diem": 0.035678900000000006,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T02:41:37.868961",
+      "total_diem": 0.05074689999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T02:42:07.880316",
+      "total_diem": 0.05074689999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T03:47:51.256242",
+      "total_diem": 0.05074689999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T03:48:20.440220",
+      "total_diem": 0.05074689999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T04:19:24.502237",
+      "total_diem": 0.05074689999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T04:19:54.022643",
+      "total_diem": 0.05074689999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T04:52:23.659506",
+      "total_diem": 0.05074689999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T04:52:53.021993",
+      "total_diem": 0.05074689999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T04:53:22.993104",
+      "total_diem": 0.05074689999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T05:10:57.447986",
+      "total_diem": 0.05074689999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T05:43:47.683338",
+      "total_diem": 0.05104859999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:00:28.139666",
+      "total_diem": 0.05104859999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:00:58.347377",
+      "total_diem": 0.05104859999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:01:28.496007",
+      "total_diem": 0.05104859999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:11:19.283935",
+      "total_diem": 0.05104859999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:45:14.754314",
+      "total_diem": 0.05104859999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:45:42.979463",
+      "total_diem": 0.05104859999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:55:03.824680",
+      "total_diem": 0.05104859999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:55:33.007016",
+      "total_diem": 0.05104859999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:56:02.740770",
+      "total_diem": 0.05104859999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:56:33.019967",
+      "total_diem": 0.05104859999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:57:02.649840",
+      "total_diem": 0.27104859999999986,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:57:33.042498",
+      "total_diem": 0.27104859999999986,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:58:02.843366",
+      "total_diem": 0.27104859999999986,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:58:32.843041",
+      "total_diem": 0.27104859999999986,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:59:03.056082",
+      "total_diem": 0.27104859999999986,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T06:59:32.747191",
+      "total_diem": 1.1510485999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T07:00:03.850814",
+      "total_diem": 1.1510485999999998,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:19:26.450511",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:21:16.425150",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:21:46.133932",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:22:16.533307",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:22:46.079874",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:23:16.300243",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:23:45.920708",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:24:16.445903",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:24:46.535672",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:25:16.247743",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:25:46.148193",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:26:16.663516",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:26:46.306288",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:27:16.166117",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:27:45.852559",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:28:16.845017",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:28:46.006005",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:29:15.930178",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:29:45.975268",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:30:16.287198",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:30:46.207949",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:31:15.997446",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:31:45.860065",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:32:16.309055",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:32:45.889183",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:33:16.099228",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:33:45.732120",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:34:16.353973",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:34:46.216164",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:35:16.293182",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:35:45.819065",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:36:16.540281",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:36:45.752185",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:37:16.220649",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:37:45.867905",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:38:16.380501",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:38:45.891446",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:39:16.603267",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:39:46.049766",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:40:16.306151",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:40:45.907809",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:41:15.887052",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:41:45.822544",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:42:16.379237",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:42:45.849313",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:43:16.587337",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:43:45.621312",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:44:16.236312",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:44:46.186574",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:45:16.093503",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:45:45.762124",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:46:16.594694",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:46:46.103263",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:47:16.001193",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:47:45.903520",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:48:16.370945",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:48:46.015698",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:49:16.120316",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:49:46.098319",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:50:17.062426",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:50:45.818507",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:51:16.108091",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:51:45.935466",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:52:16.668913",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:52:45.839759",
+      "total_diem": 0.03340699999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:53:16.046241",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:53:45.758439",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:54:16.382782",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:54:45.746295",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:55:16.302077",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:55:46.223663",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:56:16.688841",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:56:46.001065",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:57:16.499828",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:57:46.183281",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:58:16.786699",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:58:46.958588",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:59:17.320177",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-11T23:59:46.843861",
+      "total_diem": 0.03719399999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:00:16.820705",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:00:46.826650",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:01:17.445114",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:01:47.132999",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:02:17.035480",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:02:46.688348",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:03:17.600412",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:03:47.211641",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:04:17.065162",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:04:46.787085",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:05:17.437129",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:05:46.757990",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:06:17.311434",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:06:46.960968",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:07:17.316563",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:07:47.015251",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:08:17.253262",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:08:46.682661",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:09:17.363594",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:09:46.723420",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:10:17.335574",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:10:46.937041",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:11:17.291463",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:11:46.881082",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:12:17.244519",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:12:46.590196",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:13:17.257934",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:13:46.708897",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:14:16.866699",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:14:46.878201",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:15:17.576920",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:15:46.785630",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:16:17.063982",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:16:46.722892",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:17:17.319679",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:17:47.016832",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:18:17.081233",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:18:47.031524",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:19:17.488502",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:19:48.213008",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:20:18.417528",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:20:47.910904",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:21:17.911932",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:21:47.470399",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:22:17.813805",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:22:48.022691",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:23:18.028408",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:23:47.925542",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:24:17.929277",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:24:47.828483",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:25:18.139108",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:25:47.604270",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:26:18.143408",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:26:48.158580",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:27:18.049096",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:27:47.660053",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:28:17.747490",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:28:47.924125",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:29:18.370680",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:29:47.960198",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:30:17.720794",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:30:47.967229",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:31:18.069596",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:31:47.871989",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:32:17.924673",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:32:48.285037",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:33:17.745567",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:33:47.783358",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:34:17.783445",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:34:48.195146",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:35:18.198388",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:35:47.814985",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:36:18.177528",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:36:47.780291",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:37:17.930471",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:37:48.089068",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:38:18.400037",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:38:47.817279",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:39:18.610007",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:39:48.102458",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:40:17.795025",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:40:48.005621",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:41:18.212908",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:41:47.821922",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:42:17.913387",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:42:47.788572",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:43:18.134110",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:43:48.082176",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:44:18.678759",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:44:47.723618",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:45:18.350088",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:45:47.866637",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:46:17.661392",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:46:48.358189",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:47:18.646840",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:47:47.853078",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:48:17.852138",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:48:47.643505",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:49:18.375229",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:49:48.276395",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:50:18.177205",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:50:47.972298",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:51:17.979607",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:51:48.123821",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:52:17.779247",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:52:48.014667",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:53:18.082239",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:53:47.806465",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:54:17.919468",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:54:47.800668",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:55:18.218407",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:55:48.012919",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:56:18.162583",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:56:48.100748",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:57:17.858987",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:57:47.830923",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:58:18.491862",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:58:47.831192",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:59:18.259395",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T00:59:47.738914",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:00:17.996786",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:00:47.947061",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:01:18.256622",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:01:48.110258",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:02:18.368673",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:02:48.371518",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:03:18.374597",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:03:48.833389",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:04:18.283024",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:04:47.997904",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:05:18.274283",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:05:47.825113",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:06:18.399832",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:06:47.685971",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:07:18.415875",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:07:47.807352",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:08:18.220994",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:08:48.017460",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:09:18.133239",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:09:47.750918",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:10:18.448231",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:10:48.096949",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:11:18.453658",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:11:47.734299",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:12:17.946875",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:12:47.943192",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:13:17.951088",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:13:48.263850",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:14:18.084479",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:14:47.835170",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:15:17.985737",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:15:47.766925",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:16:17.978366",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:16:47.883967",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:17:18.274574",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:17:48.191822",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:18:17.912055",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:18:47.913215",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:36:34.072226",
+      "total_diem": 0.03749289999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T01:54:21.657359",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T02:44:47.554421",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T02:44:51.040717",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T02:45:20.853138",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T02:45:50.477256",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T02:46:20.246462",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T02:46:50.832830",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T03:20:18.357735",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T03:20:21.862535",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T03:20:51.133165",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T03:36:48.723046",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T05:19:53.759476",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T05:20:20.698315",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T05:54:29.660862",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T05:54:32.052014",
+      "total_diem": 0.04457139999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T06:26:25.558555",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T06:58:28.998219",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T07:00:16.875747",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T07:00:46.917731",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T07:07:13.234377",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T07:07:43.426566",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T07:17:36.919680",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T08:10:06.510513",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T09:34:51.767694",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T09:50:44.292919",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T09:51:13.858752",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T09:51:44.243849",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T10:02:09.557002",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T10:02:38.984989",
+      "total_diem": 0.04488429999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T13:58:38.099319",
+      "total_diem": 0.0127252,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T14:04:24.235760",
+      "total_diem": 0.07328119999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T14:04:53.733356",
+      "total_diem": 0.07328119999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T14:23:16.844963",
+      "total_diem": 0.11531419999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T14:23:46.972221",
+      "total_diem": 0.11531419999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T15:11:42.315892",
+      "total_diem": 0.3227446999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T15:12:12.072025",
+      "total_diem": 0.3246501999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T15:13:17.836344",
+      "total_diem": 0.3246501999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T15:14:45.790327",
+      "total_diem": 0.3325591999999999,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T15:15:16.612702",
+      "total_diem": 0.33726219999999996,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T15:17:39.073805",
+      "total_diem": 0.34342369999999994,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T15:18:22.603847",
+      "total_diem": 0.35668019999999984,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T15:18:52.901285",
+      "total_diem": 0.35889669999999985,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T15:24:25.026751",
+      "total_diem": 0.4081697000000001,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T15:42:40.421396",
+      "total_diem": 0.4487787000000002,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T15:43:09.925121",
+      "total_diem": 0.4487787000000002,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T16:08:45.075347",
+      "total_diem": 0.4714437000000003,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T16:09:13.804757",
+      "total_diem": 0.47432120000000033,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T16:25:23.116370",
+      "total_diem": 0.4768727000000003,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T17:26:08.009940",
+      "total_diem": 0.4768727000000003,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T17:26:38.113476",
+      "total_diem": 0.4819187000000002,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T17:55:28.838103",
+      "total_diem": 0.5045147000000002,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T17:55:58.107343",
+      "total_diem": 0.5067452000000001,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T18:00:15.947356",
+      "total_diem": 0.5158557000000004,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T18:00:45.912743",
+      "total_diem": 0.5158557000000004,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T18:11:13.133011",
+      "total_diem": 0.5330517000000005,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T18:27:08.985959",
+      "total_diem": 0.5458137000000004,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T18:27:37.871196",
+      "total_diem": 0.5458137000000004,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T19:28:45.544416",
+      "total_diem": 0.6095400000000009,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T20:19:43.466487",
+      "total_diem": 0.6020819999999996,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T20:29:11.865085",
+      "total_diem": 0.6020229999999994,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T20:29:43.167094",
+      "total_diem": 0.6028009999999994,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T20:30:11.991263",
+      "total_diem": 0.6020149999999993,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T20:30:41.935010",
+      "total_diem": 0.6020149999999993,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T20:31:14.677806",
+      "total_diem": 0.6020149999999993,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T20:59:27.719544",
+      "total_diem": 0.6030460000000007,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-12T20:59:57.322348",
+      "total_diem": 0.6030460000000007,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T16:47:52.473686",
+      "total_diem": 8.7452,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T16:48:20.491550",
+      "total_diem": 8.7452,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T16:48:50.821724",
+      "total_diem": 8.7452,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T16:51:38.150488",
+      "total_diem": 8.7403,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:52:07.742007",
+      "total_diem": 8.7403,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:52:38.703839",
+      "total_diem": 8.7403,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:53:08.749488",
+      "total_diem": 8.7403,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:53:41.627635",
+      "total_diem": 8.7403,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:54:10.148331",
+      "total_diem": 8.7403,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:54:40.944639",
+      "total_diem": 8.7309,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:55:11.547393",
+      "total_diem": 8.7278,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:55:42.066892",
+      "total_diem": 8.7237,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:56:12.175776",
+      "total_diem": 8.7205,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:56:42.275105",
+      "total_diem": 8.7176,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:57:11.668829",
+      "total_diem": 8.7176,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:57:43.712817",
+      "total_diem": 8.7176,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:58:12.818912",
+      "total_diem": 8.7176,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:58:43.420600",
+      "total_diem": 8.7176,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T16:59:14.350535",
+      "total_diem": 8.7176,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T17:20:23.374301",
+      "total_diem": 8.697199999999999,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T17:20:53.121892",
+      "total_diem": 8.697199999999999,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T17:21:23.439550",
+      "total_diem": 8.6871,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T17:25:37.540753",
+      "total_diem": 8.6694,
+      "total_usd": 0.0,
+      "api_key_count": 16
+    },
+    {
+      "timestamp": "2025-10-14T17:25:48.558531",
+      "total_diem": 8.6694,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:26:08.015319",
+      "total_diem": 8.6694,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:26:38.314522",
+      "total_diem": 8.6694,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:27:07.806368",
+      "total_diem": 8.6694,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:27:38.430583",
+      "total_diem": 8.6673,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:28:07.783535",
+      "total_diem": 8.6673,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:28:38.311832",
+      "total_diem": 8.6593,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:29:08.037723",
+      "total_diem": 8.6593,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:29:38.438934",
+      "total_diem": 8.6548,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:30:08.277939",
+      "total_diem": 8.6548,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:30:38.075078",
+      "total_diem": 8.6467,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:31:08.177077",
+      "total_diem": 8.6467,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:31:38.290334",
+      "total_diem": 8.6444,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:32:07.804123",
+      "total_diem": 8.6444,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:32:38.161648",
+      "total_diem": 8.638,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:33:07.885454",
+      "total_diem": 8.638,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:33:38.438091",
+      "total_diem": 8.635,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:34:08.202185",
+      "total_diem": 8.635,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:34:38.077439",
+      "total_diem": 8.633,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:34:51.391572",
+      "total_diem": 8.633,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:35:21.667275",
+      "total_diem": 8.633,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:35:52.931868",
+      "total_diem": 8.633,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:39:07.032141",
+      "total_diem": 8.6261,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:39:36.947817",
+      "total_diem": 8.6261,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:40:07.340578",
+      "total_diem": 8.6261,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-14T17:40:38.263904",
+      "total_diem": 8.6261,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    }
+  ],
+  "last_saved": "2025-10-14T17:40:38.264821"
+}
