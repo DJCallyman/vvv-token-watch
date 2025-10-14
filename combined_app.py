@@ -34,6 +34,36 @@ from vvv_token_watch.model_comparison import ModelComparisonWidget
 from vvv_token_watch.validation import validate_holding_amount, ValidationState
 from vvv_token_watch.usage_tracker import UsageWorker, BalanceInfo, APIKeyUsage
 from vvv_token_watch.vvv_display import BalanceDisplayWidget, APIKeyUsageWidget
+from vvv_token_watch.enhanced_balance_widget import HeroBalanceWidget
+from vvv_token_watch.action_buttons import ActionButtonWidget
+from vvv_token_watch.date_utils import DateFormatter
+
+# Phase 2 imports - with error handling
+try:
+    from vvv_token_watch.usage_analytics import UsageAnalytics
+    from vvv_token_watch.exchange_rate_service import ExchangeRateService
+    PHASE2_AVAILABLE = True
+    print("DEBUG: Phase 2 modules imported successfully")
+except ImportError as e:
+    print(f"WARNING: Phase 2 modules not available: {e}")
+    UsageAnalytics = None
+    ExchangeRateService = None
+    PHASE2_AVAILABLE = False
+
+# Phase 3 imports - with error handling
+try:
+    from vvv_token_watch.key_management_widget import APIKeyManagementWidget
+    from vvv_token_watch.usage_reports import usage_report_generator, UsageReportGenerator
+    from vvv_token_watch.venice_key_management import get_key_management_service
+    PHASE3_AVAILABLE = True
+    print("DEBUG: Phase 3 modules imported successfully")
+except ImportError as e:
+    print(f"WARNING: Phase 3 modules not available: {e}")
+    APIKeyManagementWidget = None
+    usage_report_generator = None
+    UsageReportGenerator = None
+    get_key_management_service = None
+    PHASE3_AVAILABLE = False
 
 # --- Suppress Warnings (Use with caution) ---
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
@@ -158,6 +188,37 @@ class CombinedViewerApp(QMainWindow):
         self.api_key_widgets = []
         self.current_usage_data = []
         self.current_balance_data = None
+        self.current_daily_usage = {}  # Store daily usage totals
+        
+        # Phase 2: Initialize analytics and services
+        if PHASE2_AVAILABLE:
+            try:
+                self.usage_analytics = UsageAnalytics()
+                self.exchange_rate_service = ExchangeRateService(cache_ttl_minutes=5)
+                print("DEBUG: Phase 2 components initialized successfully")
+            except Exception as e:
+                print(f"WARNING: Phase 2 initialization failed: {e}")
+                self.usage_analytics = None
+                self.exchange_rate_service = None
+        else:
+            print("DEBUG: Phase 2 components not available, skipping initialization")
+            self.usage_analytics = None
+            self.exchange_rate_service = None
+        
+        # Phase 3: Initialize key management and security monitoring
+        if PHASE3_AVAILABLE:
+            try:
+                self.usage_report_generator = usage_report_generator
+                self.key_management_enabled = True
+                print("DEBUG: Phase 3 components initialized successfully")
+            except Exception as e:
+                print(f"WARNING: Phase 3 initialization failed: {e}")
+                self.usage_report_generator = None
+                self.key_management_enabled = False
+        else:
+            print("DEBUG: Phase 3 components not available, skipping initialization")
+            self.usage_report_generator = None
+            self.key_management_enabled = False
         
         # Create central widget and main layout
         central_widget = QWidget()
@@ -174,16 +235,33 @@ class CombinedViewerApp(QMainWindow):
         self.main_tabs = QTabWidget()
         main_layout.addWidget(self.main_tabs)
         
-        # Create usage tracking container
+        # Create usage tracking container  
         self.usage_container = QWidget()
         self.usage_container.setStyleSheet(f"background-color: {self.theme.background};")
         usage_layout = QVBoxLayout(self.usage_container)
         usage_layout.setSpacing(10)
         usage_layout.setContentsMargins(10, 10, 10, 10)
         
-        # Create overall balance display
-        self.balance_display = BalanceDisplayWidget(self.theme.theme_colors)
-        usage_layout.addWidget(self.balance_display)
+        # Create overall balance display (Hero Card)
+        try:
+            self.hero_balance_display = HeroBalanceWidget(self.theme.theme_colors)
+            # Connect Phase 2 signals
+            self.hero_balance_display.refresh_requested.connect(self.refresh_balance_action)
+            usage_layout.addWidget(self.hero_balance_display)
+            
+            # Force text styling after widget is added to main app (to override any parent styling)
+            QTimer.singleShot(100, self.hero_balance_display.force_text_styling)
+            
+        except Exception as e:
+            print(f"ERROR: Failed to create hero balance widget: {e}")
+            # Fallback to original balance display
+            self.balance_display = BalanceDisplayWidget(self.theme.theme_colors)
+            usage_layout.addWidget(self.balance_display)
+        
+        # Keep the old balance display for backward compatibility during transition
+        if not hasattr(self, 'balance_display'):
+            self.balance_display = BalanceDisplayWidget(self.theme.theme_colors)
+        # Don't add it to layout - we'll phase it out
         
         # Create scroll area for API key usage
         self.usage_scroll_area = QScrollArea()
@@ -207,7 +285,7 @@ class CombinedViewerApp(QMainWindow):
 
         # Add usage tracking to balance tab
         balance_tab_layout.addWidget(self.usage_container)
-
+        
         # Create price display components
         self.price_display_usd = PriceDisplayWidget(self.theme)
         self.price_display_aud = PriceDisplayWidget(self.theme)
@@ -345,9 +423,31 @@ class CombinedViewerApp(QMainWindow):
         controls_layout = QHBoxLayout()
         controls_layout.setSpacing(10)
 
-        self.connect_button = QPushButton("Connect")
-        self.connect_button.clicked.connect(self.connect_thread)
-        controls_layout.addWidget(self.connect_button)
+        # Create enhanced action buttons to replace simple "Connect" button
+        try:
+            self.action_buttons = ActionButtonWidget(self.theme.theme_colors)
+            
+            # Connect action button signals
+            self.action_buttons.connect_models_requested.connect(self.connect_thread)
+            self.action_buttons.refresh_balance_requested.connect(self.refresh_balance_action)
+            self.action_buttons.load_usage_requested.connect(self.load_usage_action)
+            self.action_buttons.refresh_all_requested.connect(self.refresh_all_action)
+            
+            controls_layout.addWidget(self.action_buttons)
+            
+        except Exception as e:
+            print(f"ERROR: Failed to create action buttons: {e}")
+            # Fallback to original connect button
+            self.connect_button = QPushButton("Connect")
+            self.connect_button.clicked.connect(self.connect_thread)
+            controls_layout.addWidget(self.connect_button)
+        
+        # Keep original connect button for fallback during transition
+        if not hasattr(self, 'connect_button'):
+            self.connect_button = QPushButton("Connect (Legacy)")
+            self.connect_button.clicked.connect(self.connect_thread)
+            self.connect_button.setVisible(False)  # Hide by default
+            controls_layout.addWidget(self.connect_button)
 
         self.display_button = QPushButton("Display Models")
         self.display_button.clicked.connect(self.display_selected_models_action)
@@ -415,6 +515,9 @@ class CombinedViewerApp(QMainWindow):
         
         # Initialize usage tracking
         self._init_usage_tracking()
+        
+        # Phase 2: Initialize analytics and exchange rate services
+        self._init_phase2_services()
         
         # Start periodic updates
         QTimer.singleShot(Config.COINGECKO_INITIAL_DELAY_MS, self.update_price_label)
@@ -500,6 +603,10 @@ class CombinedViewerApp(QMainWindow):
         # Update price container
         self.price_container.setStyleSheet(f"background-color: {self.theme.background};")
         
+        # Update usage container
+        if hasattr(self, 'usage_container'):
+            self.usage_container.setStyleSheet(f"background-color: {self.theme.background};")
+        
         # Update token name label
         self.token_name_label.setStyleSheet(f"color: {self.theme.text};")
         
@@ -542,9 +649,23 @@ class CombinedViewerApp(QMainWindow):
         self._apply_theme()
         self.price_display_usd.theme = self.theme
         self.price_display_aud.theme = self.theme
+        
         # Update model comparison widget theme if it exists
         if hasattr(self, 'model_comparison_widget') and self.model_comparison_widget:
             self.model_comparison_widget.theme = self.theme
+        
+        # Update enhanced components theme
+        if hasattr(self, 'hero_balance_display') and self.hero_balance_display:
+            self.hero_balance_display.set_theme_colors(self.theme.theme_colors)
+        
+        if hasattr(self, 'action_buttons') and self.action_buttons:
+            self.action_buttons.set_theme_colors(self.theme.theme_colors)
+        
+        # Phase 3: Update key management widget themes
+        if PHASE3_AVAILABLE and hasattr(self, 'api_key_widgets'):
+            for widget in self.api_key_widgets:
+                if hasattr(widget, 'set_theme_colors'):
+                    widget.set_theme_colors(self.theme.theme_colors)
 
         # Update validation state display
         self.price_display_usd.set_validation_state(self.validation_state.value)
@@ -631,10 +752,16 @@ class CombinedViewerApp(QMainWindow):
     
     def connect_thread(self):
         """Starts the API connection in a separate thread."""
+        # Disable legacy buttons
         self.connect_button.setEnabled(False)
         self.display_button.setEnabled(False)
         self.view_styles_button.setEnabled(False)
         self.type_combobox.setEnabled(False)
+        
+        # Set loading state for action buttons
+        if hasattr(self, 'action_buttons'):
+            self.action_buttons.set_button_loading('connect', True, "Connecting...")
+        
         self.clear_display_frame()
         self.status_bar.showMessage("Connecting to Venice API...")
         
@@ -658,6 +785,81 @@ class CombinedViewerApp(QMainWindow):
         self.api_worker = APIWorker(url, headers, params)
         self.api_worker.signals.result.connect(self._update_gui_after_connect)
         self.api_worker.start()
+    
+    def refresh_balance_action(self):
+        """Handle refresh balance button action."""
+        if hasattr(self, 'action_buttons'):
+            self.action_buttons.set_button_loading('refresh_balance', True, "Refreshing...")
+        
+        try:
+            # Trigger balance refresh by restarting the usage worker
+            if hasattr(self, 'usage_worker') and self.usage_worker:
+                # If worker is already running, let it finish first
+                if not self.usage_worker.isRunning():
+                    self.usage_worker.start()
+                else:
+                    print("Usage worker already running, refresh will happen automatically")
+                
+            # Show success after a short delay
+            QTimer.singleShot(2000, lambda: [
+                self.action_buttons.set_button_loading('refresh_balance', False) if hasattr(self, 'action_buttons') else None,
+                self.action_buttons.set_button_success('refresh_balance', "Balance Updated") if hasattr(self, 'action_buttons') else None
+            ])
+            
+        except Exception as e:
+            if hasattr(self, 'action_buttons'):
+                self.action_buttons.set_button_loading('refresh_balance', False)
+                self.action_buttons.set_button_error('refresh_balance', "Refresh Failed")
+            print(f"Error refreshing balance: {e}")
+    
+    def load_usage_action(self):
+        """Handle load usage button action."""
+        if hasattr(self, 'action_buttons'):
+            self.action_buttons.set_button_loading('load_usage', True, "Loading...")
+        
+        try:
+            # Trigger usage data refresh by restarting the usage worker
+            if hasattr(self, 'usage_worker') and self.usage_worker:
+                # If worker is already running, let it finish first
+                if not self.usage_worker.isRunning():
+                    self.usage_worker.start()
+                else:
+                    print("Usage worker already running, refresh will happen automatically")
+                
+            # Show success after a short delay
+            QTimer.singleShot(2500, lambda: [
+                self.action_buttons.set_button_loading('load_usage', False) if hasattr(self, 'action_buttons') else None,
+                self.action_buttons.set_button_success('load_usage', "Usage Loaded") if hasattr(self, 'action_buttons') else None
+            ])
+            
+        except Exception as e:
+            if hasattr(self, 'action_buttons'):
+                self.action_buttons.set_button_loading('load_usage', False)
+                self.action_buttons.set_button_error('load_usage', "Load Failed")
+            print(f"Error loading usage: {e}")
+    
+    def refresh_all_action(self):
+        """Handle refresh all data button action."""
+        if hasattr(self, 'action_buttons'):
+            self.action_buttons.set_button_loading('refresh_all', True, "Refreshing all...")
+        
+        try:
+            # Trigger multiple refreshes
+            self.refresh_balance_action()
+            self.load_usage_action()
+            self.update_price_label()  # Refresh prices
+            
+            # Show success after all operations complete
+            QTimer.singleShot(3000, lambda: [
+                self.action_buttons.set_button_loading('refresh_all', False) if hasattr(self, 'action_buttons') else None,
+                self.action_buttons.set_button_success('refresh_all', "All Data Updated") if hasattr(self, 'action_buttons') else None
+            ])
+            
+        except Exception as e:
+            if hasattr(self, 'action_buttons'):
+                self.action_buttons.set_button_loading('refresh_all', False)
+                self.action_buttons.set_button_error('refresh_all', "Refresh Failed")
+            print(f"Error refreshing all data: {e}")
     
     def view_style_presets_action(self):
         """Starts fetching style presets in a separate thread."""
@@ -716,6 +918,11 @@ class CombinedViewerApp(QMainWindow):
             self.display_button.setEnabled(True)
             self.view_styles_button.setEnabled(True)
 
+            # Update action buttons to success state
+            if hasattr(self, 'action_buttons'):
+                self.action_buttons.set_button_loading('connect', False)
+                self.action_buttons.set_button_success('connect', "Connected")
+
             # Update the comparison widget with new model data
             self.update_model_comparison_data()
 
@@ -737,6 +944,11 @@ class CombinedViewerApp(QMainWindow):
             self.display_button.setEnabled(False)
             self.view_styles_button.setEnabled(False)
             self.status_bar.showMessage("Model connection failed. Check logs or API key.")
+            
+            # Update action buttons to error state
+            if hasattr(self, 'action_buttons'):
+                self.action_buttons.set_button_loading('connect', False)
+                self.action_buttons.set_button_error('connect', "Connection Failed")
             
             # Add error label
             error_label = QLabel("Model Connection failed.")
@@ -870,6 +1082,7 @@ class CombinedViewerApp(QMainWindow):
         self.usage_worker = UsageWorker(Config.VENICE_ADMIN_KEY)
         self.usage_worker.usage_data_updated.connect(self._update_usage_display)
         self.usage_worker.balance_data_updated.connect(self._update_balance_display)
+        self.usage_worker.daily_usage_updated.connect(self._update_daily_usage_display)
         self.usage_worker.error_occurred.connect(self._handle_usage_error)
     
     def _start_usage_updates(self):
@@ -889,6 +1102,33 @@ class CombinedViewerApp(QMainWindow):
         # Schedule next update
         QTimer.singleShot(Config.USAGE_REFRESH_INTERVAL_MS, self._update_usage_data)
     
+    def _update_daily_usage_display(self, daily_usage: Dict[str, float]):
+        """Handle daily usage totals from the Venice billing API."""
+        self.current_daily_usage = daily_usage
+        print(f"DEBUG: Daily usage updated - DIEM: {daily_usage.get('diem', 0):.4f}, USD: ${daily_usage.get('usd', 0):.2f}")
+        
+        # Update any widgets that need to display total daily usage
+        # This can be extended in the future for dashboard summaries
+    
+    def _refresh_data(self):
+        """
+        Refresh all data immediately (for use after key management operations).
+        This triggers an immediate data update without waiting for the timer.
+        """
+        try:
+            print("DEBUG: Refreshing data after key management operation")
+            
+            if self.usage_worker and not self.usage_worker.isRunning():
+                self.usage_worker.start()
+            
+            # Also update other data if workers exist
+            if hasattr(self, 'price_worker') and self.price_worker and not self.price_worker.isRunning():
+                self.price_worker.start()
+                
+        except Exception as e:
+            print(f"ERROR: Failed to refresh data: {e}")
+    
+    
     def _update_usage_display(self, usage_data: List[APIKeyUsage]):
         """Update the UI with new API key usage data."""
         self.current_usage_data = usage_data
@@ -906,7 +1146,19 @@ class CombinedViewerApp(QMainWindow):
         
         # Create new widgets for each API key
         for key_usage in usage_data:
-            widget = APIKeyUsageWidget(key_usage, self.theme.theme_colors)
+            # Phase 3: Use enhanced management widget if available
+            if PHASE3_AVAILABLE and self.key_management_enabled:
+                widget = APIKeyManagementWidget(key_usage, self.theme.theme_colors, self.current_balance_data)
+                # Connect management signals
+                widget.key_revoked.connect(self._handle_key_revoke)
+                
+                # Update last used timestamp from security monitoring
+                if hasattr(key_usage, 'last_used_at') and key_usage.last_used_at:
+                    widget.update_last_used(key_usage.last_used_at)
+            else:
+                # Fallback to original widget
+                widget = APIKeyUsageWidget(key_usage, self.theme.theme_colors)
+            
             self.api_key_widgets.append(widget)
             self.usage_frame_layout.addWidget(widget)
         
@@ -914,10 +1166,116 @@ class CombinedViewerApp(QMainWindow):
         self.usage_frame_layout.addStretch()
     
     def _update_balance_display(self, balance_info: BalanceInfo):
-        """Update the UI with new balance information."""
+        """Update the UI with new balance information using Phase 2 analytics."""
         self.current_balance_data = balance_info
+        
+        # Update existing API key widgets with new balance info
+        for widget in self.api_key_widgets:
+            if hasattr(widget, 'update_balance_info'):
+                widget.update_balance_info(balance_info)
+        
+        # Phase 2: Use analytics integration
+        try:
+            self._update_balance_with_analytics(balance_info, self.current_usage_data)
+        except Exception as e:
+            print(f"ERROR: Analytics update failed, falling back to basic update: {e}")
+            # Fallback to original update method
+            self._update_balance_display_fallback(balance_info)
+    
+    def _update_balance_display_fallback(self, balance_info: BalanceInfo):
+        """Fallback balance update method (original implementation)."""
+        # Update original balance display
         if self.balance_display:
             self.balance_display.update_balance(balance_info)
+        
+        # Update hero balance widget
+        if hasattr(self, 'hero_balance_display') and self.hero_balance_display:
+            try:
+                # Extract balance values from BalanceInfo
+                diem_balance = balance_info.diem if hasattr(balance_info, 'diem') else 0.0
+                usd_balance = balance_info.usd if hasattr(balance_info, 'usd') else 0.0
+                
+                # Calculate exchange rate if both values are available
+                exchange_rate = None
+                if diem_balance > 0 and usd_balance > 0:
+                    exchange_rate = usd_balance / diem_balance
+                
+                # Update hero balance widget
+                self.hero_balance_display.update_balance(
+                    diem_balance=diem_balance,
+                    usd_balance=usd_balance,
+                    exchange_rate=exchange_rate,
+                    animate=True
+                )
+                
+                # Update usage info if we have usage data
+                if hasattr(self, 'current_usage_data') and self.current_usage_data:
+                    # Calculate simple usage metrics
+                    daily_average = self._calculate_daily_average()
+                    trend = self._calculate_usage_trend()
+                    days_remaining = self._estimate_days_remaining(diem_balance, daily_average)
+                    
+                    self.hero_balance_display.update_usage_info(
+                        daily_average=daily_average,
+                        trend=trend,
+                        days_remaining=days_remaining
+                    )
+                
+            except Exception as e:
+                print(f"Error updating hero balance display: {e}")
+                # Set error state if update fails
+                self.hero_balance_display.set_error_state("Failed to update balance")
+    
+    def _calculate_daily_average(self) -> float:
+        """Calculate average daily spending from current usage data."""
+        try:
+            if not hasattr(self, 'current_usage_data') or not self.current_usage_data:
+                return 0.0
+            
+            # Simple calculation - sum all usage and estimate daily average
+            total_usage = 0.0
+            for usage in self.current_usage_data:
+                if hasattr(usage, 'usage') and hasattr(usage.usage, 'usd'):
+                    total_usage += usage.usage.usd
+            
+            # Estimate over last 30 days (rough approximation)
+            daily_average = total_usage / 30.0 if total_usage > 0 else 0.0
+            return daily_average
+            
+        except Exception as e:
+            print(f"Error calculating daily average: {e}")
+            return 0.0
+    
+    def _calculate_usage_trend(self) -> str:
+        """Calculate usage trend from recent data."""
+        try:
+            # For now, return stable - in the future this could analyze historical data
+            # to determine if usage is increasing, decreasing, or stable
+            daily_avg = self._calculate_daily_average()
+            
+            if daily_avg > 5.0:  # High usage
+                return "increasing"
+            elif daily_avg < 1.0:  # Low usage
+                return "decreasing"
+            else:
+                return "stable"
+                
+        except Exception as e:
+            print(f"Error calculating usage trend: {e}")
+            return "stable"
+    
+    def _estimate_days_remaining(self, current_balance: float, daily_average: float) -> Optional[int]:
+        """Estimate days remaining based on current balance and usage."""
+        try:
+            if daily_average <= 0 or current_balance <= 0:
+                return None
+            
+            days_remaining = int(current_balance / daily_average)
+            return max(0, days_remaining)  # Don't return negative days
+            
+        except Exception as e:
+            print(f"Error estimating days remaining: {e}")
+            return None
     
     def _handle_usage_error(self, error_msg: str):
         """Handle errors from the usage worker."""
@@ -1140,6 +1498,11 @@ class CombinedViewerApp(QMainWindow):
         print("DEBUG: Close event triggered, cleaning up...")
 
         try:
+            # Phase 2: Stop exchange rate service
+            if hasattr(self, 'exchange_rate_service') and self.exchange_rate_service:
+                print("DEBUG: Stopping exchange rate service...")
+                self.exchange_rate_service.stop_automatic_updates()
+            
             # Stop all timers
             for timer in self.findChildren(QTimer):
                 if timer.isActive():
@@ -1272,8 +1635,234 @@ class CombinedViewerApp(QMainWindow):
             self.traits_combobox.setEnabled(False)
             if result['error']:
                 self._show_api_error("Traits API Error", result['error'])
-
-
+    
+    # Phase 2 Enhancement Methods
+    
+    def _init_phase2_services(self):
+        """Initialize Phase 2 analytics and exchange rate services."""
+        try:
+            # Only initialize if components are available
+            if not self.exchange_rate_service:
+                print("DEBUG: Exchange rate service not available, skipping initialization")
+                return
+                
+            # Connect exchange rate service signals
+            self.exchange_rate_service.rate_updated.connect(self._handle_rate_update)
+            self.exchange_rate_service.rate_error.connect(self._handle_rate_error)
+            
+            # DON'T start automatic rate updates yet - this might be causing the thread issue
+            # self.exchange_rate_service.start_automatic_updates(interval_minutes=5)
+            
+            print("DEBUG: Phase 2 services initialized successfully (without auto-updates)")
+            
+        except Exception as e:
+            print(f"ERROR: Failed to initialize Phase 2 services: {e}")
+            # Don't let this break the app - just continue without Phase 2 features
+    
+    def _handle_rate_update(self, rate_data):
+        """
+        Handle exchange rate updates.
+        
+        Args:
+            rate_data: ExchangeRateData object
+        """
+        try:
+            # Update hero balance widget with new rate
+            if hasattr(self, 'hero_balance_display'):
+                self.hero_balance_display.update_exchange_rate_display(rate_data)
+            
+            # Update status bar
+            self.status_bar.showMessage(f"Exchange rate updated: {rate_data.rate:.4f}", 2000)
+            
+        except Exception as e:
+            print(f"ERROR: Failed to handle rate update: {e}")
+    
+    def _handle_rate_error(self, error_msg: str):
+        """
+        Handle exchange rate fetch errors.
+        
+        Args:
+            error_msg: Error message
+        """
+        print(f"WARNING: Exchange rate error: {error_msg}")
+        self.status_bar.showMessage(f"Rate update failed: {error_msg}", 5000)
+    
+    def _update_balance_with_analytics(self, balance_info, usage_data):
+        """
+        Update balance display with analytics integration.
+        
+        Args:
+            balance_info: BalanceInfo object
+            usage_data: List of APIKeyUsage objects
+        """
+        try:
+            # Record usage snapshot for analytics
+            self.usage_analytics.record_usage_snapshot(usage_data, balance_info)
+            
+            # Get usage trend analysis
+            trend = self.usage_analytics.get_usage_trend(days=7)
+            
+            # Calculate days remaining estimate
+            current_rate = getattr(self.exchange_rate_service.current_rate, 'rate', 0.72) if self.exchange_rate_service.current_rate else 0.72
+            days_remaining = self.usage_analytics.estimate_days_remaining(balance_info.usd)
+            trend.days_remaining_estimate = days_remaining
+            
+            # Update hero widget with analytics
+            if hasattr(self, 'hero_balance_display'):
+                self.hero_balance_display.update_with_analytics(
+                    balance_info, 
+                    trend, 
+                    self.exchange_rate_service.current_rate
+                )
+            
+            # Update original widget for backward compatibility
+            if hasattr(self, 'balance_display') and self.balance_display:
+                self.balance_display.update_balance_info(balance_info)
+                
+        except Exception as e:
+            print(f"ERROR: Failed to update balance with analytics: {e}")
+            # Fallback to basic update
+            if hasattr(self, 'hero_balance_display'):
+                self.hero_balance_display.update_balance(
+                    balance_info.diem, 
+                    balance_info.usd, 
+                    0.72  # Fallback rate
+                )
+    
+    def get_usage_analytics_summary(self) -> Dict[str, any]:
+        """
+        Get comprehensive usage analytics summary.
+        
+        Returns:
+            Dictionary with analytics data
+        """
+        try:
+            summary = self.usage_analytics.get_usage_summary(days=7)
+            
+            # Add current balance data
+            if hasattr(self, 'hero_balance_display'):
+                balance_summary = self.hero_balance_display.get_analytics_summary()
+                summary.update(balance_summary)
+            
+            return summary
+            
+        except Exception as e:
+            print(f"ERROR: Failed to get analytics summary: {e}")
+            return {"error": str(e)}
+    
+    # Phase 3: Key Management Signal Handlers
+    
+    def _handle_key_rename(self, key_id: str, new_name: str):
+        """
+        Handle API key rename request with real Venice API integration.
+        
+        Args:
+            key_id: ID of the key to rename
+            new_name: New name for the key
+        """
+        try:
+            print(f"DEBUG: Renaming key {key_id} to '{new_name}'")
+            
+            # Get Venice key management service
+            key_service = get_key_management_service() if get_key_management_service else None
+            
+            if key_service:
+                # Make actual API call to Venice
+                success = key_service.rename_api_key(key_id, new_name)
+                
+                if success:
+                    # Update local data only after successful API call
+                    for key_usage in self.current_usage_data:
+                        if key_usage.id == key_id:
+                            key_usage.name = new_name
+                            break
+                    
+                    self.status_bar.showMessage(f"Key successfully renamed to '{new_name}'", 3000)
+                    
+                    # Generate usage report with new name
+                    if self.usage_report_generator:
+                        for key_usage in self.current_usage_data:
+                            if key_usage.id == key_id:
+                                self.usage_report_generator.record_usage_snapshot(key_usage)
+                                break
+                    
+                    # Refresh data to show the change
+                    self._refresh_data()
+                else:
+                    self.status_bar.showMessage(f"Rename not supported by Venice API", 5000)
+                    QMessageBox.information(self, "Operation Not Supported", 
+                                      f"Venice API does not support renaming existing API keys.\n\n"
+                                      f"Available operations:\n"
+                                      f"• Create new keys (with custom descriptions)\n"
+                                      f"• Delete/revoke existing keys\n"
+                                      f"• View key details and usage\n\n"
+                                      f"To 'rename' a key, you would need to:\n"
+                                      f"1. Create a new key with the desired name\n"
+                                      f"2. Update your applications to use the new key\n"
+                                      f"3. Delete the old key\n\n"
+                                      f"This ensures your key security is maintained.")
+            else:
+                # Fallback to local update only
+                print("WARNING: Venice key management service not available, updating locally only")
+                for key_usage in self.current_usage_data:
+                    if key_usage.id == key_id:
+                        key_usage.name = new_name
+                        break
+                self.status_bar.showMessage(f"Key renamed locally to '{new_name}' (API unavailable)", 3000)
+                        
+        except Exception as e:
+            print(f"ERROR: Failed to rename key: {e}")
+            self.status_bar.showMessage(f"Failed to rename key: {e}", 5000)
+    def _handle_key_revoke(self, key_id: str):
+        """
+        Handle API key revocation request with real Venice API integration.
+        
+        Args:
+            key_id: ID of the key to revoke
+        """
+        try:
+            print(f"DEBUG: Revoking key {key_id}")
+            
+            # Get Venice key management service
+            key_service = get_key_management_service() if get_key_management_service else None
+            
+            if key_service:
+                # Make actual API call to Venice
+                success = key_service.revoke_api_key(key_id)
+                
+                if success:
+                    # Update local data only after successful API call
+                    for key_usage in self.current_usage_data:
+                        if key_usage.id == key_id:
+                            key_usage.is_active = False
+                            break
+                    
+                    self.status_bar.showMessage("Key successfully revoked", 3000)
+                    
+                    # Refresh data to show the change
+                    self._refresh_data()
+                else:
+                    self.status_bar.showMessage("Failed to revoke key - Venice API error", 5000)
+                    QMessageBox.warning(self, "Revocation Failed", 
+                                      f"Could not revoke the API key. This may be because:\n"
+                                      f"• The key doesn't exist\n"
+                                      f"• Network connectivity issues\n"
+                                      f"• Insufficient permissions\n\n"
+                                      f"Check the console for detailed error information.")
+            else:
+                # Fallback to local update only
+                print("WARNING: Venice key management service not available, updating locally only")
+                for key_usage in self.current_usage_data:
+                    if key_usage.id == key_id:
+                        key_usage.is_active = False
+                        break
+                self.status_bar.showMessage("Key revoked locally (API unavailable)", 3000)
+            
+        except Exception as e:
+            print(f"ERROR: Failed to revoke key: {e}")
+            self.status_bar.showMessage(f"Failed to revoke key: {e}", 5000)
+            QMessageBox.critical(self, "Error", f"An error occurred while revoking the key:\n{e}")
+    
 # Main application
 if __name__ == "__main__":
     app = QApplication(sys.argv)

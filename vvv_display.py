@@ -339,14 +339,6 @@ class APIKeyUsageWidget(QWidget):
         
         info_layout.addStretch()
         
-        # Key ID (truncated)
-        key_id = self.api_key_usage.id
-        display_id = f"...{key_id[-8:]}" if len(key_id) > 8 else key_id
-        self.id_label = QLabel(display_id)
-        self.id_label.setFont(QFont("Arial", 9))
-        self.id_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
-        info_layout.addWidget(self.id_label)
-        
         layout.addLayout(info_layout)
         
         # Status indicator
@@ -374,10 +366,10 @@ class APIKeyUsageWidget(QWidget):
         
         layout.addLayout(status_layout)
         
-        # Usage metrics
+        # Usage metrics - 7-day trailing usage
         usage_layout = QVBoxLayout()
         
-        # DIEM usage
+        # DIEM usage (always show)
         diem_layout = QHBoxLayout()
         diem_label = QLabel("DIEM 7d:")
         diem_label.setFont(QFont("Arial", 9))
@@ -391,37 +383,27 @@ class APIKeyUsageWidget(QWidget):
 
         diem_layout.addStretch()
 
-        # DIEM progress bar
-        self.diem_progress = QProgressBar()
-        self.diem_progress.setRange(0, 100)
-        self.diem_progress.setValue(0)
-        self.diem_progress.setTextVisible(False)
-        diem_layout.addWidget(self.diem_progress, 2)  # 2x stretch factor
-
         usage_layout.addLayout(diem_layout)
         
-        # USD usage
-        usd_layout = QHBoxLayout()
-        usd_label = QLabel("USD 7d:")
-        usd_label.setFont(QFont("Arial", 9))
-        usd_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
-        usd_layout.addWidget(usd_label)
-        
-        self.usd_usage_label = QLabel(f"${self.api_key_usage.usage.usd:.2f}")
-        self.usd_usage_label.setFont(QFont("Arial", 9, QFont.Bold))
-        self.usd_usage_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
-        usd_layout.addWidget(self.usd_usage_label)
-        
-        usd_layout.addStretch()
-        
-        # USD progress bar
-        self.usd_progress = QProgressBar()
-        self.usd_progress.setRange(0, 100)
-        self.usd_progress.setValue(0)
-        self.usd_progress.setTextVisible(False)
-        usd_layout.addWidget(self.usd_progress, 2)  # 2x stretch factor
-        
-        usage_layout.addLayout(usd_layout)
+        # USD usage (only show if > 0)
+        usd_value = self.api_key_usage.usage.usd
+        if usd_value > 0:
+            usd_layout = QHBoxLayout()
+            usd_label = QLabel("USD 7d:")
+            usd_label.setFont(QFont("Arial", 9))
+            usd_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+            usd_layout.addWidget(usd_label)
+            
+            self.usd_usage_label = QLabel(f"${usd_value:.2f}")
+            self.usd_usage_label.setFont(QFont("Arial", 9, QFont.Bold))
+            self.usd_usage_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+            usd_layout.addWidget(self.usd_usage_label)
+            
+            usd_layout.addStretch()
+            
+            usage_layout.addLayout(usd_layout)
+        else:
+            self.usd_usage_label = None
         
         layout.addLayout(usage_layout)
         
@@ -434,15 +416,35 @@ class APIKeyUsageWidget(QWidget):
                 border-radius: 8px;
                 border: 1px solid {self.theme_colors['border']};
             }}
-            QProgressBar {{
-                border: 1px solid {self.theme_colors['border']};
-                border-radius: 4px;
-            }}
-            QProgressBar::chunk {{
-                background-color: {self.theme_colors['primary']};
-                border-radius: 4px;
-            }}
         """)
+    
+    def _update_progress_bars(self):
+        """Deprecated: Progress bars removed. Kept for compatibility."""
+        pass
+    
+    def update_usage(self, api_key_usage: APIKeyUsage):
+        """
+        Update the widget with new API key usage data.
+        
+        Args:
+            api_key_usage: New APIKeyUsage object with updated data
+        """
+        self.api_key_usage = api_key_usage
+        
+        # Update labels
+        self.name_label.setText(api_key_usage.name)
+        
+        # Update active status
+        color = self.theme_colors['positive'] if api_key_usage.is_active else self.theme_colors['negative']
+        self.active_status.setStyleSheet(f"background-color: {color}; border-radius: 5px;")
+        self.active_label.setText("Active" if api_key_usage.is_active else "Inactive")
+        
+        # Update DIEM usage value
+        self.diem_usage_label.setText(f"{api_key_usage.usage.diem:.4f}")
+        
+        # Update USD usage value only if label exists
+        if self.usd_usage_label is not None:
+            self.usd_usage_label.setText(f"${api_key_usage.usage.usd:.2f}")
         
         # Set initial progress values
         self._update_progress_bars()
@@ -511,9 +513,6 @@ class APIKeyUsageWidget(QWidget):
         
         # Update labels
         self.name_label.setText(api_key_usage.name)
-        key_id = api_key_usage.id
-        display_id = f"...{key_id[-8:]}" if len(key_id) > 8 else key_id
-        self.id_label.setText(display_id)
         
         # Update active status
         color = self.theme_colors['positive'] if api_key_usage.is_active else self.theme_colors['negative']
