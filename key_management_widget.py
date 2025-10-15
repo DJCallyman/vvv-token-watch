@@ -319,7 +319,7 @@ class APIKeyManagementWidget(QWidget):
         # Last used timestamp (Phase 3 security monitoring)
         self.last_used_label = QLabel("Last used: Never")
         self.last_used_label.setFont(QFont("Arial", 8))
-        self.last_used_label.setStyleSheet(f"color: {self.theme_colors['warning']};")
+        self.last_used_label.setStyleSheet(f"color: {self.theme_colors['error']};")
         status_layout.addWidget(self.last_used_label)
         
         status_layout.addStretch()
@@ -455,7 +455,7 @@ class APIKeyManagementWidget(QWidget):
         
         if not last_used_at:
             self.last_used_label.setText("Last used: Never")
-            self.last_used_label.setStyleSheet(f"color: {self.theme_colors['warning']};")
+            self.last_used_label.setStyleSheet(f"color: {self.theme_colors['error']};")
         else:
             try:
                 formatted_time = DateFormatter.relative_time(last_used_at)
