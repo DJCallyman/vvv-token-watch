@@ -6131,7 +6131,19 @@
       "total_diem": 7.1331999999999995,
       "total_usd": 0.0,
       "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-15T16:54:03.219317",
+      "total_diem": 7.1331999999999995,
+      "total_usd": 0.0,
+      "api_key_count": 15
+    },
+    {
+      "timestamp": "2025-10-15T16:54:34.110870",
+      "total_diem": 7.1276,
+      "total_usd": 0.0,
+      "api_key_count": 15
     }
   ],
-  "last_saved": "2025-10-15T16:53:33.113433"
+  "last_saved": "2025-10-15T16:54:34.112465"
 }
