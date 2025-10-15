@@ -171,7 +171,10 @@ class CombinedViewerApp(QMainWindow):
             sys.exit(1)
             
         self.setWindowTitle("Venice AI Models & CoinGecko Price Viewer")
-        self.setMinimumSize(850, 750)
+        self.setMinimumSize(1200, 850)  # Increased minimum size for better chart display
+        
+        # Set a good default size for 1470x956 display
+        self.resize(1280, 920)
         
         self.models_data = None
         self.model_types = ["all"]
@@ -285,6 +288,21 @@ class CombinedViewerApp(QMainWindow):
 
         # Add usage tracking to balance tab
         balance_tab_layout.addWidget(self.usage_container)
+        
+        # Create enhanced action buttons for global data refresh
+        try:
+            self.action_buttons = ActionButtonWidget(self.theme.theme_colors)
+            
+            # Connect action button signals
+            self.action_buttons.connect_models_requested.connect(self.connect_thread)
+            self.action_buttons.refresh_balance_requested.connect(self.refresh_balance_action)
+            self.action_buttons.load_usage_requested.connect(self.load_usage_action)
+            self.action_buttons.refresh_all_requested.connect(self.refresh_all_action)
+            
+            balance_tab_layout.addWidget(self.action_buttons)
+            
+        except Exception as e:
+            print(f"ERROR: Failed to create action buttons: {e}")
         
         # Create price display components
         self.price_display_usd = PriceDisplayWidget(self.theme)
@@ -423,31 +441,10 @@ class CombinedViewerApp(QMainWindow):
         controls_layout = QHBoxLayout()
         controls_layout.setSpacing(10)
 
-        # Create enhanced action buttons to replace simple "Connect" button
-        try:
-            self.action_buttons = ActionButtonWidget(self.theme.theme_colors)
-            
-            # Connect action button signals
-            self.action_buttons.connect_models_requested.connect(self.connect_thread)
-            self.action_buttons.refresh_balance_requested.connect(self.refresh_balance_action)
-            self.action_buttons.load_usage_requested.connect(self.load_usage_action)
-            self.action_buttons.refresh_all_requested.connect(self.refresh_all_action)
-            
-            controls_layout.addWidget(self.action_buttons)
-            
-        except Exception as e:
-            print(f"ERROR: Failed to create action buttons: {e}")
-            # Fallback to original connect button
-            self.connect_button = QPushButton("Connect")
-            self.connect_button.clicked.connect(self.connect_thread)
-            controls_layout.addWidget(self.connect_button)
-        
         # Keep original connect button for fallback during transition
-        if not hasattr(self, 'connect_button'):
-            self.connect_button = QPushButton("Connect (Legacy)")
-            self.connect_button.clicked.connect(self.connect_thread)
-            self.connect_button.setVisible(False)  # Hide by default
-            controls_layout.addWidget(self.connect_button)
+        self.connect_button = QPushButton("Connect")
+        self.connect_button.clicked.connect(self.connect_thread)
+        controls_layout.addWidget(self.connect_button)
 
         self.display_button = QPushButton("Display Models")
         self.display_button.clicked.connect(self.display_selected_models_action)
