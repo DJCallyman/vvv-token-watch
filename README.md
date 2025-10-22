@@ -43,7 +43,7 @@ USAGE_REFRESH_INTERVAL_MS=30000  # Refresh interval for usage data in millisecon
 ## Usage
 
 ```bash
-python combined_app.py
+python main.py
 ```
 
 ## Development
