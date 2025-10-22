@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['vvv_display.py'],
+    ['main.py'],
     pathex=[],
     binaries=[],
     datas=[],
