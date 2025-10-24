@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import json
 
 try:
-    from .config import Config
+    from config import Config
 except ImportError:
     from config import Config
 

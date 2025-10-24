@@ -18,10 +18,10 @@ from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Signal, QTimer
 from PySide6.QtGui import QFont, QPalette, QLinearGradient, QBrush, QColor, QPainter
 
 try:
-    from .status_indicator import StatusIndicator, UsageStatusIndicator
-    from .usage_analytics import UsageAnalytics, UsageTrend, format_trend_display, format_days_remaining
-    from .exchange_rate_service import ExchangeRateData, format_rate_display
-    from .date_utils import DateFormatter
+    from status_indicator import StatusIndicator, UsageStatusIndicator
+    from usage_analytics import UsageAnalytics, UsageTrend, format_trend_display, format_days_remaining
+    from exchange_rate_service import ExchangeRateData, format_rate_display
+    from date_utils import DateFormatter
 except ImportError:
     from status_indicator import StatusIndicator, UsageStatusIndicator
     from usage_analytics import UsageAnalytics, UsageTrend, format_trend_display, format_days_remaining

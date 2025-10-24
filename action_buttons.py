@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
 from PySide6.QtCore import Qt, Signal, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QIcon, QPixmap, QPainter
 try:
-    from .status_indicator import StatusIndicator
+    from status_indicator import StatusIndicator
 except ImportError:
     from status_indicator import StatusIndicator
 
