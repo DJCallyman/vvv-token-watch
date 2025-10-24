@@ -31,9 +31,9 @@ import matplotlib.pyplot as plt
 import requests
 from datetime import timezone
 
-from .config import Config
-from .theme import Theme
-from .usage_tracker import UsageWorker, APIKeyUsage
+from config import Config
+from theme import Theme
+from usage_tracker import UsageWorker, APIKeyUsage
 
 
 class ChartCanvas(FigureCanvas):
