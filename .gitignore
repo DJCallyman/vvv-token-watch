@@ -1,0 +1,53 @@
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+*.egg-info/
+*.egg
+dist/
+build/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+.DS_Store
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build artifacts
+**/.eggs/
+**/build/
+**/dist/
+
+# Temporary files
+*.tmp
+*.log
+crash-dump.log
+
+# Runtime data files
+usage_history.json
+usage_reports_history.json
+error_log.txt
+
+# System files
+Thumbs.db
+.DS_Store
+
+# PyInstaller
+*.spec
