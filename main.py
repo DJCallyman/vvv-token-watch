@@ -21,27 +21,27 @@ from PySide6.QtGui import QFont, QPalette, QColor, QCloseEvent, QDoubleValidator
 
 # Add the project directory to Python path (make it dynamic)
 import os
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
-# Import local modules using absolute imports
-from vvv_token_watch.currency_utils import format_currency
-from vvv_token_watch.config import Config
-from vvv_token_watch.theme import Theme
-from vvv_token_watch.price_display import PriceDisplayWidget
-from vvv_token_watch.model_viewer import ModelViewerWidget
-from vvv_token_watch.model_comparison import ModelComparisonWidget
-from vvv_token_watch.validation import validate_holding_amount, ValidationState
-from vvv_token_watch.usage_tracker import UsageWorker, BalanceInfo, APIKeyUsage
-from vvv_token_watch.vvv_display import BalanceDisplayWidget, APIKeyUsageWidget
-from vvv_token_watch.enhanced_balance_widget import HeroBalanceWidget
-from vvv_token_watch.action_buttons import ActionButtonWidget
-from vvv_token_watch.date_utils import DateFormatter
+# Import local modules using relative imports (now a standalone repo)
+from currency_utils import format_currency
+from config import Config
+from theme import Theme
+from price_display import PriceDisplayWidget
+from model_viewer import ModelViewerWidget
+from model_comparison import ModelComparisonWidget
+from validation import validate_holding_amount, ValidationState
+from usage_tracker import UsageWorker, BalanceInfo, APIKeyUsage
+from vvv_display import BalanceDisplayWidget, APIKeyUsageWidget
+from enhanced_balance_widget import HeroBalanceWidget
+from action_buttons import ActionButtonWidget
+from date_utils import DateFormatter
 
 # Phase 2 imports - with error handling
 try:
-    from vvv_token_watch.usage_analytics import UsageAnalytics
-    from vvv_token_watch.exchange_rate_service import ExchangeRateService
+    from usage_analytics import UsageAnalytics
+    from exchange_rate_service import ExchangeRateService
     PHASE2_AVAILABLE = True
     print("DEBUG: Phase 2 modules imported successfully")
 except ImportError as e:
@@ -52,9 +52,9 @@ except ImportError as e:
 
 # Phase 3 imports - with error handling
 try:
-    from vvv_token_watch.key_management_widget import APIKeyManagementWidget
-    from vvv_token_watch.usage_reports import usage_report_generator, UsageReportGenerator
-    from vvv_token_watch.venice_key_management import get_key_management_service
+    from key_management_widget import APIKeyManagementWidget
+    from usage_reports import usage_report_generator, UsageReportGenerator
+    from venice_key_management import get_key_management_service
     PHASE3_AVAILABLE = True
     print("DEBUG: Phase 3 modules imported successfully")
 except ImportError as e:
