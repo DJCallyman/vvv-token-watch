@@ -38,7 +38,9 @@ build/
 # Temporary files
 *.tmp
 *.log
+*log.*
 crash-dump.log
+
 
 # Runtime data files
 usage_history.json

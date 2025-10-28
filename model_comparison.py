@@ -430,6 +430,8 @@ class ModelComparisonWidget(QWidget):
         self.type_filter = QComboBox()
         self.type_filter.addItems(["All", "text", "image", "tts", "embedding", "upscale", "inpaint"])
         self.type_filter.currentTextChanged.connect(self.apply_filters)
+        # Apply modern styling
+        self.type_filter.setStyleSheet(self._get_combobox_style())
         type_layout.addWidget(type_label)
         type_layout.addWidget(self.type_filter)
         filters_layout.addLayout(type_layout)
@@ -862,6 +864,40 @@ class ModelComparisonWidget(QWidget):
         item.setToolTip(1, model_id)  # Show full model ID on hover
 
         return item
+
+    def _get_combobox_style(self):
+        """Return modern combobox styling that matches the leaderboard"""
+        return f"""
+            QComboBox {{
+                background-color: {self.theme.card_background};
+                color: {self.theme.text};
+                border: 1px solid {self.theme.accent};
+                border-radius: 4px;
+                padding: 5px;
+                min-width: 100px;
+            }}
+            QComboBox:hover {{
+                border: 2px solid {self.theme.accent};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 20px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid {self.theme.text};
+                margin-right: 5px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {self.theme.card_background};
+                color: {self.theme.text};
+                selection-background-color: {self.theme.accent};
+                selection-color: {self.theme.text};
+                border: 1px solid {self.theme.accent};
+            }}
+        """
 
     def apply_filters(self):
         """Apply current filters to the comparison table"""

@@ -37,6 +37,7 @@ from vvv_display import BalanceDisplayWidget, APIKeyUsageWidget
 from enhanced_balance_widget import HeroBalanceWidget
 from action_buttons import ActionButtonWidget
 from date_utils import DateFormatter
+from usage_leaderboard import UsageLeaderboardWidget
 
 # Phase 2 imports - with error handling
 try:
@@ -223,6 +224,108 @@ class CombinedViewerApp(QMainWindow):
             self.usage_report_generator = None
             self.key_management_enabled = False
         
+        # Initialize UI
+        self.init_ui()
+    
+    def get_combobox_style(self):
+        """Get the modern combobox stylesheet"""
+        bg_color = self.theme.background
+        text_color = self.theme.text
+        accent_color = self.theme.accent
+        card_bg = self.theme.card_background
+        
+        return f"""
+            QComboBox {{
+                background-color: {card_bg};
+                color: {text_color};
+                border: 1px solid {accent_color};
+                border-radius: 4px;
+                padding: 5px;
+                min-width: 100px;
+            }}
+            QComboBox:hover {{
+                border: 2px solid {accent_color};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 20px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid {text_color};
+                margin-right: 5px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {card_bg};
+                color: {text_color};
+                selection-background-color: {accent_color};
+                selection-color: {text_color};
+                border: 1px solid {accent_color};
+            }}
+        """
+    
+    def get_button_style(self):
+        """Get the modern button stylesheet"""
+        bg_color = self.theme.background
+        text_color = self.theme.text
+        accent_color = self.theme.accent
+        card_bg = self.theme.card_background
+        border_color = self.theme.border
+        
+        return f"""
+            QPushButton {{
+                background-color: {card_bg};
+                color: {text_color};
+                border: 1px solid {accent_color};
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: {accent_color};
+                color: {text_color};
+            }}
+            QPushButton:pressed {{
+                background-color: {accent_color};
+                border: 2px solid {accent_color};
+            }}
+            QPushButton:disabled {{
+                background-color: {border_color};
+                color: {self.theme.text_secondary};
+                border: 1px solid {border_color};
+            }}
+        """
+    
+    def get_radiobutton_style(self):
+        """Get the modern radio button stylesheet"""
+        text_color = self.theme.text
+        accent_color = self.theme.accent
+        
+        return f"""
+            QRadioButton {{
+                color: {text_color};
+                spacing: 5px;
+            }}
+            QRadioButton::indicator {{
+                width: 16px;
+                height: 16px;
+            }}
+            QRadioButton::indicator:checked {{
+                background-color: {accent_color};
+                border: 2px solid {accent_color};
+                border-radius: 8px;
+            }}
+            QRadioButton::indicator:unchecked {{
+                background-color: transparent;
+                border: 2px solid palette(mid);
+                border-radius: 8px;
+            }}
+        """
+    
+    def init_ui(self):
+        """Initialize the main UI after helper methods are defined"""
         # Create central widget and main layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -421,6 +524,7 @@ class CombinedViewerApp(QMainWindow):
         self.theme_toggle.addItems(["Dark", "Light"])
         self.theme_toggle.setCurrentText("Dark" if self.theme.mode == 'dark' else "Light")
         self.theme_toggle.currentTextChanged.connect(self.toggle_theme)
+        self.theme_toggle.setStyleSheet(self.get_combobox_style())
         theme_layout.addWidget(self.theme_toggle)
 
         price_layout.addWidget(self.theme_frame, alignment=Qt.AlignRight)
@@ -444,16 +548,19 @@ class CombinedViewerApp(QMainWindow):
         # Keep original connect button for fallback during transition
         self.connect_button = QPushButton("Connect")
         self.connect_button.clicked.connect(self.connect_thread)
+        self.connect_button.setStyleSheet(self.get_button_style())
         controls_layout.addWidget(self.connect_button)
 
         self.display_button = QPushButton("Display Models")
         self.display_button.clicked.connect(self.display_selected_models_action)
         self.display_button.setEnabled(False)
+        self.display_button.setStyleSheet(self.get_button_style())
         controls_layout.addWidget(self.display_button)
 
         self.view_styles_button = QPushButton("View Style Presets")
         self.view_styles_button.clicked.connect(self.view_style_presets_action)
         self.view_styles_button.setEnabled(False)
+        self.view_styles_button.setStyleSheet(self.get_button_style())
         controls_layout.addWidget(self.view_styles_button)
 
         # Create model type selector
@@ -465,6 +572,7 @@ class CombinedViewerApp(QMainWindow):
         self.type_combobox.setCurrentText("all")
         self.type_combobox.blockSignals(False)
         self.type_combobox.currentTextChanged.connect(self.display_selected_models_action)
+        self.type_combobox.setStyleSheet(self.get_combobox_style())
         controls_layout.addWidget(self.type_combobox)
 
         self.traits_combobox = QComboBox()
@@ -475,6 +583,7 @@ class CombinedViewerApp(QMainWindow):
         self.traits_combobox.setCurrentText("all")
         self.traits_combobox.blockSignals(False)
         self.traits_combobox.currentTextChanged.connect(self.display_selected_models_action)
+        self.traits_combobox.setStyleSheet(self.get_combobox_style())
 
         # Add debugging to verify combobox signals are connected
         print("DEBUG: Setting up combobox signal connections...")
@@ -597,48 +706,172 @@ class CombinedViewerApp(QMainWindow):
     
     def _apply_theme(self):
         """Apply current theme to all UI elements"""
+        # Get theme colors
+        bg_color = self.theme.background
+        text_color = self.theme.text
+        accent_color = self.theme.accent
+        card_bg = self.theme.card_background
+        border_color = self.theme.border
+        
         # Update price container
-        self.price_container.setStyleSheet(f"background-color: {self.theme.background};")
+        self.price_container.setStyleSheet(f"background-color: {bg_color};")
         
         # Update usage container
         if hasattr(self, 'usage_container'):
-            self.usage_container.setStyleSheet(f"background-color: {self.theme.background};")
+            self.usage_container.setStyleSheet(f"background-color: {bg_color};")
         
         # Update token name label
-        self.token_name_label.setStyleSheet(f"color: {self.theme.text};")
+        self.token_name_label.setStyleSheet(f"color: {text_color};")
         
         # Update holding frame
-        self.holding_frame.setStyleSheet(f"background-color: {self.theme.background};")
+        self.holding_frame.setStyleSheet(f"background-color: {bg_color};")
         for child in self.holding_frame.findChildren(QLabel):
-            child.setStyleSheet(f"color: {self.theme.text};")
+            child.setStyleSheet(f"color: {text_color};")
         
         # Update price frames
-        self.prices_frame.setStyleSheet(f"background-color: {self.theme.background};")
+        self.prices_frame.setStyleSheet(f"background-color: {bg_color};")
         for group in [self.usd_group, self.aud_group]:
             group.setStyleSheet(f"""
                 QGroupBox {{
-                    background-color: {self.theme.background};
-                    border: 1px solid {self.theme.accent};
+                    background-color: {bg_color};
+                    border: 1px solid {accent_color};
                     border-radius: 5px;
                     margin-top: 10px;
                     padding: 10px;
-                    color: {self.theme.text};
+                    color: {text_color};
                 }}
                 QGroupBox::title {{
                     subcontrol-origin: margin;
                     subcontrol-position: top center;
                     padding: 0 5px;
-                    background-color: {self.theme.background};
+                    background-color: {bg_color};
                 }}
             """)
         
         # Update status label
-        self.price_status_label.setStyleSheet(f"color: {self.theme.text};")
+        self.price_status_label.setStyleSheet(f"color: {text_color};")
         
         # Update theme toggle
-        self.theme_frame.setStyleSheet(f"background-color: {self.theme.background};")
+        self.theme_frame.setStyleSheet(f"background-color: {bg_color};")
         for child in self.theme_frame.findChildren(QLabel):
-            child.setStyleSheet(f"color: {self.theme.text};")
+            child.setStyleSheet(f"color: {text_color};")
+        
+        # Apply modern styling to comboboxes
+        combobox_style = f"""
+            QComboBox {{
+                background-color: {card_bg};
+                color: {text_color};
+                border: 1px solid {accent_color};
+                border-radius: 4px;
+                padding: 5px;
+                min-width: 100px;
+            }}
+            QComboBox:hover {{
+                border: 2px solid {accent_color};
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 20px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 4px solid transparent;
+                border-right: 4px solid transparent;
+                border-top: 5px solid {text_color};
+                margin-right: 5px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {card_bg};
+                color: {text_color};
+                selection-background-color: {accent_color};
+                selection-color: {text_color};
+                border: 1px solid {accent_color};
+            }}
+        """
+        
+        if hasattr(self, 'theme_toggle'):
+            self.theme_toggle.setStyleSheet(combobox_style)
+        if hasattr(self, 'type_combobox'):
+            self.type_combobox.setStyleSheet(combobox_style)
+        if hasattr(self, 'traits_combobox'):
+            self.traits_combobox.setStyleSheet(combobox_style)
+        
+        # Apply modern styling to buttons
+        button_style = f"""
+            QPushButton {{
+                background-color: {card_bg};
+                color: {text_color};
+                border: 1px solid {accent_color};
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: {accent_color};
+                color: {text_color};
+            }}
+            QPushButton:pressed {{
+                background-color: {accent_color};
+                border: 2px solid {accent_color};
+            }}
+            QPushButton:disabled {{
+                background-color: {border_color};
+                color: {self.theme.text_secondary};
+                border: 1px solid {border_color};
+            }}
+        """
+        
+        if hasattr(self, 'connect_button'):
+            self.connect_button.setStyleSheet(button_style)
+        if hasattr(self, 'display_button'):
+            self.display_button.setStyleSheet(button_style)
+        if hasattr(self, 'view_styles_button'):
+            self.view_styles_button.setStyleSheet(button_style)
+        
+        # Apply styling to scroll areas
+        scroll_style = f"""
+            QScrollArea {{
+                background-color: {bg_color};
+                border: none;
+            }}
+            QScrollBar:vertical {{
+                background: {card_bg};
+                width: 12px;
+                border-radius: 6px;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {accent_color};
+                border-radius: 6px;
+                min-height: 20px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {accent_color};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar:horizontal {{
+                background: {card_bg};
+                height: 12px;
+                border-radius: 6px;
+            }}
+            QScrollBar::handle:horizontal {{
+                background: {accent_color};
+                border-radius: 6px;
+                min-width: 20px;
+            }}
+            QScrollBar::handle:horizontal:hover {{
+                background: {accent_color};
+            }}
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                width: 0px;
+            }}
+        """
+        
+        if hasattr(self, 'scroll_area'):
+            self.scroll_area.setStyleSheet(scroll_style)
+        if hasattr(self, 'usage_scroll_area'):
+            self.usage_scroll_area.setStyleSheet(scroll_style)
     
     def toggle_theme(self, theme_name):
         """Toggle between dark and light themes"""
@@ -663,6 +896,11 @@ class CombinedViewerApp(QMainWindow):
             for widget in self.api_key_widgets:
                 if hasattr(widget, 'set_theme_colors'):
                     widget.set_theme_colors(self.theme.theme_colors)
+        
+        # Update leaderboard theme
+        if hasattr(self, 'leaderboard_widget') and self.leaderboard_widget:
+            self.leaderboard_widget.theme_colors = self.theme.theme_colors
+            self.leaderboard_widget.apply_theme()
 
         # Update validation state display
         self.price_display_usd.set_validation_state(self.validation_state.value)
@@ -1161,6 +1399,10 @@ class CombinedViewerApp(QMainWindow):
         
         # Add stretch to push widgets to the top
         self.usage_frame_layout.addStretch()
+        
+        # Update the leaderboard widget with new data
+        if hasattr(self, 'leaderboard_widget') and self.leaderboard_widget:
+            self.leaderboard_widget.set_data(usage_data)
     
     def _update_balance_display(self, balance_info: BalanceInfo):
         """Update the UI with new balance information using Phase 2 analytics."""
@@ -1467,6 +1709,22 @@ class CombinedViewerApp(QMainWindow):
 
         # Add tab to main tabs
         self.main_tabs.addTab(self.comparison_tab, "📊 Compare & Analyze")
+        
+        # Create fourth tab: Usage Leaderboard
+        self.create_leaderboard_tab()
+
+    def create_leaderboard_tab(self):
+        """Create the usage leaderboard tab"""
+        self.leaderboard_tab = QWidget()
+        tab_layout = QVBoxLayout(self.leaderboard_tab)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Create the leaderboard widget
+        self.leaderboard_widget = UsageLeaderboardWidget(self.theme.theme_colors)
+        tab_layout.addWidget(self.leaderboard_widget)
+        
+        # Add tab to main tabs
+        self.main_tabs.addTab(self.leaderboard_tab, "📊 Usage Leaderboard")
 
     def update_model_comparison_data(self):
         """Update the comparison widget with new model data"""
