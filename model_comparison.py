@@ -34,6 +34,7 @@ from datetime import timezone
 from config import Config
 from theme import Theme
 from usage_tracker import UsageWorker, APIKeyUsage
+from venice_api_client import VeniceAPIClient
 
 
 class ChartCanvas(FigureCanvas):
@@ -65,11 +66,7 @@ class ModelAnalyticsWorker(QThread):
     def __init__(self, admin_key: str = None):
         super().__init__()
         self.admin_key = admin_key or Config.VENICE_ADMIN_KEY
-        self.base_url = "https://api.venice.ai/api/v1"
-        self.headers = {
-            "Authorization": f"Bearer {self.admin_key}",
-            "Content-Type": "application/json"
-        }
+        self.api_client = VeniceAPIClient(self.admin_key)
 
     def run(self):
         """Fetch and process analytics data from Venice API"""
@@ -103,9 +100,7 @@ class ModelAnalyticsWorker(QThread):
             'sortOrder': 'desc'
         }
         
-        url = f"{self.base_url}/billing/usage"
-        response = requests.get(url, headers=self.headers, params=params, timeout=30)
-        response.raise_for_status()
+        response = self.api_client.get("/billing/usage", params=params)
         
         data = response.json()
         return data.get('data', [])

@@ -1,13 +1,14 @@
 """
-Web App Usage Tracker - Fetches non-API usage from Venice billing endpoint.
-Tracks web app consumption (video generation, etc.) separately from API key usage.
+Web app usage tracking for Venice AI.
+Fetches usage data from /billing/usage endpoint and filters for web app consumption.
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Any
-import requests
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 from PySide6.QtCore import QThread, Signal
+
+from venice_api_client import VeniceAPIClient
 
 
 @dataclass
@@ -60,11 +61,7 @@ class WebUsageWorker(QThread):
         super().__init__(parent)
         self.admin_key = admin_key
         self.days = days
-        self.base_url = "https://api.venice.ai/api/v1"
-        self.headers = {
-            "Authorization": f"Bearer {self.admin_key}",
-            "Content-Type": "application/json"
-        }
+        self.api_client = VeniceAPIClient(admin_key)
     
     def run(self):
         """Fetch and process web app usage data"""
@@ -115,13 +112,7 @@ class WebUsageWorker(QThread):
             params["page"] = page
             
             try:
-                response = requests.get(
-                    f"{self.base_url}/billing/usage",
-                    headers=self.headers,
-                    params=params,
-                    timeout=30
-                )
-                response.raise_for_status()
+                response = self.api_client.get("/billing/usage", params=params)
                 
                 data = response.json()
                 records = data.get("data", [])
@@ -188,7 +179,7 @@ class WebUsageWorker(QThread):
                 
                 page += 1
                 
-            except requests.exceptions.RequestException as e:
+            except Exception as e:
                 raise Exception(f"Failed to fetch billing usage: {str(e)}")
         
         return WebUsageMetrics(

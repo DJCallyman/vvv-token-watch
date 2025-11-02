@@ -8,10 +8,8 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 import json
 
-try:
-    from config import Config
-except ImportError:
-    from config import Config
+from config import Config
+from venice_api_client import VeniceAPIClient
 
 
 @dataclass
@@ -40,11 +38,7 @@ class VeniceKeyManagementService:
             admin_key: Venice ADMIN API key with full permissions
         """
         self.admin_key = admin_key
-        self.base_url = "https://api.venice.ai/api/v1"
-        self.headers = {
-            "Authorization": f"Bearer {self.admin_key}",
-            "Content-Type": "application/json"
-        }
+        self.api_client = VeniceAPIClient(admin_key)
     
     def get_api_keys(self) -> List[VeniceAPIKeyInfo]:
         """
@@ -54,8 +48,7 @@ class VeniceKeyManagementService:
             List of VeniceAPIKeyInfo objects
         """
         try:
-            response = requests.get(f"{self.base_url}/api_keys", headers=self.headers, timeout=30)
-            response.raise_for_status()
+            response = self.api_client.get("/api_keys")
             
             data = response.json()
             keys = []
@@ -114,12 +107,7 @@ class VeniceKeyManagementService:
             True if successful, False otherwise
         """
         try:
-            response = requests.delete(
-                f"{self.base_url}/api_keys",
-                headers=self.headers,
-                params={"id": key_id},
-                timeout=30
-            )
+            response = self.api_client.delete(f"/api_keys?id={key_id}")
             
             if response.status_code == 200:
                 result = response.json()
@@ -196,12 +184,7 @@ class VeniceKeyManagementService:
                     
                 create_data["consumptionLimit"] = consumption_limit
             
-            response = requests.post(
-                f"{self.base_url}/api_keys",
-                headers=self.headers,
-                json=create_data,
-                timeout=30
-            )
+            response = self.api_client.post("/api_keys", data=create_data)
             
             if response.status_code == 200:
                 result = response.json()
@@ -240,7 +223,7 @@ class VeniceKeyManagementService:
         # We can still test if the basic endpoints are reachable
         try:
             # Test list keys (should work)
-            response = requests.get(f"{self.base_url}/api_keys", headers=self.headers, timeout=10)
+            response = self.api_client.get("/api_keys")
             capabilities["list_keys"] = (response.status_code == 200)
             
         except Exception as e:

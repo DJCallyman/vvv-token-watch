@@ -10,6 +10,9 @@ import json
 from datetime import datetime, timezone
 from PySide6.QtCore import QThread, Signal
 
+from venice_api_client import VeniceAPIClient
+
+
 @dataclass
 class UsageMetrics:
     """Tracks usage metrics for a specific time period"""
@@ -57,11 +60,7 @@ class UsageWorker(QThread):
         """
         super().__init__(parent)
         self.admin_key = admin_key
-        self.base_url = "https://api.venice.ai/api/v1"
-        self.headers = {
-            "Authorization": f"Bearer {self.admin_key}",
-            "Content-Type": "application/json"
-        }
+        self.api_client = VeniceAPIClient(admin_key)
 
     def run(self):
         """
@@ -101,9 +100,7 @@ class UsageWorker(QThread):
         print("WARNING: Using deprecated fetch_api_keys_usage method. Use fetch_api_keys_with_daily_usage instead.")
         try:
             # Get list of API keys
-            keys_url = f"{self.base_url}/api_keys"
-            keys_response = requests.get(keys_url, headers=self.headers, timeout=30)
-            keys_response.raise_for_status()
+            keys_response = self.api_client.get("/api_keys")
             keys_data = keys_response.json()
 
             api_keys = []
@@ -111,9 +108,7 @@ class UsageWorker(QThread):
                 key_id = key_data.get("id", "unknown")
                 
                 # Fetch key-specific usage
-                key_url = f"{self.base_url}/api_keys/{key_id}"
-                key_response = requests.get(key_url, headers=self.headers, timeout=30)
-                key_response.raise_for_status()
+                key_response = self.api_client.get(f"/api_keys/{key_id}")
                 key_info = key_response.json().get("data", {})
                 
                 # Extract usage data (DEPRECATED - 7-day trailing data)
@@ -150,9 +145,7 @@ class UsageWorker(QThread):
         """
         try:
             # Use the rate_limits endpoint to get current balances and limits
-            url = f"{self.base_url}/api_keys/rate_limits"
-            response = requests.get(url, headers=self.headers, timeout=30)
-            response.raise_for_status()
+            response = self.api_client.get("/api_keys/rate_limits")
 
             data = response.json().get("data", {})
             balances = data.get("balances", {})
@@ -208,9 +201,7 @@ class UsageWorker(QThread):
                 'sortOrder': 'desc'
             }
             
-            url = f"{self.base_url}/billing/usage"
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
-            response.raise_for_status()
+            response = self.api_client.get("/billing/usage", params=params)
             
             data = response.json().get("data", [])
             
@@ -248,9 +239,7 @@ class UsageWorker(QThread):
         """
         try:
             # Get list of API keys with their usage data
-            keys_url = f"{self.base_url}/api_keys"
-            keys_response = requests.get(keys_url, headers=self.headers, timeout=30)
-            keys_response.raise_for_status()
+            keys_response = self.api_client.get("/api_keys")
             keys_data = keys_response.json()
 
             api_keys = []
