@@ -54,3 +54,5 @@ Thumbs.db
 
 # PyInstaller
 *.spec
+get_usage.py
+get_webapp_usage.py
