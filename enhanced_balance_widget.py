@@ -632,3 +632,64 @@ class HeroBalanceWidget(QWidget):
     def refresh_analytics(self):
         """Trigger analytics refresh by emitting refresh signal."""
         self.refresh_requested.emit()
+    
+    def update_usage_breakdown(self, api_keys_diem: float, api_keys_usd: float,
+                              web_usage_diem: float, web_usage_usd: float,
+                              exchange_rate: float = None):
+        """
+        Update the usage breakdown showing API keys, web app, and total usage.
+        
+        This provides visibility into separate usage sources as requested for
+        unified leaderboard integration.
+        
+        Args:
+            api_keys_diem: Total DIEM usage from API keys (7-day)
+            api_keys_usd: Total USD usage from API keys (7-day)
+            web_usage_diem: Total DIEM usage from web app (7-day)
+            web_usage_usd: Total USD usage from web app (7-day)
+            exchange_rate: Current DIEM to USD exchange rate
+        """
+        # Store for later reference
+        self._api_keys_usage = {"diem": api_keys_diem, "usd": api_keys_usd}
+        self._web_usage = {"diem": web_usage_diem, "usd": web_usage_usd}
+        
+        # Calculate totals
+        total_diem = api_keys_diem + web_usage_diem
+        total_usd = api_keys_usd + web_usage_usd
+        
+        if exchange_rate is not None:
+            self.current_rate = exchange_rate
+        
+        # Build detailed breakdown text for tooltips
+        breakdown = (
+            f"7-Day Usage Breakdown:\n"
+            f"🔑 API Keys: {api_keys_diem:.4f} DIEM (${api_keys_usd:.2f})\n"
+            f"🌐 Web App: {web_usage_diem:.4f} DIEM (${web_usage_usd:.2f})\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 Total: {total_diem:.4f} DIEM (${total_usd:.2f})"
+        )
+        
+        # Update the main balance display to show total
+        self.update_balance(total_diem, total_usd, exchange_rate, animate=False)
+        
+        # Add breakdown to DIEM tooltip
+        if hasattr(self, 'diem_amount_label'):
+            self.diem_amount_label.setToolTip(breakdown)
+        
+        # Update USD tooltip with breakdown
+        if hasattr(self, 'usd_amount_label'):
+            self.usd_amount_label.setToolTip(breakdown)
+        
+        # Update usage indicator with combined trend
+        if total_diem > 0:
+            daily_avg = total_diem / 7.0
+            # Determine trend based on API key dominance
+            if api_keys_diem > web_usage_diem * 2:
+                trend = "api_dominant"
+            elif web_usage_diem > api_keys_diem * 2:
+                trend = "web_dominant"
+            else:
+                trend = "balanced"
+            
+            # Update the usage indicator
+            self.usage_indicator.set_usage_trend("stable", daily_avg)

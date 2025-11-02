@@ -16,6 +16,8 @@ from PySide6.QtCore import (Qt, QAbstractTableModel, QModelIndex, QSortFilterPro
 from PySide6.QtGui import (QPalette, QFont, QColor, QBrush, QPen, QPainter, QIcon, QPixmap)
 
 from usage_tracker import APIKeyUsage
+from unified_usage_entry import UnifiedUsageEntry
+from web_usage_tracker import WebUsageMetrics
 
 
 class SortMode(Enum):
@@ -112,28 +114,66 @@ class UsageLeaderboardModel(QAbstractTableModel):
     
     COLUMN_COUNT = 5
     
-    HEADERS = ["API Key", "7-Day Usage", "Status", "DIEM 7 Day Usage", "DIEM Avg Daily Usage"]
+    HEADERS = ["Identifier", "7-Day Usage", "Status", "DIEM 7 Day Usage", "DIEM Avg Daily Usage"]
     
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._data: List[APIKeyUsage] = []
+        self._data: List[UnifiedUsageEntry] = []
         self._sort_mode = SortMode.USAGE_HIGH_TO_LOW
         self._filter_status = FilterStatus.ALL
         self._search_text = ""
-        self._filtered_data: List[APIKeyUsage] = []
+        self._filtered_data: List[UnifiedUsageEntry] = []
         self._max_usage = 0.0
         self._max_log_value = 1.0
+        self._expanded_states: dict = {}  # Track expanded states by entry ID
     
-    def set_data(self, api_keys: List[APIKeyUsage]):
-        """Set the data for the model"""
-        self._data = api_keys if api_keys else []
+    def set_data(self, entries: List[UnifiedUsageEntry]):
+        """Set the data for the model - accepts unified entries (API keys + web usage)"""
+        from unified_usage_integrator import UnifiedUsageIntegrator
+        
+        # Save current expanded states before updating
+        self._save_expanded_states()
+        
+        # Restore expanded states in new entries
+        self._restore_expanded_states(entries)
+        
+        self._data = entries if entries else []
+        # Flatten hierarchical entries for display
+        self._flattened_data = UnifiedUsageIntegrator.flatten_entries(self._data)
         self._update_max_usage()
         self._apply_filters_and_sort()
     
+    def _save_expanded_states(self):
+        """Save expanded states from current data"""
+        def collect_states(entry_list):
+            for entry in entry_list:
+                if entry.is_group:
+                    self._expanded_states[entry.id] = entry.is_expanded
+                    if entry.has_children:
+                        collect_states(entry.children)
+        
+        self._expanded_states.clear()
+        if self._data:
+            collect_states(self._data)
+    
+    def _restore_expanded_states(self, entries: List[UnifiedUsageEntry]):
+        """Restore expanded states to new entries"""
+        def restore_states(entry_list):
+            for entry in entry_list:
+                if entry.is_group and entry.id in self._expanded_states:
+                    entry.is_expanded = self._expanded_states[entry.id]
+                    if entry.has_children:
+                        restore_states(entry.children)
+        
+        if entries and self._expanded_states:
+            restore_states(entries)
+    
     def _update_max_usage(self):
         """Update maximum usage value for scaling"""
+        # Use flattened data but only top-level entries for max calculation
         if self._data:
-            self._max_usage = max(key.usage.diem for key in self._data)
+            top_level = [e for e in self._data if e.depth == 0]
+            self._max_usage = max(entry.usage.diem for entry in top_level) if top_level else 0.0
             self._max_log_value = math.log10(self._max_usage + 1) if self._max_usage > 0 else 1.0
         else:
             self._max_usage = 0.0
@@ -160,52 +200,95 @@ class UsageLeaderboardModel(QAbstractTableModel):
     
     def _apply_filters_and_sort(self):
         """Apply filters and sorting to the data"""
+        from unified_usage_integrator import UnifiedUsageIntegrator
+        
         self.beginResetModel()
         
-        # Start with all data
-        filtered = list(self._data)
+        # Flatten entries (respecting expanded states)
+        flattened = UnifiedUsageIntegrator.flatten_entries(self._data)
         
         # Apply search filter
         if self._search_text:
             filtered = [
-                key for key in filtered
-                if self._search_text in key.name.lower() or 
-                   self._search_text in key.id.lower()
+                entry for entry in flattened
+                if self._search_text in entry.identifier.lower() or 
+                   self._search_text in entry.id.lower()
             ]
+        else:
+            filtered = list(flattened)
         
         # Apply status filter
         if self._filter_status == FilterStatus.ACTIVE:
-            filtered = [key for key in filtered if self._is_active(key)]
+            filtered = [entry for entry in filtered if self._is_active(entry)]
         elif self._filter_status == FilterStatus.IDLE:
-            filtered = [key for key in filtered if not self._is_active(key)]
+            filtered = [entry for entry in filtered if not self._is_active(entry)]
         
-        # Apply sorting
+        # Apply sorting (only sort top-level entries)
+        # The flattened list already has the correct hierarchy, just sort top-level
+        top_level_indices = [i for i, e in enumerate(filtered) if e.depth == 0]
+        
+        # Extract top-level entries with their positions
+        top_level_with_positions = [(i, filtered[i]) for i in top_level_indices]
+        
+        # Sort top-level entries
         if self._sort_mode == SortMode.USAGE_HIGH_TO_LOW:
-            # Sort by active status first (active=1, idle=0), then by usage descending
-            filtered.sort(key=lambda k: (self._is_active(k), k.usage.diem), reverse=True)
+            top_level_with_positions.sort(key=lambda x: (self._is_active(x[1]), x[1].usage.diem), reverse=True)
         elif self._sort_mode == SortMode.USAGE_LOW_TO_HIGH:
-            # Sort by active status first (active=1, idle=0), then by usage ascending
-            filtered.sort(key=lambda k: (self._is_active(k), k.usage.diem), reverse=False)
+            top_level_with_positions.sort(key=lambda x: (self._is_active(x[1]), x[1].usage.diem), reverse=False)
         elif self._sort_mode == SortMode.NAME_A_TO_Z:
-            filtered.sort(key=lambda k: k.name.lower())
+            top_level_with_positions.sort(key=lambda x: x[1].identifier.lower())
         elif self._sort_mode == SortMode.LAST_ACTIVE:
-            filtered.sort(key=lambda k: k.last_used_at or "", reverse=True)
+            top_level_with_positions.sort(key=lambda x: x[1].last_used_at or "", reverse=True)
         
-        self._filtered_data = filtered
+        # Rebuild the list maintaining hierarchy
+        self._filtered_data = []
+        processed_indices = set()
+        
+        for _, top_entry in top_level_with_positions:
+            # Find the original index and all its descendants in sequence
+            start_idx = next(i for i, e in enumerate(filtered) if e is top_entry)
+            processed_indices.add(start_idx)
+            self._filtered_data.append(filtered[start_idx])
+            
+            # Add all descendants that follow this top-level entry until the next top-level
+            idx = start_idx + 1
+            while idx < len(filtered) and filtered[idx].depth > 0:
+                if idx not in processed_indices:
+                    processed_indices.add(idx)
+                    self._filtered_data.append(filtered[idx])
+                idx += 1
+        
         self.endResetModel()
     
-    def _is_active(self, key: APIKeyUsage) -> bool:
-        """Check if a key is active (used within last 7 days)"""
+    def toggle_group(self, index: QModelIndex):
+        """Toggle expand/collapse state of a group entry"""
+        if not index.isValid() or index.row() >= len(self._filtered_data):
+            return
+        
+        entry = self._filtered_data[index.row()]
+        if entry.is_group:
+            entry.toggle_expanded()
+            # Refresh display to show/hide children
+            self._apply_filters_and_sort()
+    
+    def get_entry_at_index(self, index: QModelIndex) -> Optional[UnifiedUsageEntry]:
+        """Get the entry at the given index"""
+        if not index.isValid() or index.row() >= len(self._filtered_data):
+            return None
+        return self._filtered_data[index.row()]
+    
+    def _is_active(self, entry: UnifiedUsageEntry) -> bool:
+        """Check if an entry is active (used within last 7 days)"""
         # If there's any usage in the 7-day period, consider it active
-        if key.usage.diem > 0:
+        if entry.usage.diem > 0:
             return True
         
         # Otherwise check the last_used_at timestamp
-        if not key.last_used_at:
+        if not entry.last_used_at:
             return False
         
         try:
-            last_used = datetime.fromisoformat(key.last_used_at.replace('Z', '+00:00'))
+            last_used = datetime.fromisoformat(entry.last_used_at.replace('Z', '+00:00'))
             now = datetime.now(timezone.utc)
             delta = now - last_used
             return delta < timedelta(days=7)
@@ -235,63 +318,78 @@ class UsageLeaderboardModel(QAbstractTableModel):
         if not index.isValid() or index.row() >= len(self._filtered_data):
             return None
         
-        key = self._filtered_data[index.row()]
+        entry = self._filtered_data[index.row()]
         col = index.column()
         
         # Display role - what text to show
         if role == Qt.DisplayRole:
             if col == self.COL_IDENTIFIER:
-                # Return name or truncated ID
-                if key.name and key.name.strip() and not key.name.startswith("Key "):
-                    return key.name
+                # Add indentation for child entries
+                indent = "    " * entry.depth
+                # Add expand/collapse indicator for groups
+                if entry.is_group:
+                    indicator = "▼" if entry.is_expanded else "▶"
+                    return f"{indent}{indicator} {entry.icon} {entry.identifier}"
                 else:
-                    # Truncate ID: first 8 and last 4 characters
-                    if len(key.id) > 12:
-                        return f"{key.id[:8]}...{key.id[-4:]}"
-                    return key.id
+                    return f"{indent}{entry.icon} {entry.identifier}"
             
             elif col == self.COL_USAGE:
-                return f"{key.usage.diem:.4f} DIEM"
+                return f"{entry.usage.diem:.4f} DIEM"
             
             elif col == self.COL_STATUS:
-                return "Active" if self._is_active(key) else "Idle"
+                return "Active" if self._is_active(entry) else "Idle"
             
             elif col == self.COL_VISUAL_BAR_7DAY:
-                return f"{key.usage.diem:.4f}"
+                return f"{entry.usage.diem:.4f}"
             
             elif col == self.COL_VISUAL_BAR_DAILY:
-                daily_avg = key.usage.diem / 7.0
+                daily_avg = entry.usage.diem / 7.0
                 return f"{daily_avg:.4f}"
         
-        # Tooltip role - show full ID on hover
+        # Tooltip role - show full details on hover
         elif role == Qt.ToolTipRole:
             if col == self.COL_IDENTIFIER:
-                return f"Full ID: {key.id}"
+                if entry.entry_type == "api_key":
+                    return f"API Key ID: {entry.id}"
+                else:
+                    return f"Web App Usage\nSKU: {entry.id}"
             elif col == self.COL_USAGE:
-                daily_avg = key.usage.diem / 7.0
-                return f"7-Day Usage: {key.usage.diem:.4f} DIEM (${key.usage.usd:.2f} USD)\nDaily Average: {daily_avg:.4f} DIEM/day"
+                daily_avg = entry.usage.diem / 7.0
+                tooltip = f"7-Day Usage: {entry.usage.diem:.4f} DIEM (${entry.usage.usd:.2f} USD)\nDaily Average: {daily_avg:.4f} DIEM/day"
+                if entry.entry_type == "web_sku" and entry.model_details:
+                    tooltip += f"\n\nModel Details:\n{entry.model_details}"
+                return tooltip
             elif col == self.COL_STATUS:
-                if key.last_used_at:
-                    return f"Last used: {key.last_used_at}"
+                if entry.last_used_at:
+                    return f"Last used: {entry.last_used_at}"
                 return "Never used"
             elif col == self.COL_VISUAL_BAR_7DAY:
-                percentile = self._get_usage_percentile(key.usage.diem)
-                return f"7-Day Total: {key.usage.diem:.4f} DIEM ({percentile*100:.1f}th percentile)"
+                percentile = self._get_usage_percentile(entry.usage.diem)
+                return f"7-Day Total: {entry.usage.diem:.4f} DIEM ({percentile*100:.1f}th percentile)"
             elif col == self.COL_VISUAL_BAR_DAILY:
-                daily_avg = key.usage.diem / 7.0
-                percentile = self._get_usage_percentile(key.usage.diem)
+                daily_avg = entry.usage.diem / 7.0
+                percentile = self._get_usage_percentile(entry.usage.diem)
                 return f"Daily Average: {daily_avg:.4f} DIEM/day ({percentile*100:.1f}th percentile)"
         
-        # Background role - heat map coloring
+        # Background role - heat map coloring with distinction for web entries
         elif role == Qt.BackgroundRole:
-            percentile = self._get_usage_percentile(key.usage.diem)
+            percentile = self._get_usage_percentile(entry.usage.diem)
             
-            if percentile >= 0.75:
-                return QBrush(QColor(255, 200, 200, 30))  # Light red
-            elif percentile >= 0.50:
-                return QBrush(QColor(255, 240, 200, 30))  # Light orange
-            elif percentile >= 0.25:
-                return QBrush(QColor(255, 255, 200, 30))  # Light yellow
+            # Different color tint for web entries
+            if entry.entry_type == "web_sku":
+                if percentile >= 0.75:
+                    return QBrush(QColor(200, 200, 255, 30))  # Light blue-red
+                elif percentile >= 0.50:
+                    return QBrush(QColor(220, 220, 255, 30))  # Light blue-orange
+                elif percentile >= 0.25:
+                    return QBrush(QColor(240, 240, 255, 30))  # Light blue-yellow
+            else:
+                if percentile >= 0.75:
+                    return QBrush(QColor(255, 200, 200, 30))  # Light red
+                elif percentile >= 0.50:
+                    return QBrush(QColor(255, 240, 200, 30))  # Light orange
+                elif percentile >= 0.25:
+                    return QBrush(QColor(255, 255, 200, 30))  # Light yellow
         
         # Decoration role - status indicator icon
         elif role == Qt.DecorationRole:
@@ -302,7 +400,7 @@ class UsageLeaderboardModel(QAbstractTableModel):
                 painter = QPainter(pixmap)
                 painter.setRenderHint(QPainter.Antialiasing)
                 
-                if self._is_active(key):
+                if self._is_active(entry):
                     painter.setBrush(QColor(100, 200, 100))  # Green
                 else:
                     painter.setBrush(QColor(150, 150, 150))  # Grey
@@ -316,20 +414,20 @@ class UsageLeaderboardModel(QAbstractTableModel):
         # User role - store raw usage value for delegate
         elif role == Qt.UserRole:
             if col == self.COL_VISUAL_BAR_7DAY:
-                return key.usage.diem
+                return entry.usage.diem
             elif col == self.COL_VISUAL_BAR_DAILY:
-                return key.usage.diem / 7.0
+                return entry.usage.diem / 7.0
         
         # User role + 1 - store percentile for delegate
         elif role == Qt.UserRole + 1:
             if col == self.COL_VISUAL_BAR_7DAY:
-                return self._get_usage_percentile(key.usage.diem)
+                return self._get_usage_percentile(entry.usage.diem)
             elif col == self.COL_VISUAL_BAR_DAILY:
-                return self._get_usage_percentile(key.usage.diem)
+                return self._get_usage_percentile(entry.usage.diem)
         
-        # User role + 2 - store full key object for details panel
+        # User role + 2 - store full entry object for details panel
         elif role == Qt.UserRole + 2:
-            return key
+            return entry
         
         return None
     
@@ -397,11 +495,24 @@ class UsageLeaderboardWidget(QWidget):
         main_layout.addWidget(self.table_view)
         
         # Empty state label (hidden by default)
-        self.empty_label = QLabel("No API keys configured...")
+        self.empty_label = QLabel("No usage data available...")
         self.empty_label.setAlignment(Qt.AlignCenter)
         self.empty_label.setStyleSheet(f"color: {self.theme_colors.get('text', '#ffffff')}; font-size: 14px;")
         self.empty_label.hide()
         main_layout.addWidget(self.empty_label)
+        
+        # Loading indicator for web usage (shown during fetch)
+        self.loading_label = QLabel("⏳ Loading web app usage data...")
+        self.loading_label.setAlignment(Qt.AlignCenter)
+        self.loading_label.setStyleSheet(f"""
+            color: {self.theme_colors.get('accent', '#4a9eff')};
+            font-size: 13px;
+            padding: 8px;
+            background-color: {self.theme_colors.get('widget_bg', '#2a2a2a')};
+            border-radius: 4px;
+        """)
+        self.loading_label.hide()
+        main_layout.addWidget(self.loading_label)
     
     def create_header(self) -> QWidget:
         """Create the header widget with controls"""
@@ -410,7 +521,7 @@ class UsageLeaderboardWidget(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         
         # Title
-        title = QLabel("API Usage Leaderboard")
+        title = QLabel("Usage Leaderboard")
         title.setFont(QFont("Arial", 16, QFont.Bold))
         title.setStyleSheet(f"color: {self.theme_colors.get('text', '#ffffff')};")
         layout.addWidget(title)
@@ -487,14 +598,19 @@ class UsageLeaderboardWidget(QWidget):
     def _on_row_clicked(self, index: QModelIndex):
         """Handle row click events"""
         if index.isValid():
-            # Get the full key object
-            key = self.model.data(self.model.index(index.row(), 0), Qt.UserRole + 2)
-            if key:
-                self.row_clicked.emit(key)
+            # Check if clicked on a group entry - toggle expand/collapse
+            entry = self.model.get_entry_at_index(index)
+            if entry and entry.is_group:
+                self.model.toggle_group(index)
+                return
+            
+            # For non-group entries, emit the row_clicked signal
+            if entry:
+                self.row_clicked.emit(entry)
     
-    def set_data(self, api_keys: List[APIKeyUsage]):
-        """Update the leaderboard with new data"""
-        self.model.set_data(api_keys)
+    def set_data(self, entries: List[UnifiedUsageEntry]):
+        """Update the leaderboard with new unified entries (API keys + web usage)"""
+        self.model.set_data(entries)
         max_log = self.model.get_max_log_value()
         self.bar_delegate_7day.set_max_log_value(max_log)
         # For daily average, calculate max from daily values
@@ -603,3 +719,13 @@ class UsageLeaderboardWidget(QWidget):
         self.filter_all.setStyleSheet(radio_style)
         self.filter_active.setStyleSheet(radio_style)
         self.filter_idle.setStyleSheet(radio_style)
+    
+    def show_loading(self, message: str = "⏳ Loading web app usage data..."):
+        """Show loading indicator with optional custom message"""
+        self.loading_label.setText(message)
+        self.loading_label.show()
+        self.empty_label.hide()
+    
+    def hide_loading(self):
+        """Hide loading indicator"""
+        self.loading_label.hide()

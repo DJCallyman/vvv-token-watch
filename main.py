@@ -38,6 +38,9 @@ from enhanced_balance_widget import HeroBalanceWidget
 from action_buttons import ActionButtonWidget
 from date_utils import DateFormatter
 from usage_leaderboard import UsageLeaderboardWidget
+from web_usage_tracker import WebUsageWorker, WebUsageMetrics
+from unified_usage_entry import UnifiedUsageEntry
+from unified_usage_integrator import UnifiedUsageIntegrator
 
 # Phase 2 imports - with error handling
 try:
@@ -188,6 +191,8 @@ class CombinedViewerApp(QMainWindow):
         
         # Initialize API usage tracking components
         self.usage_worker = None
+        self.web_usage_worker = None
+        self.web_usage_metrics = None
         self.balance_display = None
         self.api_key_widgets = []
         self.current_usage_data = []
@@ -1319,6 +1324,12 @@ class CombinedViewerApp(QMainWindow):
         self.usage_worker.balance_data_updated.connect(self._update_balance_display)
         self.usage_worker.daily_usage_updated.connect(self._update_daily_usage_display)
         self.usage_worker.error_occurred.connect(self._handle_usage_error)
+        
+        # Initialize web usage worker for unified leaderboard
+        self.web_usage_worker = WebUsageWorker(Config.VENICE_ADMIN_KEY)
+        self.web_usage_worker.progress_updated.connect(self._on_web_usage_progress)
+        self.web_usage_worker.web_usage_updated.connect(self._on_web_usage_finished)
+        self.web_usage_worker.error_occurred.connect(self._on_web_usage_error)
     
     def _start_usage_updates(self):
         """Start periodic usage data updates."""
@@ -1326,8 +1337,16 @@ class CombinedViewerApp(QMainWindow):
             # Start initial update
             self.usage_worker.start()
             
-            # Set up periodic updates
+            # Set up periodic updates (5 minutes for API keys)
             QTimer.singleShot(Config.USAGE_REFRESH_INTERVAL_MS, self._update_usage_data)
+        
+        # Start web usage updates (15 minutes interval)
+        if self.web_usage_worker:
+            # Start initial web usage fetch
+            self._refresh_web_usage()
+            
+            # Set up periodic updates (15 minutes = 900,000 ms)
+            QTimer.singleShot(900000, self._update_web_usage_data)
     
     def _update_usage_data(self):
         """Trigger a usage data update and schedule the next one."""
@@ -1337,6 +1356,22 @@ class CombinedViewerApp(QMainWindow):
         # Schedule next update
         QTimer.singleShot(Config.USAGE_REFRESH_INTERVAL_MS, self._update_usage_data)
     
+    def _update_web_usage_data(self):
+        """Trigger a web usage data update and schedule the next one."""
+        self._refresh_web_usage()
+        
+        # Schedule next update (15 minutes)
+        QTimer.singleShot(900000, self._update_web_usage_data)
+    
+    def _refresh_web_usage(self):
+        """Refresh web app usage data."""
+        if self.web_usage_worker and not self.web_usage_worker.isRunning():
+            # Show loading indicator before starting fetch
+            if hasattr(self, 'leaderboard_widget'):
+                self.leaderboard_widget.show_loading("⏳ Loading web app usage data...")
+            self.web_usage_worker.days = 7  # 7-day window to match API keys
+            self.web_usage_worker.start()
+    
     def _update_daily_usage_display(self, daily_usage: Dict[str, float]):
         """Handle daily usage totals from the Venice billing API."""
         self.current_daily_usage = daily_usage
@@ -1344,6 +1379,31 @@ class CombinedViewerApp(QMainWindow):
         
         # Update any widgets that need to display total daily usage
         # This can be extended in the future for dashboard summaries
+    
+    def _on_web_usage_progress(self, message: str):
+        """Handle web usage fetch progress."""
+        print(f"DEBUG: Web usage progress: {message}")
+        # Update loading indicator in leaderboard
+        if hasattr(self, 'leaderboard_widget'):
+            self.leaderboard_widget.show_loading(f"⏳ {message}")
+    
+    def _on_web_usage_finished(self, web_metrics: WebUsageMetrics):
+        """Handle web usage data received."""
+        print(f"DEBUG: Web usage finished - {web_metrics.diem:.4f} DIEM (${web_metrics.usd:.2f} USD)")
+        self.web_usage_metrics = web_metrics
+        # Hide loading indicator
+        if hasattr(self, 'leaderboard_widget'):
+            self.leaderboard_widget.hide_loading()
+        self._update_unified_leaderboard()
+    
+    def _on_web_usage_error(self, error_message: str):
+        """Handle web usage fetch error."""
+        print(f"WARNING: Web usage error: {error_message}")
+        # Hide loading indicator on error
+        if hasattr(self, 'leaderboard_widget'):
+            self.leaderboard_widget.hide_loading()
+        # Fall back to API keys only
+        self._update_unified_leaderboard()
     
     def _refresh_data(self):
         """
@@ -1362,6 +1422,57 @@ class CombinedViewerApp(QMainWindow):
                 
         except Exception as e:
             print(f"ERROR: Failed to refresh data: {e}")
+    
+    def _update_unified_leaderboard(self):
+        """Update leaderboard with combined API key and web usage data."""
+        # Get API keys (from existing worker)
+        api_keys = self.current_usage_data if self.current_usage_data else []
+        
+        # Get web usage (default to empty if not yet loaded)
+        if hasattr(self, 'web_usage_metrics') and self.web_usage_metrics:
+            web_metrics = self.web_usage_metrics
+        else:
+            # Create empty metrics
+            web_metrics = WebUsageMetrics(
+                diem=0.0, usd=0.0, vcu=0.0,
+                total_requests=0, items=[], by_sku={}
+            )
+        
+        # Create unified entries
+        entries, api_diem, api_usd, web_diem, web_usd = \
+            UnifiedUsageIntegrator.create_unified_entries(
+                api_keys=api_keys,
+                web_usage=web_metrics,
+                days=7
+            )
+        
+        print(f"DEBUG: Unified entries created - {len(entries)} total "
+              f"(API: {api_diem:.4f} DIEM, Web: {web_diem:.4f} DIEM)")
+        
+        # Update leaderboard (now accepts UnifiedUsageEntry)
+        if hasattr(self, 'leaderboard_widget') and self.leaderboard_widget:
+            self.leaderboard_widget.set_data(entries)
+        
+        # Update balance widget with breakdown
+        if hasattr(self, 'hero_balance') and self.hero_balance:
+            # Get exchange rate
+            if hasattr(self, 'exchange_rate_service') and self.exchange_rate_service:
+                try:
+                    rate_data = self.exchange_rate_service.get_rate()
+                    exchange_rate = rate_data.rate if rate_data else 0.72
+                except Exception as e:
+                    print(f"WARNING: Failed to get exchange rate: {e}")
+                    exchange_rate = 0.72
+            else:
+                exchange_rate = 0.72
+            
+            self.hero_balance.update_usage_breakdown(
+                api_keys_diem=api_diem,
+                api_keys_usd=api_usd,
+                web_usage_diem=web_diem,
+                web_usage_usd=web_usd,
+                exchange_rate=exchange_rate
+            )
     
     
     def _update_usage_display(self, usage_data: List[APIKeyUsage]):
@@ -1400,9 +1511,8 @@ class CombinedViewerApp(QMainWindow):
         # Add stretch to push widgets to the top
         self.usage_frame_layout.addStretch()
         
-        # Update the leaderboard widget with new data
-        if hasattr(self, 'leaderboard_widget') and self.leaderboard_widget:
-            self.leaderboard_widget.set_data(usage_data)
+        # Update the unified leaderboard with API keys and web usage
+        self._update_unified_leaderboard()
     
     def _update_balance_display(self, balance_info: BalanceInfo):
         """Update the UI with new balance information using Phase 2 analytics."""
