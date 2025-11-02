@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout
 from PySide6.QtCore import Qt
-from theme import Theme
+from src.config.theme import Theme
 
 class ModelViewerWidget(QWidget):
     def __init__(self, theme: Theme, parent=None):

@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QPushButton,
                                 QLabel, QProgressBar, QSizePolicy, QSpacerItem)
 from PySide6.QtCore import Qt, Signal, QTimer, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import QFont, QIcon, QPixmap, QPainter
-from status_indicator import StatusIndicator
+from src.widgets.status_indicator import StatusIndicator
 
 
 class ActionButton(QPushButton):

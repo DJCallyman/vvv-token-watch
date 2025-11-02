@@ -9,7 +9,7 @@ import json
 import os
 from dataclasses import dataclass
 
-from usage_tracker import APIKeyUsage, UsageMetrics
+from src.core.usage_tracker import APIKeyUsage, UsageMetrics
 
 
 @dataclass
@@ -38,7 +38,9 @@ class UsageReportGenerator:
     def load_historical_data(self):
         """Load historical usage data from storage"""
         try:
-            data_file = "usage_reports_history.json"
+            # Get project root (two levels up from this file)
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            data_file = os.path.join(project_root, "data", "usage_reports_history.json")
             if os.path.exists(data_file):
                 with open(data_file, 'r') as f:
                     self.historical_data = json.load(f)
@@ -49,7 +51,9 @@ class UsageReportGenerator:
     def save_historical_data(self):
         """Save historical usage data to storage"""
         try:
-            data_file = "usage_reports_history.json"
+            # Get project root (two levels up from this file)
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            data_file = os.path.join(project_root, "data", "usage_reports_history.json")
             with open(data_file, 'w') as f:
                 json.dump(self.historical_data, f, indent=2)
         except Exception as e:

@@ -8,8 +8,8 @@ from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 import json
 
-from config import Config
-from venice_api_client import VeniceAPIClient
+from src.config.config import Config
+from src.core.venice_api_client import VeniceAPIClient
 
 
 @dataclass

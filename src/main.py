@@ -25,25 +25,25 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
 # Import local modules using relative imports (now a standalone repo)
-from utils import format_currency, validate_holding_amount, ValidationState
-from config import Config
-from theme import Theme
-from price_display import PriceDisplayWidget
-from model_viewer import ModelViewerWidget
-from model_comparison import ModelComparisonWidget
-from usage_tracker import UsageWorker, BalanceInfo, APIKeyUsage
-from vvv_display import BalanceDisplayWidget, APIKeyUsageWidget
-from enhanced_balance_widget import HeroBalanceWidget
-from action_buttons import ActionButtonWidget
-from date_utils import DateFormatter
-from usage_leaderboard import UsageLeaderboardWidget
-from web_usage import WebUsageWorker, WebUsageMetrics
-from unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
+from src.utils.utils import format_currency, validate_holding_amount, ValidationState
+from src.config.config import Config
+from src.config.theme import Theme
+from src.widgets.price_display import PriceDisplayWidget
+from src.cli.model_viewer import ModelViewerWidget
+from src.analytics.model_comparison import ModelComparisonWidget
+from src.core.usage_tracker import UsageWorker, BalanceInfo, APIKeyUsage
+from src.widgets.vvv_display import BalanceDisplayWidget, APIKeyUsageWidget
+from src.widgets.enhanced_balance_widget import HeroBalanceWidget
+from src.widgets.action_buttons import ActionButtonWidget
+from src.utils.date_utils import DateFormatter
+from src.widgets.usage_leaderboard import UsageLeaderboardWidget
+from src.core.web_usage import WebUsageWorker, WebUsageMetrics
+from src.core.unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
 
 # Phase 2 imports - with error handling
 try:
-    from usage_analytics import UsageAnalytics
-    from exchange_rate_service import ExchangeRateService
+    from src.analytics.usage_analytics import UsageAnalytics
+    from src.services.exchange_rate_service import ExchangeRateService
     PHASE2_AVAILABLE = True
     print("DEBUG: Phase 2 modules imported successfully")
 except ImportError as e:
@@ -54,9 +54,9 @@ except ImportError as e:
 
 # Phase 3 imports - with error handling
 try:
-    from key_management_widget import APIKeyManagementWidget
-    from usage_reports import usage_report_generator, UsageReportGenerator
-    from venice_key_management import get_key_management_service
+    from src.widgets.key_management_widget import APIKeyManagementWidget
+    from src.analytics.usage_reports import usage_report_generator, UsageReportGenerator
+    from src.services.venice_key_management import get_key_management_service
     PHASE3_AVAILABLE = True
     print("DEBUG: Phase 3 modules imported successfully")
 except ImportError as e:
@@ -2225,10 +2225,16 @@ class CombinedViewerApp(QMainWindow):
             print(f"ERROR: Failed to revoke key: {e}")
             self.status_bar.showMessage(f"Failed to revoke key: {e}", 5000)
             QMessageBox.critical(self, "Error", f"An error occurred while revoking the key:\n{e}")
-    
-# Main application
-if __name__ == "__main__":
+
+
+def main():
+    """Main entry point for the application."""
     app = QApplication(sys.argv)
     window = CombinedViewerApp()
     window.show()
     sys.exit(app.exec())
+
+
+# Main application
+if __name__ == "__main__":
+    main()

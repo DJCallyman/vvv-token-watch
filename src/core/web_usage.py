@@ -8,7 +8,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
 from PySide6.QtCore import QThread, Signal
 
-from venice_api_client import VeniceAPIClient
+from src.core.venice_api_client import VeniceAPIClient
 
 
 @dataclass

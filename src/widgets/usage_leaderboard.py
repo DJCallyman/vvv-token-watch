@@ -15,9 +15,9 @@ from PySide6.QtCore import (Qt, QAbstractTableModel, QModelIndex, QSortFilterPro
                            Signal, QRectF, QPointF)
 from PySide6.QtGui import (QPalette, QFont, QColor, QBrush, QPen, QPainter, QIcon, QPixmap)
 
-from usage_tracker import APIKeyUsage
-from unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
-from web_usage import WebUsageMetrics
+from src.core.usage_tracker import APIKeyUsage
+from src.core.unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
+from src.core.web_usage import WebUsageMetrics
 
 
 class SortMode(Enum):

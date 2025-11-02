@@ -10,7 +10,7 @@ import json
 from datetime import datetime, timezone
 from PySide6.QtCore import QThread, Signal
 
-from venice_api_client import VeniceAPIClient
+from src.core.venice_api_client import VeniceAPIClient
 
 
 @dataclass
