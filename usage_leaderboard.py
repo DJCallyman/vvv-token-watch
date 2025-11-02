@@ -16,8 +16,8 @@ from PySide6.QtCore import (Qt, QAbstractTableModel, QModelIndex, QSortFilterPro
 from PySide6.QtGui import (QPalette, QFont, QColor, QBrush, QPen, QPainter, QIcon, QPixmap)
 
 from usage_tracker import APIKeyUsage
-from unified_usage_entry import UnifiedUsageEntry
-from web_usage_tracker import WebUsageMetrics
+from unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
+from web_usage import WebUsageMetrics
 
 
 class SortMode(Enum):
@@ -129,8 +129,6 @@ class UsageLeaderboardModel(QAbstractTableModel):
     
     def set_data(self, entries: List[UnifiedUsageEntry]):
         """Set the data for the model - accepts unified entries (API keys + web usage)"""
-        from unified_usage_integrator import UnifiedUsageIntegrator
-        
         # Save current expanded states before updating
         self._save_expanded_states()
         
@@ -200,8 +198,6 @@ class UsageLeaderboardModel(QAbstractTableModel):
     
     def _apply_filters_and_sort(self):
         """Apply filters and sorting to the data"""
-        from unified_usage_integrator import UnifiedUsageIntegrator
-        
         self.beginResetModel()
         
         # Flatten entries (respecting expanded states)

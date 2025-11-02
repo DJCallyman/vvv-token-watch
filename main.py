@@ -38,9 +38,8 @@ from enhanced_balance_widget import HeroBalanceWidget
 from action_buttons import ActionButtonWidget
 from date_utils import DateFormatter
 from usage_leaderboard import UsageLeaderboardWidget
-from web_usage_tracker import WebUsageWorker, WebUsageMetrics
-from unified_usage_entry import UnifiedUsageEntry
-from unified_usage_integrator import UnifiedUsageIntegrator
+from web_usage import WebUsageWorker, WebUsageMetrics
+from unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
 
 # Phase 2 imports - with error handling
 try:
