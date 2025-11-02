@@ -1,7 +1,5 @@
-try:
-    from config import Config
-except ImportError:
-    from config import Config
+from config import Config
+
 
 class Theme:
     def __init__(self, mode=None):

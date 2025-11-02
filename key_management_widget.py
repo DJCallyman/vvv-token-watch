@@ -13,13 +13,8 @@ import webbrowser
 import json
 from datetime import datetime
 
-try:
-    from usage_tracker import APIKeyUsage, BalanceInfo
-    from date_utils import DateFormatter
-except ImportError:
-    # Fallback for direct execution
-    from usage_tracker import APIKeyUsage, BalanceInfo
-    from date_utils import DateFormatter
+from usage_tracker import APIKeyUsage, BalanceInfo
+from date_utils import DateFormatter
 
 
 class KeyActionMenu(QMenu):

@@ -1,9 +1,34 @@
+"""
+Utility functions for the vvv_token_watch application.
+
+This module contains small helper functions for currency formatting,
+input validation, and other common utilities.
+"""
+
 from enum import Enum
 
+
+# Currency formatting utilities
+def format_currency(value, currency):
+    """Format a numeric value as a currency string with appropriate symbol and decimal places."""
+    if value is None:
+        return "N/A"
+    
+    if currency.lower() == 'usd':
+        return f"${value:,.2f}"
+    elif currency.lower() == 'aud':
+        return f"A${value:,.2f}"
+    else:
+        # Fallback for other currencies
+        return f"{currency.upper()} {value:,.2f}"
+
+
+# Validation utilities
 class ValidationState(Enum):
     VALID = "valid"
     WARNING = "warning"
     ERROR = "error"
+
 
 def validate_holding_amount(value: str) -> ValidationState:
     """

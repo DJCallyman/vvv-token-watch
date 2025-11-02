@@ -9,11 +9,7 @@ import json
 import os
 from dataclasses import dataclass
 
-try:
-    from usage_tracker import APIKeyUsage, UsageMetrics
-except ImportError:
-    # Fallback for direct execution
-    from usage_tracker import APIKeyUsage, UsageMetrics
+from usage_tracker import APIKeyUsage, UsageMetrics
 
 
 @dataclass

@@ -12,10 +12,7 @@ import statistics
 import json
 import os
 
-try:
-    from usage_tracker import APIKeyUsage, UsageMetrics, BalanceInfo
-except ImportError:
-    from usage_tracker import APIKeyUsage, UsageMetrics, BalanceInfo
+from usage_tracker import APIKeyUsage, UsageMetrics, BalanceInfo
 
 
 @dataclass

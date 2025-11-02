@@ -25,13 +25,12 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, project_root)
 
 # Import local modules using relative imports (now a standalone repo)
-from currency_utils import format_currency
+from utils import format_currency, validate_holding_amount, ValidationState
 from config import Config
 from theme import Theme
 from price_display import PriceDisplayWidget
 from model_viewer import ModelViewerWidget
 from model_comparison import ModelComparisonWidget
-from validation import validate_holding_amount, ValidationState
 from usage_tracker import UsageWorker, BalanceInfo, APIKeyUsage
 from vvv_display import BalanceDisplayWidget, APIKeyUsageWidget
 from enhanced_balance_widget import HeroBalanceWidget
