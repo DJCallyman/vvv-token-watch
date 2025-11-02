@@ -11,7 +11,7 @@ import sys
 from typing import List, Dict, Any
 
 # Import the data models and worker from usage_tracker
-from usage_tracker import APIKeyUsage, BalanceInfo
+from src.core.usage_tracker import APIKeyUsage, BalanceInfo
 
 class TokenDisplayWidget(QWidget):
     """

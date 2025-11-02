@@ -31,10 +31,10 @@ import matplotlib.pyplot as plt
 import requests
 from datetime import timezone
 
-from config import Config
-from theme import Theme
-from usage_tracker import UsageWorker, APIKeyUsage
-from venice_api_client import VeniceAPIClient
+from src.config.config import Config
+from src.config.theme import Theme
+from src.core.usage_tracker import UsageWorker, APIKeyUsage
+from src.core.venice_api_client import VeniceAPIClient
 
 
 class ChartCanvas(FigureCanvas):

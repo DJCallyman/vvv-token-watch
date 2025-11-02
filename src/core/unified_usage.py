@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Tuple
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
-from usage_tracker import APIKeyUsage, UsageMetrics
-from web_usage import WebUsageMetrics
+from src.core.usage_tracker import APIKeyUsage, UsageMetrics
+from src.core.web_usage import WebUsageMetrics
 
 
 # ============================================================================

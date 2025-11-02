@@ -13,8 +13,8 @@ import webbrowser
 import json
 from datetime import datetime
 
-from usage_tracker import APIKeyUsage, BalanceInfo
-from date_utils import DateFormatter
+from src.core.usage_tracker import APIKeyUsage, BalanceInfo
+from src.utils.date_utils import DateFormatter
 
 
 class KeyActionMenu(QMenu):

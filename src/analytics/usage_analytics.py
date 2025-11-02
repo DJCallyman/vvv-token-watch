@@ -12,7 +12,7 @@ import statistics
 import json
 import os
 
-from usage_tracker import APIKeyUsage, UsageMetrics, BalanceInfo
+from src.core.usage_tracker import APIKeyUsage, UsageMetrics, BalanceInfo
 
 
 @dataclass
@@ -52,9 +52,13 @@ class UsageAnalytics:
         Initialize the usage analytics engine.
         
         Args:
-            storage_path: Path to store historical usage data (defaults to current directory)
+            storage_path: Path to store historical usage data (defaults to data directory)
         """
-        self.storage_path = storage_path or os.path.join(os.getcwd(), "usage_history.json")
+        if storage_path is None:
+            # Get project root (two levels up from this file)
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            storage_path = os.path.join(project_root, "data", "usage_history.json")
+        self.storage_path = storage_path
         self.usage_history: List[UsageSnapshot] = []
         self.load_historical_data()
     
