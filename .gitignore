@@ -35,10 +35,11 @@ build/
 **/build/
 **/dist/
 
-# Temporary files
+# Temporary and log files
 *.tmp
 *.log
 *log.*
+archive
 crash-dump.log
 
 
