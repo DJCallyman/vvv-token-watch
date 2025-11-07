@@ -26,12 +26,16 @@ sys.path.insert(0, project_root)
 
 # Import local modules using relative imports (now a standalone repo)
 from src.utils.utils import format_currency, validate_holding_amount, ValidationState
+from src.utils.error_handler import ErrorHandler
+from src.utils.model_utils import ModelNameParser
 from src.config.config import Config
 from src.config.theme import Theme
+from src.config.features import FeatureFlags
 from src.widgets.price_display import PriceDisplayWidget
 from src.cli.model_viewer import ModelViewerWidget
 from src.analytics.model_comparison import ModelComparisonWidget
 from src.core.usage_tracker import UsageWorker, BalanceInfo, APIKeyUsage
+from src.core.worker_factory import APIWorkerFactory, WorkerPool
 from src.widgets.vvv_display import BalanceDisplayWidget, APIKeyUsageWidget
 from src.widgets.enhanced_balance_widget import HeroBalanceWidget
 from src.widgets.action_buttons import ActionButtonWidget
@@ -40,99 +44,68 @@ from src.widgets.usage_leaderboard import UsageLeaderboardWidget
 from src.core.web_usage import WebUsageWorker, WebUsageMetrics
 from src.core.unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
 
-# Phase 2 imports - with error handling
-try:
-    from src.analytics.usage_analytics import UsageAnalytics
-    from src.services.exchange_rate_service import ExchangeRateService
-    PHASE2_AVAILABLE = True
-    print("DEBUG: Phase 2 modules imported successfully")
-except ImportError as e:
-    print(f"WARNING: Phase 2 modules not available: {e}")
-    UsageAnalytics = None
-    ExchangeRateService = None
-    PHASE2_AVAILABLE = False
-
-# Phase 3 imports - with error handling
-try:
-    from src.widgets.key_management_widget import APIKeyManagementWidget
-    from src.analytics.usage_reports import usage_report_generator, UsageReportGenerator
-    from src.services.venice_key_management import get_key_management_service
-    PHASE3_AVAILABLE = True
-    print("DEBUG: Phase 3 modules imported successfully")
-except ImportError as e:
-    print(f"WARNING: Phase 3 modules not available: {e}")
-    APIKeyManagementWidget = None
-    usage_report_generator = None
-    UsageReportGenerator = None
-    get_key_management_service = None
-    PHASE3_AVAILABLE = False
-
 # --- Suppress Warnings (Use with caution) ---
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
 
-# --- Error Logging Configuration ---
-logging.basicConfig(
-    filename='error_log.txt',
-    level=logging.ERROR,
-    format='[%(asctime)s] %(levelname)s: %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
 
-class WorkerSignals(QObject):
-    """Signals for worker threads to communicate with main thread"""
-    result = Signal(dict)
+# --- Logging Configuration ---
+def setup_logging():
+    """
+    Configure application-wide logging with proper levels and handlers.
+    Replaces scattered print() statements with proper logging.
+    """
+    # Determine log level from config
+    log_level = logging.DEBUG if getattr(Config, 'DEBUG_MODE', False) else logging.INFO
+    
+    # Create formatters
+    detailed_formatter = logging.Formatter(
+        '[%(asctime)s] %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    simple_formatter = logging.Formatter(
+        '[%(levelname)s] %(message)s'
+    )
+    
+    # File handler for all logs
+    file_handler = logging.FileHandler('app.log', encoding='utf-8')
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(detailed_formatter)
+    
+    # File handler for errors only
+    error_handler = logging.FileHandler('error_log.txt', encoding='utf-8')
+    error_handler.setLevel(logging.ERROR)
+    error_handler.setFormatter(detailed_formatter)
+    
+    # Console handler for INFO and above
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(log_level)
+    console_handler.setFormatter(simple_formatter)
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(error_handler)
+    root_logger.addHandler(console_handler)
+    
+    # Quiet down noisy third-party loggers
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    logging.getLogger('requests').setLevel(logging.WARNING)
+    
+    return root_logger
 
-class APIWorker(QThread):
-    """Worker thread for API calls"""
-    def __init__(self, url: str, headers: Dict[str, str], params: Optional[Dict] = None):
-        super().__init__()
-        self.url = url
-        self.headers = headers
-        self.params = params
-        self.signals = WorkerSignals()
 
-    def run(self):
-        """Execute the API request in a separate thread"""
-        result = {'success': False, 'data': None, 'error': None}
-        try:
-            response = requests.get(self.url, headers=self.headers, params=self.params, timeout=20)
-            response.raise_for_status()
-            data = response.json()
-            if data and 'data' in data:
-                result['success'] = True
-                result['data'] = data
-            else:
-                result['error'] = "API response missing 'data' key or is empty."
-                logging.error(result['error'])
-        except requests.exceptions.RequestException as e:
-            result['error'] = f"API Connection Error: {e}"
-            logging.error(result['error'])
-        
-        self.signals.result.emit(result)
+# Initialize logging
+logger = setup_logging()
+logger.info("=" * 60)
+logger.info("Venice Token Watch Application Starting")
+logger.info("=" * 60)
 
-class StylePresetWorker(QThread):
-    """Worker thread for fetching style presets"""
-    def __init__(self, url: str, headers: Dict[str, str]):
-        super().__init__()
-        self.url = url
-        self.headers = headers
-        self.signals = WorkerSignals()
+# Check feature availability
+PHASE2_AVAILABLE = FeatureFlags.is_phase2_available()
+PHASE3_AVAILABLE = FeatureFlags.is_phase3_available()
+FeatureFlags.log_feature_status()
 
-    def run(self):
-        """Fetch style presets in a separate thread"""
-        result = {'success': False, 'data': [], 'error': None}
-        try:
-            response = requests.get(self.url, headers=self.headers, timeout=20)
-            response.raise_for_status()
-            style_presets = response.json()
-            if style_presets and 'data' in style_presets:
-                result['success'] = True
-                result['data'] = style_presets['data']
-        except requests.exceptions.RequestException as e:
-            result['error'] = f"Style Preset API Error: {e}"
-            logging.error(result['error'])
-
-        self.signals.result.emit(result)
 
 class CombinedViewerApp(QMainWindow):
     """
@@ -161,7 +134,7 @@ class CombinedViewerApp(QMainWindow):
     """
     def __init__(self, parent=None):
         super().__init__(parent)
-        print("DEBUG: Initializing CombinedViewerApp...")
+        logger.debug("Initializing CombinedViewerApp...")
         
         # Initialize theme system
         self.theme = Theme()
@@ -200,30 +173,34 @@ class CombinedViewerApp(QMainWindow):
         # Phase 2: Initialize analytics and services
         if PHASE2_AVAILABLE:
             try:
+                UsageAnalytics = FeatureFlags.get_feature_module('UsageAnalytics')
+                ExchangeRateService = FeatureFlags.get_feature_module('ExchangeRateService')
+                
                 self.usage_analytics = UsageAnalytics()
                 self.exchange_rate_service = ExchangeRateService(cache_ttl_minutes=5)
-                print("DEBUG: Phase 2 components initialized successfully")
+                logger.info("Phase 2 components initialized successfully")
             except Exception as e:
-                print(f"WARNING: Phase 2 initialization failed: {e}")
+                ErrorHandler.log_warning(f"Phase 2 initialization failed: {e}")
                 self.usage_analytics = None
                 self.exchange_rate_service = None
         else:
-            print("DEBUG: Phase 2 components not available, skipping initialization")
+            logger.debug("Phase 2 components not available, skipping initialization")
             self.usage_analytics = None
             self.exchange_rate_service = None
         
         # Phase 3: Initialize key management and security monitoring
         if PHASE3_AVAILABLE:
             try:
+                usage_report_generator = FeatureFlags.get_feature_module('UsageReportGenerator')
                 self.usage_report_generator = usage_report_generator
                 self.key_management_enabled = True
-                print("DEBUG: Phase 3 components initialized successfully")
+                logger.info("Phase 3 components initialized successfully")
             except Exception as e:
-                print(f"WARNING: Phase 3 initialization failed: {e}")
+                ErrorHandler.log_warning(f"Phase 3 initialization failed: {e}")
                 self.usage_report_generator = None
                 self.key_management_enabled = False
         else:
-            print("DEBUG: Phase 3 components not available, skipping initialization")
+            logger.debug("Phase 3 components not available, skipping initialization")
             self.usage_report_generator = None
             self.key_management_enabled = False
         
@@ -362,7 +339,7 @@ class CombinedViewerApp(QMainWindow):
             QTimer.singleShot(100, self.hero_balance_display.force_text_styling)
             
         except Exception as e:
-            print(f"ERROR: Failed to create hero balance widget: {e}")
+            logger.error(f"Failed to create hero balance widget: {e}")
             # Fallback to original balance display
             self.balance_display = BalanceDisplayWidget(self.theme.theme_colors)
             usage_layout.addWidget(self.balance_display)
@@ -408,7 +385,7 @@ class CombinedViewerApp(QMainWindow):
             balance_tab_layout.addWidget(self.action_buttons)
             
         except Exception as e:
-            print(f"ERROR: Failed to create action buttons: {e}")
+            logger.error(f"Failed to create action buttons: {e}")
         
         # Create price display components
         self.price_display_usd = PriceDisplayWidget(self.theme)
@@ -589,9 +566,9 @@ class CombinedViewerApp(QMainWindow):
         self.traits_combobox.setStyleSheet(self.get_combobox_style())
 
         # Add debugging to verify combobox signals are connected
-        print("DEBUG: Setting up combobox signal connections...")
-        print(f"DEBUG: Type combobox has {self.type_combobox.count()} items")
-        print(f"DEBUG: Traits combobox has {self.traits_combobox.count()} items")
+        logger.debug("Setting up combobox signal connections...")
+        logger.debug(f"Type combobox has {self.type_combobox.count()} items")
+        logger.debug(f"Traits combobox has {self.traits_combobox.count()} items")
         controls_layout.addWidget(self.traits_combobox)
 
         models_tab_layout.addLayout(controls_layout)
@@ -635,7 +612,7 @@ class CombinedViewerApp(QMainWindow):
         # Initial actions
         QTimer.singleShot(Config.COINGECKO_INITIAL_DELAY_MS, self.update_price_label)
         
-        print("DEBUG: CombinedViewerApp initialization complete.")
+        logger.debug("CombinedViewerApp initialization complete.")
     
     def _on_holding_text_changed(self, text: str) -> None:
         """
@@ -934,8 +911,7 @@ class CombinedViewerApp(QMainWindow):
                 return None
             except requests.exceptions.RequestException as e:
                 error_msg = f"Error fetching data from CoinGecko API (attempt {attempt + 1}/{max_retries}): {e}"
-                print(error_msg)
-                logging.error(error_msg)
+                logger.error(error_msg)
                 if attempt < max_retries - 1:
                     time.sleep(2 ** attempt)
                 else:
@@ -1015,13 +991,9 @@ class CombinedViewerApp(QMainWindow):
         connecting_label.setStyleSheet(f"color: {self.theme.text};")
         self.display_layout.addWidget(connecting_label, alignment=Qt.AlignCenter)
         
-        # Create and start worker thread
-        url = 'https://api.venice.ai/api/v1/models'
-        headers = {'Accept': 'application/json', 'Authorization': f'Bearer {Config.VENICE_API_KEY}'}
-        params = {'type': 'all'}
-        
-        self.api_worker = APIWorker(url, headers, params)
-        self.api_worker.signals.result.connect(self._update_gui_after_connect)
+        # Create and start worker thread using factory
+        self.api_worker = APIWorkerFactory.create_models_worker(model_type='all', parent=self)
+        self.api_worker.result.connect(self._update_gui_after_connect)
         self.api_worker.start()
     
     def refresh_balance_action(self):
@@ -1036,7 +1008,7 @@ class CombinedViewerApp(QMainWindow):
                 if not self.usage_worker.isRunning():
                     self.usage_worker.start()
                 else:
-                    print("Usage worker already running, refresh will happen automatically")
+                    logger.info("Usage worker already running, refresh will happen automatically")
                 
             # Show success after a short delay
             QTimer.singleShot(2000, lambda: [
@@ -1048,7 +1020,7 @@ class CombinedViewerApp(QMainWindow):
             if hasattr(self, 'action_buttons'):
                 self.action_buttons.set_button_loading('refresh_balance', False)
                 self.action_buttons.set_button_error('refresh_balance', "Refresh Failed")
-            print(f"Error refreshing balance: {e}")
+            logger.error(f"Error refreshing balance: {e}")
     
     def load_usage_action(self):
         """Handle load usage button action."""
@@ -1062,7 +1034,7 @@ class CombinedViewerApp(QMainWindow):
                 if not self.usage_worker.isRunning():
                     self.usage_worker.start()
                 else:
-                    print("Usage worker already running, refresh will happen automatically")
+                    logger.info("Usage worker already running, refresh will happen automatically")
                 
             # Show success after a short delay
             QTimer.singleShot(2500, lambda: [
@@ -1074,7 +1046,7 @@ class CombinedViewerApp(QMainWindow):
             if hasattr(self, 'action_buttons'):
                 self.action_buttons.set_button_loading('load_usage', False)
                 self.action_buttons.set_button_error('load_usage', "Load Failed")
-            print(f"Error loading usage: {e}")
+            logger.error(f"Error loading usage: {e}")
     
     def refresh_all_action(self):
         """Handle refresh all data button action."""
@@ -1097,7 +1069,7 @@ class CombinedViewerApp(QMainWindow):
             if hasattr(self, 'action_buttons'):
                 self.action_buttons.set_button_loading('refresh_all', False)
                 self.action_buttons.set_button_error('refresh_all', "Refresh Failed")
-            print(f"Error refreshing all data: {e}")
+            logger.error(f"Error refreshing all data: {e}")
     
     def view_style_presets_action(self):
         """Starts fetching style presets in a separate thread."""
@@ -1120,12 +1092,9 @@ class CombinedViewerApp(QMainWindow):
         fetching_label.setStyleSheet(f"color: {self.theme.text};")
         self.display_layout.addWidget(fetching_label, alignment=Qt.AlignCenter)
         
-        # Create and start worker thread
-        url = 'https://api.venice.ai/api/v1/image/styles'
-        headers = {'Accept': 'application/json', 'Authorization': f'Bearer {Config.VENICE_API_KEY}'}
-        
-        self.style_worker = StylePresetWorker(url, headers)
-        self.style_worker.signals.result.connect(self._update_gui_after_fetch_style_presets)
+        # Create and start worker thread using factory
+        self.style_worker = APIWorkerFactory.create_style_presets_worker(parent=self)
+        self.style_worker.result.connect(self._update_gui_after_fetch_style_presets)
         self.style_worker.start()
     
     def _update_gui_after_connect(self, result):
@@ -1244,9 +1213,9 @@ class CombinedViewerApp(QMainWindow):
             QMessageBox.warning(self, "No Model Data", "Please connect to the Model API first.")
             return
 
-        print(f"DEBUG: Original models count before filtering: {len(self.models_data['data'])}")
-        print(f"DEBUG: Selected type: {self.type_combobox.currentText()}")
-        print(f"DEBUG: Selected trait: {self.traits_combobox.currentText()}")
+        logger.debug(f"Original models count before filtering: {len(self.models_data['data'])}")
+        logger.debug(f"Selected type: {self.type_combobox.currentText()}")
+        logger.debug(f"Selected trait: {self.traits_combobox.currentText()}")
 
         # Debug: Show model types present
         model_types_set = set()
@@ -1256,7 +1225,7 @@ class CombinedViewerApp(QMainWindow):
                 if model_type:
                     model_types_set.add(str(model_type))
 
-        print(f"DEBUG: Available model types in data: {sorted(list(model_types_set))}")
+        logger.debug(f"Available model types in data: {sorted(list(model_types_set))}")
 
         self.display_filtered_models()
     
@@ -1373,21 +1342,21 @@ class CombinedViewerApp(QMainWindow):
     def _update_daily_usage_display(self, daily_usage: Dict[str, float]):
         """Handle daily usage totals from the Venice billing API."""
         self.current_daily_usage = daily_usage
-        print(f"DEBUG: Daily usage updated - DIEM: {daily_usage.get('diem', 0):.4f}, USD: ${daily_usage.get('usd', 0):.2f}")
+        logger.debug(f"Daily usage updated - DIEM: {daily_usage.get('diem', 0):.4f}, USD: ${daily_usage.get('usd', 0):.2f}")
         
         # Update any widgets that need to display total daily usage
         # This can be extended in the future for dashboard summaries
     
     def _on_web_usage_progress(self, message: str):
         """Handle web usage fetch progress."""
-        print(f"DEBUG: Web usage progress: {message}")
+        logger.debug(f"Web usage progress: {message}")
         # Update loading indicator in leaderboard
         if hasattr(self, 'leaderboard_widget'):
             self.leaderboard_widget.show_loading(f"⏳ {message}")
     
     def _on_web_usage_finished(self, web_metrics: WebUsageMetrics):
         """Handle web usage data received."""
-        print(f"DEBUG: Web usage finished - {web_metrics.diem:.4f} DIEM (${web_metrics.usd:.2f} USD)")
+        logger.debug(f"Web usage finished - {web_metrics.diem:.4f} DIEM (${web_metrics.usd:.2f} USD)")
         self.web_usage_metrics = web_metrics
         # Hide loading indicator
         if hasattr(self, 'leaderboard_widget'):
@@ -1396,7 +1365,7 @@ class CombinedViewerApp(QMainWindow):
     
     def _on_web_usage_error(self, error_message: str):
         """Handle web usage fetch error."""
-        print(f"WARNING: Web usage error: {error_message}")
+        logger.warning(f"Web usage error: {error_message}")
         # Hide loading indicator on error
         if hasattr(self, 'leaderboard_widget'):
             self.leaderboard_widget.hide_loading()
@@ -1409,7 +1378,7 @@ class CombinedViewerApp(QMainWindow):
         This triggers an immediate data update without waiting for the timer.
         """
         try:
-            print("DEBUG: Refreshing data after key management operation")
+            logger.debug("Refreshing data after key management operation")
             
             if self.usage_worker and not self.usage_worker.isRunning():
                 self.usage_worker.start()
@@ -1419,7 +1388,7 @@ class CombinedViewerApp(QMainWindow):
                 self.price_worker.start()
                 
         except Exception as e:
-            print(f"ERROR: Failed to refresh data: {e}")
+            logger.error(f"Failed to refresh data: {e}")
     
     def _update_unified_leaderboard(self):
         """Update leaderboard with combined API key and web usage data."""
@@ -1444,7 +1413,7 @@ class CombinedViewerApp(QMainWindow):
                 days=7
             )
         
-        print(f"DEBUG: Unified entries created - {len(entries)} total "
+        logger.debug(f"Unified entries created - {len(entries)} total "
               f"(API: {api_diem:.4f} DIEM, Web: {web_diem:.4f} DIEM)")
         
         # Update leaderboard (now accepts UnifiedUsageEntry)
@@ -1459,7 +1428,7 @@ class CombinedViewerApp(QMainWindow):
                     rate_data = self.exchange_rate_service.get_rate()
                     exchange_rate = rate_data.rate if rate_data else 0.72
                 except Exception as e:
-                    print(f"WARNING: Failed to get exchange rate: {e}")
+                    logger.warning(f"Failed to get exchange rate: {e}")
                     exchange_rate = 0.72
             else:
                 exchange_rate = 0.72
@@ -1492,13 +1461,17 @@ class CombinedViewerApp(QMainWindow):
         for key_usage in usage_data:
             # Phase 3: Use enhanced management widget if available
             if PHASE3_AVAILABLE and self.key_management_enabled:
-                widget = APIKeyManagementWidget(key_usage, self.theme.theme_colors, self.current_balance_data)
-                # Connect management signals
-                widget.key_revoked.connect(self._handle_key_revoke)
-                
-                # Update last used timestamp from security monitoring
-                if hasattr(key_usage, 'last_used_at') and key_usage.last_used_at:
-                    widget.update_last_used(key_usage.last_used_at)
+                APIKeyManagementWidget = FeatureFlags.get_feature_module('APIKeyManagementWidget')
+                if APIKeyManagementWidget:
+                    widget = APIKeyManagementWidget(key_usage, self.theme.theme_colors, self.current_balance_data)
+                    # Connect management signals
+                    widget.key_revoked.connect(self._handle_key_revoke)
+                    
+                    # Update last used timestamp from security monitoring
+                    if hasattr(key_usage, 'last_used_at') and key_usage.last_used_at:
+                        widget.update_last_used(key_usage.last_used_at)
+                else:
+                    widget = APIKeyUsageWidget(key_usage, self.theme.theme_colors)
             else:
                 # Fallback to original widget
                 widget = APIKeyUsageWidget(key_usage, self.theme.theme_colors)
@@ -1525,7 +1498,7 @@ class CombinedViewerApp(QMainWindow):
         try:
             self._update_balance_with_analytics(balance_info, self.current_usage_data)
         except Exception as e:
-            print(f"ERROR: Analytics update failed, falling back to basic update: {e}")
+            logger.error(f"Analytics update failed, falling back to basic update: {e}")
             # Fallback to original update method
             self._update_balance_display_fallback(balance_info)
     
@@ -1569,7 +1542,7 @@ class CombinedViewerApp(QMainWindow):
                     )
                 
             except Exception as e:
-                print(f"Error updating hero balance display: {e}")
+                logger.info(f"Error updating hero balance display: {e}")
                 # Set error state if update fails
                 self.hero_balance_display.set_error_state("Failed to update balance")
     
@@ -1590,7 +1563,7 @@ class CombinedViewerApp(QMainWindow):
             return daily_average
             
         except Exception as e:
-            print(f"Error calculating daily average: {e}")
+            logger.info(f"Error calculating daily average: {e}")
             return 0.0
     
     def _calculate_usage_trend(self) -> str:
@@ -1608,7 +1581,7 @@ class CombinedViewerApp(QMainWindow):
                 return "stable"
                 
         except Exception as e:
-            print(f"Error calculating usage trend: {e}")
+            logger.info(f"Error calculating usage trend: {e}")
             return "stable"
     
     def _estimate_days_remaining(self, current_balance: float, daily_average: float) -> Optional[int]:
@@ -1621,12 +1594,12 @@ class CombinedViewerApp(QMainWindow):
             return max(0, days_remaining)  # Don't return negative days
             
         except Exception as e:
-            print(f"Error estimating days remaining: {e}")
+            logger.info(f"Error estimating days remaining: {e}")
             return None
     
     def _handle_usage_error(self, error_msg: str):
         """Handle errors from the usage worker."""
-        print(f"Usage tracking error: {error_msg}")
+        logger.info(f"Usage tracking error: {error_msg}")
         self.status_bar.showMessage(f"Usage tracking error: {error_msg}")
         
         # Show error message if this is the first error or if it's different from the last one
@@ -1659,14 +1632,14 @@ class CombinedViewerApp(QMainWindow):
         for model in original_models:
             # Defensive programming: ensure model is a dictionary
             if not isinstance(model, dict):
-                print(f"DEBUG: Skipping invalid model data: {model}")
+                logger.debug(f"Skipping invalid model data: {model}")
                 continue
 
             model_id = model.get('id', 'N/A')
 
             # Defensive check: ensure model_id exists and is not None
             if not model_id or model_id == 'N/A':
-                print("DEBUG: Skipping model with invalid ID")
+                logger.debug("Skipping model with invalid ID")
                 continue
 
             model_type = model.get('type')
@@ -1674,7 +1647,7 @@ class CombinedViewerApp(QMainWindow):
 
             # Defensive check: ensure model_type is a string
             if not isinstance(model_type, str) or model_type == 'Unknown':
-                print(f"DEBUG: Skipping model '{model_id}' with invalid type: {model_type}")
+                logger.debug(f"Skipping model '{model_id}' with invalid type: {model_type}")
                 continue
 
             traits = model_spec.get('traits', []) if isinstance(model_spec, dict) else []
@@ -1682,17 +1655,17 @@ class CombinedViewerApp(QMainWindow):
             # Case-insensitive trait matching - ensure traits is a list
             if not isinstance(traits, list):
                 traits = []
-                print(f"DEBUG: Warning - model '{model_id}' has invalid traits format: {traits}")
+                logger.debug(f"Warning - model '{model_id}' has invalid traits format: {traits}")
 
             trait_match = selected_trait == "all" or selected_trait in traits
             type_match = selected_type == "all" or model_type == selected_type
 
-            print(f"DEBUG: Model '{model_id}' - Type: {model_type}, Traits: {traits}, Type match: {type_match}, Trait match: {trait_match}")
+            logger.debug(f"Model '{model_id}' - Type: {model_type}, Traits: {traits}, Type match: {type_match}, Trait match: {trait_match}")
 
             if type_match and trait_match:
                 filtered_models.append(model)
 
-        print(f"DEBUG: Filtered {len(filtered_models)} models out of {len(original_models)} total models")
+        logger.debug(f"Filtered {len(filtered_models)} models out of {len(original_models)} total models")
 
         found_models = False
         models_container = QWidget()
@@ -1854,16 +1827,16 @@ class CombinedViewerApp(QMainWindow):
         try:
             self._cleanup_threads()
         except Exception as e:
-            print(f"DEBUG: Error in destructor: {e}")
+            logger.debug(f"Error in destructor: {e}")
 
     def closeEvent(self, event):
         """Override close event to properly clean up resources"""
-        print("DEBUG: Close event triggered, cleaning up...")
+        logger.debug("Close event triggered, cleaning up...")
 
         try:
             # Phase 2: Stop exchange rate service
             if hasattr(self, 'exchange_rate_service') and self.exchange_rate_service:
-                print("DEBUG: Stopping exchange rate service...")
+                logger.debug("Stopping exchange rate service...")
                 self.exchange_rate_service.stop_automatic_updates()
             
             # Stop all timers
@@ -1880,65 +1853,62 @@ class CombinedViewerApp(QMainWindow):
                     if self.model_comparison_widget.analytics_worker and self.model_comparison_widget.analytics_worker.isRunning():
                         self.model_comparison_widget.analytics_worker.wait()
 
-            print("DEBUG: Cleanup completed successfully")
+            logger.debug("Cleanup completed successfully")
 
         except Exception as e:
-            print(f"DEBUG: Error during cleanup: {e}")
+            logger.debug(f"Error during cleanup: {e}")
 
         event.accept()
 
     def _cleanup_threads(self):
         """Clean up all active threads to prevent crashes"""
-        print("DEBUG: Cleaning up threads...")
+        logger.debug("Cleaning up threads...")
 
         # Clean up API worker
         if hasattr(self, 'api_worker') and self.api_worker and self.api_worker.isRunning():
-            print("DEBUG: Waiting for API worker to finish...")
+            logger.debug("Waiting for API worker to finish...")
             self.api_worker.wait()
 
         # Clean up style worker
         if hasattr(self, 'style_worker') and self.style_worker and self.style_worker.isRunning():
-            print("DEBUG: Waiting for style worker to finish...")
+            logger.debug("Waiting for style worker to finish...")
             self.style_worker.wait()
 
         # Clean up traits worker
         if hasattr(self, 'traits_worker') and self.traits_worker and self.traits_worker.isRunning():
-            print("DEBUG: Waiting for traits worker to finish...")
+            logger.debug("Waiting for traits worker to finish...")
             self.traits_worker.wait()
 
         # Clean up usage worker
         if self.usage_worker and self.usage_worker.isRunning():
-            print("DEBUG: Waiting for usage worker to finish...")
+            logger.debug("Waiting for usage worker to finish...")
             self.usage_worker.wait()
 
-        print("DEBUG: Thread cleanup complete")
+        logger.debug("Thread cleanup complete")
 
     def fetch_traits(self):
         """Starts fetching model traits in a separate thread."""
-        url = 'https://api.venice.ai/api/v1/models/traits'
-        headers = {'Accept': 'application/json', 'Authorization': f'Bearer {Config.VENICE_API_KEY}'}
-
-        self.traits_worker = APIWorker(url, headers)
-        self.traits_worker.signals.result.connect(self._update_gui_after_fetch_traits)
+        self.traits_worker = APIWorkerFactory.create_traits_worker(parent=self)
+        self.traits_worker.result.connect(self._update_gui_after_fetch_traits)
         self.traits_worker.start()
 
     def _update_gui_after_fetch_traits(self, result):
         """Updates GUI with model traits data."""
         if result['success']:
             traits_data = result['data']
-            print(f"DEBUG: Raw Traits API response: {traits_data}")
+            logger.debug(f"Raw Traits API response: {traits_data}")
 
             # Handle different possible response structures
             trait_names = []
 
             # First check if we have a standard API response with 'data' field
             if isinstance(traits_data, dict) and 'data' in traits_data:
-                print("DEBUG: Found 'data' field in response")
+                logger.debug("Found 'data' field in response")
                 data = traits_data['data']
 
                 # Check if data is a list of trait objects
                 if isinstance(data, list):
-                    print(f"DEBUG: Data is a list with {len(data)} items")
+                    logger.debug(f"Data is a list with {len(data)} items")
                     # Try to extract trait names from list items
                     for item in data:
                         if isinstance(item, dict) and 'name' in item:
@@ -1948,7 +1918,7 @@ class CombinedViewerApp(QMainWindow):
 
                 # Check if data is a dictionary of traits
                 elif isinstance(data, dict):
-                    print(f"DEBUG: Data is a dictionary with {len(data)} keys")
+                    logger.debug(f"Data is a dictionary with {len(data)} keys")
                     # If data has a 'traits' field, use that
                     if 'traits' in data:
                         traits = data['traits']
@@ -1962,7 +1932,7 @@ class CombinedViewerApp(QMainWindow):
 
             # If no 'data' field, try to extract directly
             else:
-                print("DEBUG: No 'data' field found in response")
+                logger.debug("No 'data' field found in response")
                 if isinstance(traits_data, list):
                     # Assume list contains trait names
                     trait_names = [str(item) for item in traits_data if isinstance(item, (str, int))]
@@ -1985,14 +1955,14 @@ class CombinedViewerApp(QMainWindow):
                 if name.lower() not in ['data', 'object', 'type', 'id', 'meta', 'links']:
                     valid_trait_names.append(name)
 
-            print(f"DEBUG: Extracted {len(valid_trait_names)} valid traits: {valid_trait_names}")
+            logger.debug(f"Extracted {len(valid_trait_names)} valid traits: {valid_trait_names}")
 
             self.traits_combobox.clear()
             self.traits_combobox.addItems(["all"] + valid_trait_names)
             self.traits_combobox.setCurrentText("all")
             self.traits_combobox.setEnabled(True)
         else:
-            print(f"DEBUG: Traits API error: {result.get('error', 'Unknown error')}")
+            logger.debug(f"Traits API error: {result.get('error', 'Unknown error')}")
             self.traits_combobox.clear()
             self.traits_combobox.addItems(["all"])
             self.traits_combobox.setEnabled(False)
@@ -2006,7 +1976,7 @@ class CombinedViewerApp(QMainWindow):
         try:
             # Only initialize if components are available
             if not self.exchange_rate_service:
-                print("DEBUG: Exchange rate service not available, skipping initialization")
+                logger.debug("Exchange rate service not available, skipping initialization")
                 return
                 
             # Connect exchange rate service signals
@@ -2016,10 +1986,10 @@ class CombinedViewerApp(QMainWindow):
             # DON'T start automatic rate updates yet - this might be causing the thread issue
             # self.exchange_rate_service.start_automatic_updates(interval_minutes=5)
             
-            print("DEBUG: Phase 2 services initialized successfully (without auto-updates)")
+            logger.debug("Phase 2 services initialized successfully (without auto-updates)")
             
         except Exception as e:
-            print(f"ERROR: Failed to initialize Phase 2 services: {e}")
+            logger.error(f"Failed to initialize Phase 2 services: {e}")
             # Don't let this break the app - just continue without Phase 2 features
     
     def _handle_rate_update(self, rate_data):
@@ -2038,7 +2008,7 @@ class CombinedViewerApp(QMainWindow):
             self.status_bar.showMessage(f"Exchange rate updated: {rate_data.rate:.4f}", 2000)
             
         except Exception as e:
-            print(f"ERROR: Failed to handle rate update: {e}")
+            logger.error(f"Failed to handle rate update: {e}")
     
     def _handle_rate_error(self, error_msg: str):
         """
@@ -2047,7 +2017,7 @@ class CombinedViewerApp(QMainWindow):
         Args:
             error_msg: Error message
         """
-        print(f"WARNING: Exchange rate error: {error_msg}")
+        logger.warning(f"Exchange rate error: {error_msg}")
         self.status_bar.showMessage(f"Rate update failed: {error_msg}", 5000)
     
     def _update_balance_with_analytics(self, balance_info, usage_data):
@@ -2083,7 +2053,7 @@ class CombinedViewerApp(QMainWindow):
                 self.balance_display.update_balance_info(balance_info)
                 
         except Exception as e:
-            print(f"ERROR: Failed to update balance with analytics: {e}")
+            logger.error(f"Failed to update balance with analytics: {e}")
             # Fallback to basic update
             if hasattr(self, 'hero_balance_display'):
                 self.hero_balance_display.update_balance(
@@ -2110,7 +2080,7 @@ class CombinedViewerApp(QMainWindow):
             return summary
             
         except Exception as e:
-            print(f"ERROR: Failed to get analytics summary: {e}")
+            logger.error(f"Failed to get analytics summary: {e}")
             return {"error": str(e)}
     
     # Phase 3: Key Management Signal Handlers
@@ -2124,9 +2094,10 @@ class CombinedViewerApp(QMainWindow):
             new_name: New name for the key
         """
         try:
-            print(f"DEBUG: Renaming key {key_id} to '{new_name}'")
+            logger.debug(f"Renaming key {key_id} to '{new_name}'")
             
             # Get Venice key management service
+            get_key_management_service = FeatureFlags.get_feature_module('get_key_management_service')
             key_service = get_key_management_service() if get_key_management_service else None
             
             if key_service:
@@ -2166,7 +2137,7 @@ class CombinedViewerApp(QMainWindow):
                                       f"This ensures your key security is maintained.")
             else:
                 # Fallback to local update only
-                print("WARNING: Venice key management service not available, updating locally only")
+                logger.warning("Venice key management service not available, updating locally only")
                 for key_usage in self.current_usage_data:
                     if key_usage.id == key_id:
                         key_usage.name = new_name
@@ -2174,7 +2145,7 @@ class CombinedViewerApp(QMainWindow):
                 self.status_bar.showMessage(f"Key renamed locally to '{new_name}' (API unavailable)", 3000)
                         
         except Exception as e:
-            print(f"ERROR: Failed to rename key: {e}")
+            logger.error(f"Failed to rename key: {e}")
             self.status_bar.showMessage(f"Failed to rename key: {e}", 5000)
     def _handle_key_revoke(self, key_id: str):
         """
@@ -2184,9 +2155,10 @@ class CombinedViewerApp(QMainWindow):
             key_id: ID of the key to revoke
         """
         try:
-            print(f"DEBUG: Revoking key {key_id}")
+            logger.debug(f"Revoking key {key_id}")
             
             # Get Venice key management service
+            get_key_management_service = FeatureFlags.get_feature_module('get_key_management_service')
             key_service = get_key_management_service() if get_key_management_service else None
             
             if key_service:
@@ -2214,7 +2186,7 @@ class CombinedViewerApp(QMainWindow):
                                       f"Check the console for detailed error information.")
             else:
                 # Fallback to local update only
-                print("WARNING: Venice key management service not available, updating locally only")
+                logger.warning("Venice key management service not available, updating locally only")
                 for key_usage in self.current_usage_data:
                     if key_usage.id == key_id:
                         key_usage.is_active = False
@@ -2222,7 +2194,7 @@ class CombinedViewerApp(QMainWindow):
                 self.status_bar.showMessage("Key revoked locally (API unavailable)", 3000)
             
         except Exception as e:
-            print(f"ERROR: Failed to revoke key: {e}")
+            logger.error(f"Failed to revoke key: {e}")
             self.status_bar.showMessage(f"Failed to revoke key: {e}", 5000)
             QMessageBox.critical(self, "Error", f"An error occurred while revoking the key:\n{e}")
 

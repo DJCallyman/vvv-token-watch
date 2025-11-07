@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from PySide6.QtCore import QThread, Signal
 
 from src.core.venice_api_client import VeniceAPIClient
+from src.utils.date_utils import DateFormatter
 
 
 @dataclass
@@ -189,14 +190,12 @@ class UsageWorker(QThread):
                 today = datetime.now(timezone.utc).date()
                 target_date = today.isoformat()
             
-            # Create start and end datetime strings for the target date
-            start_date = f"{target_date}T00:00:00Z"
-            end_date = f"{target_date}T23:59:59Z"
+            # Use DateFormatter for consistent date range creation
+            date_params = DateFormatter.create_daily_date_range(target_date)
             
             # Prepare the request parameters
             params = {
-                'startDate': start_date,
-                'endDate': end_date,
+                **date_params,
                 'limit': 500,  # Get all entries for the day
                 'sortOrder': 'desc'
             }

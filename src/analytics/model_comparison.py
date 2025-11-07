@@ -35,6 +35,8 @@ from src.config.config import Config
 from src.config.theme import Theme
 from src.core.usage_tracker import UsageWorker, APIKeyUsage
 from src.core.venice_api_client import VeniceAPIClient
+from src.utils.date_utils import DateFormatter
+from src.utils.model_utils import ModelNameParser
 
 
 class ChartCanvas(FigureCanvas):
@@ -86,16 +88,11 @@ class ModelAnalyticsWorker(QThread):
 
     def _fetch_billing_usage(self, days: int = 7) -> List[Dict[str, Any]]:
         """Fetch real billing usage data from Venice API"""
-        end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=days)
-        
-        # Format dates as ISO 8601 strings without microseconds (API expects this format)
-        start_date_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_date_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        # Use DateFormatter utility for consistent date ranges
+        date_params = DateFormatter.create_date_range(days=days)
         
         params = {
-            'startDate': start_date_str,
-            'endDate': end_date_str,
+            **date_params,
             'limit': 500,  # Get up to 500 recent entries
             'sortOrder': 'desc'
         }
@@ -129,9 +126,8 @@ class ModelAnalyticsWorker(QThread):
             if abs_amount == 0:
                 continue
             
-            # Clean up model name (remove suffixes like '-llm-input-mtoken', '-llm-output-mtoken')
-            model_name = sku.split('-llm-')[0] if '-llm-' in sku else sku
-            model_name = model_name.replace('-mtoken', '').replace('-input', '').replace('-output', '')
+            # Clean up model name using ModelNameParser
+            model_name = ModelNameParser.clean_sku_name(sku)
             
             # Initialize model data if not exists
             if model_name not in model_usage:
