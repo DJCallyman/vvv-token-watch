@@ -5,13 +5,73 @@ This module provides functions to convert ISO timestamps and datetime objects
 into more readable, human-friendly formats using relative time descriptions.
 """
 
-from datetime import datetime, timedelta
-from typing import Optional, Union
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Union, Dict
 import re
 
 
 class DateFormatter:
     """Utility class for formatting dates in human-friendly formats."""
+    
+    @staticmethod
+    def create_date_range(days: int = 7, end_date: Optional[datetime] = None) -> Dict[str, str]:
+        """
+        Create API-compatible date range parameters for Venice API.
+        
+        Args:
+            days: Number of days to include in the range (default 7)
+            end_date: Optional end date (defaults to current UTC time)
+            
+        Returns:
+            Dictionary with 'startDate' and 'endDate' in ISO 8601 format
+            Example: {"startDate": "2025-10-26T00:00:00Z", "endDate": "2025-11-02T23:59:59Z"}
+        """
+        if end_date is None:
+            end_date = datetime.now(timezone.utc)
+        
+        start_date = end_date - timedelta(days=days)
+        
+        return {
+            "startDate": start_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "endDate": end_date.strftime("%Y-%m-%dT%H:%M:%SZ")
+        }
+    
+    @staticmethod
+    def create_daily_date_range(target_date: Optional[str] = None) -> Dict[str, str]:
+        """
+        Create API-compatible date range for a single day.
+        
+        Args:
+            target_date: Date in 'YYYY-MM-DD' format. If None, uses today's date in UTC.
+            
+        Returns:
+            Dictionary with 'startDate' and 'endDate' covering the full day
+            Example: {"startDate": "2025-11-02T00:00:00Z", "endDate": "2025-11-02T23:59:59Z"}
+        """
+        if target_date is None:
+            today = datetime.now(timezone.utc).date()
+            target_date = today.isoformat()
+        
+        return {
+            "startDate": f"{target_date}T00:00:00Z",
+            "endDate": f"{target_date}T23:59:59Z"
+        }
+    
+    @staticmethod
+    def format_iso_timestamp(dt: Optional[datetime] = None) -> str:
+        """
+        Format datetime as ISO 8601 timestamp for API requests.
+        
+        Args:
+            dt: Datetime object (defaults to current UTC time)
+            
+        Returns:
+            ISO 8601 formatted timestamp string
+        """
+        if dt is None:
+            dt = datetime.now(timezone.utc)
+        
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     
     @staticmethod
     def human_friendly(iso_timestamp: Union[str, datetime], context: str = "Created") -> str:

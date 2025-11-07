@@ -9,6 +9,7 @@ from datetime import datetime, timezone, timedelta
 from PySide6.QtCore import QThread, Signal
 
 from src.core.venice_api_client import VeniceAPIClient
+from src.utils.date_utils import DateFormatter
 
 
 @dataclass
@@ -86,13 +87,11 @@ class WebUsageWorker(QThread):
         Returns:
             WebUsageMetrics with aggregated data
         """
-        # Calculate date range
-        end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=self.days)
+        # Calculate date range using utility
+        date_params = DateFormatter.create_date_range(days=self.days)
         
         params = {
-            "startDate": start_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "endDate": end_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            **date_params,
             "sortOrder": "desc",
             "limit": 500,
             "page": 1
