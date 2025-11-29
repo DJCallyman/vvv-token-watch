@@ -6,7 +6,9 @@ across multiple files and provide consistent model name handling.
 """
 
 import re
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
+
+from src.data.model_pricing import ModelPricingDatabase, ModelPricing
 
 
 class ModelNameParser:
@@ -195,6 +197,101 @@ class ModelNameParser:
             'is_input': ModelNameParser.is_input_sku(sku),
             'is_output': ModelNameParser.is_output_sku(sku),
         }
+    
+    @staticmethod
+    def get_model_pricing(sku: str) -> Optional[ModelPricing]:
+        """
+        Get pricing information for a model based on its SKU.
+        
+        Args:
+            sku: Raw SKU string (e.g., "llama-3.3-70b-llm-input-mtoken")
+            
+        Returns:
+            ModelPricing object or None if not found
+        """
+        clean_model_id = ModelNameParser.clean_sku_name(sku)
+        return ModelPricingDatabase.get_model(clean_model_id)
+    
+    @staticmethod
+    def calculate_sku_cost(sku: str, units: float) -> Optional[float]:
+        """
+        Calculate cost for a specific SKU based on units consumed.
+        
+        For chat models:
+        - Input SKUs: units = tokens, cost = (tokens * input_price) / 1M
+        - Output SKUs: units = tokens, cost = (tokens * output_price) / 1M
+        
+        For image models:
+        - units = generations, cost = generations * generation_price
+        
+        For audio models:
+        - units = characters, cost = (characters * character_price) / 1M
+        
+        Args:
+            sku: Raw SKU string
+            units: Number of units consumed (tokens, generations, characters)
+            
+        Returns:
+            Cost in USD or None if pricing not found
+        """
+        pricing = ModelNameParser.get_model_pricing(sku)
+        if not pricing:
+            return None
+        
+        # Chat/embedding models (token-based)
+        if ModelNameParser.is_input_sku(sku) and pricing.input_price is not None:
+            return (units * pricing.input_price) / 1_000_000
+        
+        if ModelNameParser.is_output_sku(sku) and pricing.output_price is not None:
+            return (units * pricing.output_price) / 1_000_000
+        
+        # Image models (generation-based)
+        if pricing.generation_price is not None:
+            return units * pricing.generation_price
+        
+        # Audio models (character-based)
+        if pricing.character_price is not None:
+            return (units * pricing.character_price) / 1_000_000
+        
+        return None
+    
+    @staticmethod
+    def find_model_alternatives(current_sku: str, 
+                               min_savings_percent: float = 10.0) -> List[Tuple[str, str, float]]:
+        """
+        Find cheaper alternative models for a given SKU.
+        
+        Args:
+            current_sku: Current SKU being used
+            min_savings_percent: Minimum savings percentage to include (default 10%)
+            
+        Returns:
+            List of (model_id, display_name, savings_percent) tuples
+        """
+        clean_model_id = ModelNameParser.clean_sku_name(current_sku)
+        current_pricing = ModelPricingDatabase.get_model(clean_model_id)
+        
+        if not current_pricing:
+            return []
+        
+        # Get required capabilities from current model
+        required_caps = current_pricing.capabilities
+        
+        # Find alternatives
+        alternatives_data = ModelPricingDatabase.find_cheaper_alternatives(
+            clean_model_id, 
+            required_capabilities=required_caps
+        )
+        
+        # Filter by minimum savings and format results
+        results = []
+        for alt_id, savings_pct in alternatives_data:
+            if savings_pct >= min_savings_percent:
+                alt_pricing = ModelPricingDatabase.get_model(alt_id)
+                if alt_pricing:
+                    results.append((alt_id, alt_pricing.display_name, savings_pct))
+        
+        return results
 
 
 class ModelFilter:

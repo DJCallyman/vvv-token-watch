@@ -8,11 +8,98 @@ This module provides:
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from src.core.usage_tracker import APIKeyUsage, UsageMetrics
 from src.core.web_usage import WebUsageMetrics
+
+
+# ============================================================================
+# Usage Category Detection
+# ============================================================================
+
+class UsageCategory:
+    """Constants for usage categories."""
+    VIDEO = "video"
+    IMAGE = "image"
+    LLM = "llm"
+    UNKNOWN = "unknown"
+    
+    # Icons for each category
+    ICONS = {
+        VIDEO: "🎬",
+        IMAGE: "🖼️",
+        LLM: "💬",
+        UNKNOWN: "📊"
+    }
+    
+    # Display names for category groups
+    DISPLAY_NAMES = {
+        VIDEO: "Video Generation",
+        IMAGE: "Image Generation",
+        LLM: "Text (LLM) Models",
+        UNKNOWN: "Other Usage"
+    }
+
+
+def detect_usage_category(sku: str, notes: str = "") -> str:
+    """
+    Detect the usage category from SKU and notes.
+    
+    Args:
+        sku: The SKU identifier
+        notes: The notes field from billing (e.g., "Video Inference", "Image Inference")
+    
+    Returns:
+        UsageCategory constant
+    """
+    sku_lower = sku.lower()
+    notes_lower = notes.lower() if notes else ""
+    
+    # Check notes first (most reliable)
+    if "video inference" in notes_lower:
+        return UsageCategory.VIDEO
+    if "image inference" in notes_lower or "fal image" in notes_lower:
+        return UsageCategory.IMAGE
+    if "llm inference" in notes_lower:
+        return UsageCategory.LLM
+    
+    # Fall back to SKU pattern matching
+    # Video models
+    video_patterns = [
+        'video', 'veo', 'kling', 'sora', 'wan-', 'ltx', 'longcat', 'ovi-image-to-video'
+    ]
+    if any(pattern in sku_lower for pattern in video_patterns):
+        return UsageCategory.VIDEO
+    
+    # Image models
+    image_patterns = [
+        'image-unit', 'img', 'flux', 'nano-banana', 'seedream', 'hidream',
+        'stable-diffusion', 'sd35', 'lustify', 'wai-illustrious', 'upscale'
+    ]
+    if any(pattern in sku_lower for pattern in image_patterns):
+        return UsageCategory.IMAGE
+    
+    # LLM models (text)
+    llm_patterns = [
+        'llm', 'mtoken', 'gpt', 'llama', 'mistral', 'qwen', 'claude', 'gemma',
+        'deepseek', 'glm', 'grok', 'hermes'
+    ]
+    if any(pattern in sku_lower for pattern in llm_patterns):
+        return UsageCategory.LLM
+    
+    return UsageCategory.UNKNOWN
+
+
+def get_category_icon(category: str) -> str:
+    """Get the icon for a usage category."""
+    return UsageCategory.ICONS.get(category, UsageCategory.ICONS[UsageCategory.UNKNOWN])
+
+
+def get_category_display_name(category: str) -> str:
+    """Get the display name for a usage category."""
+    return UsageCategory.DISPLAY_NAMES.get(category, UsageCategory.DISPLAY_NAMES[UsageCategory.UNKNOWN])
 
 
 # ============================================================================
@@ -107,12 +194,13 @@ class UnifiedUsageEntry:
         
         Args:
             sku: Model/service SKU
-            sku_data: Dict with count, amount, currency, units
+            sku_data: Dict with count, amount, currency, units, notes
             total_days: Number of days in the period
         """
         # Extract amounts by currency
         currency = sku_data.get("currency", "DIEM")
         amount = sku_data.get("amount", 0.0)
+        notes = sku_data.get("notes", "")
         
         # Distribute amount to appropriate currency
         diem_amount = amount if currency == "DIEM" else 0.0
@@ -129,16 +217,23 @@ class UnifiedUsageEntry:
         # Create friendly name from SKU
         display_name = format_sku_display_name(sku)
         
+        # Detect category and get appropriate icon
+        category = detect_usage_category(sku, notes)
+        icon = get_category_icon(category)
+        
+        # Determine entry type based on category
+        entry_type = f"web_{category}"  # e.g., web_video, web_image, web_llm
+        
         return UnifiedUsageEntry(
             id=f"webapp-{sku}",
             name=display_name,
             usage=usage,
             is_active=True,  # Web usage is always "active"
-            entry_type="web_app",
+            entry_type=entry_type,
             sku=sku,
             request_count=sku_data.get("count", 0),
             daily_average=daily_avg,
-            icon="🎬"
+            icon=icon
         )
     
     @staticmethod
@@ -226,61 +321,107 @@ class UnifiedUsageIntegrator:
             # Create parent group entry for all web usage
             web_group = UnifiedUsageEntry.create_web_group(web_usage, days)
             
-            # Group SKUs by base model name
-            model_groups = defaultdict(list)
-            model_totals = defaultdict(lambda: {'diem': 0.0, 'usd': 0.0, 'count': 0})
+            # Group SKUs by category first, then by base model name
+            # Structure: category -> model_name -> [sku_entries]
+            category_groups: Dict[str, Dict[str, list]] = defaultdict(lambda: defaultdict(list))
+            category_totals: Dict[str, Dict[str, dict]] = defaultdict(lambda: defaultdict(lambda: {'diem': 0.0, 'usd': 0.0, 'count': 0}))
+            category_grand_totals: Dict[str, dict] = defaultdict(lambda: {'diem': 0.0, 'usd': 0.0, 'count': 0})
             
-            # First pass: group SKUs and calculate totals per model
+            # First pass: categorize and group SKUs
             for sku, sku_data in web_usage.by_sku.items():
                 amount = sku_data.get("amount", 0.0)
                 if amount > 0:
+                    notes = sku_data.get("notes", "")
+                    category = detect_usage_category(sku, notes)
                     base_model = extract_base_model_name(sku)
+                    
                     child_entry = UnifiedUsageEntry.from_web_sku(
                         sku=sku,
                         sku_data=sku_data,
                         total_days=days
                     )
-                    model_groups[base_model].append(child_entry)
+                    category_groups[category][base_model].append(child_entry)
                     
-                    # Accumulate totals
+                    # Accumulate totals per model
                     currency = sku_data.get("currency", "DIEM")
                     if currency == "DIEM":
-                        model_totals[base_model]['diem'] += amount
+                        category_totals[category][base_model]['diem'] += amount
+                        category_grand_totals[category]['diem'] += amount
                     else:
-                        model_totals[base_model]['usd'] += amount
-                    model_totals[base_model]['count'] += sku_data.get("count", 0)
+                        category_totals[category][base_model]['usd'] += amount
+                        category_grand_totals[category]['usd'] += amount
+                    category_totals[category][base_model]['count'] += sku_data.get("count", 0)
+                    category_grand_totals[category]['count'] += sku_data.get("count", 0)
             
-            # Second pass: create model group entries and add children
-            for base_model, sku_entries in sorted(model_groups.items()):
-                # Create a model-level group
-                totals = model_totals[base_model]
-                model_usage = UsageMetrics(diem=totals['diem'], usd=totals['usd'])
-                model_daily_avg = UsageMetrics(
-                    diem=totals['diem'] / days,
-                    usd=totals['usd'] / days
+            # Second pass: create category groups with model subgroups
+            # Order categories: Video first, then Image, then LLM, then Unknown
+            category_order = [UsageCategory.VIDEO, UsageCategory.IMAGE, UsageCategory.LLM, UsageCategory.UNKNOWN]
+            
+            for category in category_order:
+                if category not in category_groups:
+                    continue
+                    
+                model_groups = category_groups[category]
+                model_totals = category_totals[category]
+                grand_totals = category_grand_totals[category]
+                
+                # Create category-level group (e.g., "Video Generation")
+                category_usage = UsageMetrics(diem=grand_totals['diem'], usd=grand_totals['usd'])
+                category_daily_avg = UsageMetrics(
+                    diem=grand_totals['diem'] / days,
+                    usd=grand_totals['usd'] / days
                 )
                 
-                model_group_entry = UnifiedUsageEntry(
-                    id=f"web-model-{base_model.replace(' ', '-').lower()}",
-                    name=base_model,
-                    usage=model_usage,
+                category_icon = get_category_icon(category)
+                category_display = get_category_display_name(category)
+                
+                category_group_entry = UnifiedUsageEntry(
+                    id=f"web-category-{category}",
+                    name=category_display,
+                    usage=category_usage,
                     is_active=True,
                     entry_type="web_group",
-                    sku=f"group-{base_model}",
-                    request_count=totals['count'],
-                    daily_average=model_daily_avg,
-                    icon="🎬",
+                    sku=f"category-{category}",
+                    request_count=grand_totals['count'],
+                    daily_average=category_daily_avg,
+                    icon=category_icon,
                     is_expanded=False,
                     depth=1  # This is a child of web_group
                 )
                 
-                # Add individual SKU entries as children of this model group
-                for sku_entry in sku_entries:
-                    sku_entry.depth = 2  # Grandchildren of top web_group
-                    model_group_entry.add_child(sku_entry)
+                # Create model-level groups within this category
+                for base_model, sku_entries in sorted(model_groups.items()):
+                    totals = model_totals[base_model]
+                    model_usage = UsageMetrics(diem=totals['diem'], usd=totals['usd'])
+                    model_daily_avg = UsageMetrics(
+                        diem=totals['diem'] / days,
+                        usd=totals['usd'] / days
+                    )
+                    
+                    model_group_entry = UnifiedUsageEntry(
+                        id=f"web-model-{category}-{base_model.replace(' ', '-').lower()}",
+                        name=base_model,
+                        usage=model_usage,
+                        is_active=True,
+                        entry_type="web_group",
+                        sku=f"group-{base_model}",
+                        request_count=totals['count'],
+                        daily_average=model_daily_avg,
+                        icon=category_icon,
+                        is_expanded=False,
+                        depth=2  # This is a grandchild of web_group
+                    )
+                    
+                    # Add individual SKU entries as children of this model group
+                    for sku_entry in sku_entries:
+                        sku_entry.depth = 3  # Great-grandchildren of top web_group
+                        model_group_entry.add_child(sku_entry)
+                    
+                    # Add the model group to the category group
+                    category_group_entry.add_child(model_group_entry)
                 
-                # Add the model group to the top-level web group
-                web_group.add_child(model_group_entry)
+                # Add the category group to the top-level web group
+                web_group.add_child(category_group_entry)
             
             # Add the top-level web group (with nested children) to entries
             entries.append(web_group)
@@ -391,27 +532,33 @@ def format_sku_display_name(sku: str) -> str:
     parts = sku.lower().split('-')
     
     # Common patterns
-    if 'veo' in parts:
+    # Check for Veo (handle both 'veo' in parts and 'veoXX' combined form)
+    veo_part = next((p for p in parts if p.startswith('veo')), None)
+    if veo_part or 'veo' in parts:
         # Find version - handle veo31 -> 3.1, veo2 -> 2, etc.
         version = ''
-        for part in parts:
-            if part.startswith('veo') and len(part) > 3:
-                # Extract numbers after 'veo'
-                num_part = part[3:]
-                if num_part.replace('.', '').isdigit():
-                    # Insert decimal if needed (31 -> 3.1, 20 -> 2.0)
-                    if '.' not in num_part and len(num_part) == 2:
-                        version = f"{num_part[0]}.{num_part[1]}"
-                    else:
-                        version = num_part
-                    break
-            elif part.replace('.', '').isdigit() and 'veo' in parts:
-                version = part
-                break
+        if veo_part and len(veo_part) > 3:
+            # Extract numbers after 'veo' (e.g., veo31 -> 31)
+            num_part = veo_part[3:]
+            if num_part.replace('.', '').isdigit():
+                # Insert decimal if needed (31 -> 3.1, 20 -> 2.0)
+                if '.' not in num_part and len(num_part) == 2:
+                    version = f"{num_part[0]}.{num_part[1]}"
+                else:
+                    version = num_part
+        elif veo_part == 'veo':
+            # Look for version in next part
+            idx = parts.index(veo_part)
+            if idx + 1 < len(parts) and parts[idx + 1].replace('.', '').isdigit():
+                version = parts[idx + 1]
         
+        quality = 'Full' if 'full' in parts else 'Fast' if 'fast' in parts else ''
+        mode = 'I2V' if 'image' in parts else 'T2V' if 'text' in parts else ''
         duration = next((p for p in parts if p.endswith('s') and p[:-1].isdigit()), '')
         resolution = next((p for p in parts if 'p' in p and p.replace('p', '').isdigit()), '')
-        return f"Veo {version} ({duration}, {resolution})" if duration and resolution else f"Veo {version}"
+        name_parts = [p for p in ["Veo", version, quality, mode] if p]
+        details = ', '.join(filter(None, [duration, resolution]))
+        return ' '.join(name_parts) + (f" ({details})" if details else "")
     
     elif 'sora' in parts:
         version = next((p for p in parts if p.replace('.', '').isdigit()), '')
@@ -443,11 +590,73 @@ def format_sku_display_name(sku: str) -> str:
     elif 'ovi' in parts:
         return "Ovi Image-to-Video"
     
-    elif 'mistral' in sku or 'llm' in sku:
-        return f"{sku.split('-')[0].title()} LLM"
+    elif 'ltx' in parts or 'longcat' in parts:
+        # LTX and Longcat video models
+        model_name = 'LTX' if 'ltx' in parts else 'Longcat'
+        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
+        quality = 'Fast' if 'fast' in parts else 'Full' if 'full' in parts else ''
+        duration = next((p for p in parts if p.endswith('s') and p[:-1].isdigit()), '')
+        resolution = next((p for p in parts if 'p' in p and p.replace('p', '').isdigit()), '')
+        mode = 'I2V' if 'image' in parts else 'T2V' if 'text' in parts else ''
+        name_parts = [p for p in [model_name, version, quality, mode] if p]
+        details = ', '.join(filter(None, [duration, resolution]))
+        return ' '.join(name_parts) + (f" ({details})" if details else "")
     
-    elif 'image' in sku or 'sd' in sku or 'stable' in sku:
-        return "Image Generation"
+    # === LLM / Text Models ===
+    elif 'grok' in parts:
+        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
+        tier = 'Fast' if 'fast' in parts else ''
+        io_type = 'Input' if 'input' in parts else 'Output' if 'output' in parts else ''
+        name_parts = [p for p in ["Grok", version, tier] if p]
+        return ' '.join(name_parts) + (f" ({io_type})" if io_type else "")
+    
+    elif 'glm' in sku.lower() or 'zai' in parts:
+        # GLM models (e.g., zai-org-glm-4.6-llm-input-mtoken)
+        version = ''
+        for part in parts:
+            if 'glm' in part:
+                # Extract version after 'glm' if present
+                idx = parts.index(part)
+                if idx + 1 < len(parts) and parts[idx + 1].replace('.', '').isdigit():
+                    version = parts[idx + 1]
+                break
+            if part.replace('.', '').isdigit():
+                version = part
+        io_type = 'Input' if 'input' in parts else 'Output' if 'output' in parts else ''
+        return f"GLM {version}" + (f" ({io_type})" if io_type else "")
+    
+    elif 'llm' in parts or 'mtoken' in sku.lower():
+        # Generic LLM token usage (e.g., mistral-31-24b-llm-input-mtoken)
+        model_name = parts[0].title() if parts else "LLM"
+        version = next((p for p in parts if p.replace('.', '').replace('b', '').isdigit()), '')
+        io_type = 'Input' if 'input' in parts else 'Output' if 'output' in parts else ''
+        name_parts = [p for p in [model_name, version] if p]
+        return ' '.join(name_parts) + (f" ({io_type})" if io_type else "")
+    
+    # === Image Models ===
+    elif 'nano' in parts and 'banana' in parts:
+        return "Nano Banana Pro"
+    
+    elif 'flux' in parts:
+        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
+        tier = 'Pro' if 'pro' in parts else ''
+        name_parts = [p for p in ["Flux", version, tier] if p]
+        return ' '.join(name_parts) if name_parts else "Flux"
+    
+    elif 'seedream' in parts:
+        version = next((p for p in parts if p.replace('v', '').isdigit()), '')
+        return f"Seedream {version}" if version else "Seedream"
+    
+    elif 'hidream' in parts:
+        return "HiDream"
+    
+    elif 'stable' in parts or 'sd' in parts:
+        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
+        return f"Stable Diffusion {version}" if version else "Stable Diffusion"
+    
+    elif 'upscale' in sku.lower():
+        scale = '4x' if '4x' in sku else '2x' if '2x' in sku else ''
+        return f"Upscaler {scale}" if scale else "Upscaler"
     
     # Fallback: capitalize and clean up
     clean_name = sku.replace('-', ' ').replace('_', ' ').title()
@@ -463,26 +672,30 @@ def extract_base_model_name(sku: str) -> str:
         veo31-full-text-to-video-duration-rate-8s-720p-audio -> Veo 3.1
         wan-2.5-preview-text-to-video-duration-resolution-rate-10s-720p-audio -> Wan 2.5
         sora-2-pro-image-to-video-duration-resolution-rate-8s-720p-audio -> Sora 2 Pro
+        grok-4-fast-llm-input-mtoken -> Grok 4 Fast
+        nano-banana-pro-fixed-1img -> Nano Banana Pro
     """
     if not sku:
         return "Unknown Model"
     
     parts = sku.lower().split('-')
     
-    if 'veo' in parts:
+    # === Video Models ===
+    # Check for Veo (handle both 'veo' in parts and 'veoXX' combined form)
+    veo_part = next((p for p in parts if p.startswith('veo')), None)
+    if veo_part:
         version = ''
-        for part in parts:
-            if part.startswith('veo') and len(part) > 3:
-                num_part = part[3:]
-                if num_part.replace('.', '').isdigit():
-                    if '.' not in num_part and len(num_part) == 2:
-                        version = f"{num_part[0]}.{num_part[1]}"
-                    else:
-                        version = num_part
-                    break
-            elif part.replace('.', '').isdigit() and 'veo' in parts:
-                version = part
-                break
+        if len(veo_part) > 3:
+            num_part = veo_part[3:]
+            if num_part.replace('.', '').isdigit():
+                if '.' not in num_part and len(num_part) == 2:
+                    version = f"{num_part[0]}.{num_part[1]}"
+                else:
+                    version = num_part
+        elif veo_part == 'veo':
+            idx = parts.index(veo_part)
+            if idx + 1 < len(parts) and parts[idx + 1].replace('.', '').isdigit():
+                version = parts[idx + 1]
         return f"Veo {version}" if version else "Veo"
     
     elif 'sora' in parts:
@@ -506,6 +719,62 @@ def extract_base_model_name(sku: str) -> str:
     
     elif 'ovi' in parts:
         return "Ovi"
+    
+    elif 'ltx' in parts:
+        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
+        quality = 'Fast' if 'fast' in parts else 'Full' if 'full' in parts else ''
+        name_parts = [p for p in ["LTX", version, quality] if p]
+        return ' '.join(name_parts) if name_parts else "LTX"
+    
+    elif 'longcat' in parts:
+        return "Longcat"
+    
+    # === LLM / Text Models ===
+    elif 'grok' in parts:
+        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
+        tier = 'Fast' if 'fast' in parts else ''
+        name_parts = [p for p in ["Grok", version, tier] if p]
+        return ' '.join(name_parts) if name_parts else "Grok"
+    
+    elif 'glm' in sku.lower() or 'zai' in parts:
+        version = ''
+        for part in parts:
+            if 'glm' in part:
+                idx = parts.index(part)
+                if idx + 1 < len(parts) and parts[idx + 1].replace('.', '').isdigit():
+                    version = parts[idx + 1]
+                break
+            if part.replace('.', '').isdigit():
+                version = part
+        return f"GLM {version}" if version else "GLM"
+    
+    elif any(llm in parts for llm in ['mistral', 'llama', 'qwen', 'deepseek']):
+        model_name = next((p for p in parts if p in ['mistral', 'llama', 'qwen', 'deepseek']), parts[0])
+        version = next((p for p in parts if p.replace('.', '').replace('b', '').isdigit()), '')
+        return f"{model_name.title()} {version}" if version else model_name.title()
+    
+    # === Image Models ===
+    elif 'nano' in parts and 'banana' in parts:
+        return "Nano Banana Pro"
+    
+    elif 'flux' in parts:
+        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
+        tier = 'Pro' if 'pro' in parts else ''
+        name_parts = [p for p in ["Flux", version, tier] if p]
+        return ' '.join(name_parts) if name_parts else "Flux"
+    
+    elif 'seedream' in parts:
+        version = next((p for p in parts if p.replace('v', '').isdigit()), '')
+        return f"Seedream {version}" if version else "Seedream"
+    
+    elif 'hidream' in parts:
+        return "HiDream"
+    
+    elif 'stable' in parts or 'sd' in parts:
+        return "Stable Diffusion"
+    
+    elif 'upscale' in sku.lower():
+        return "Upscaler"
     
     # Fallback
     return sku.split('-')[0].title()

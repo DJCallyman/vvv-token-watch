@@ -47,6 +47,13 @@ crash-dump.log
 usage_history.json
 usage_reports_history.json
 error_log.txt
+app.log
+
+# User-specific cache and data files (contain personal usage data)
+data/billing_cache.json
+data/usage_history.json
+usage_data.json
+usage_data.csv
 
 # System files
 Thumbs.db
