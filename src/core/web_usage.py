@@ -159,7 +159,8 @@ class WebUsageWorker(QThread):
                             "count": 0,
                             "amount": 0.0,
                             "currency": currency,
-                            "units": 0.0
+                            "units": 0.0,
+                            "notes": notes  # Store usage type (Video Inference, Image Inference, etc.)
                         }
                     sku_breakdown[sku]["count"] += 1
                     sku_breakdown[sku]["amount"] += amount

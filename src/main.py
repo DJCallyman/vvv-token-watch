@@ -43,6 +43,7 @@ from src.utils.date_utils import DateFormatter
 from src.widgets.usage_leaderboard import UsageLeaderboardWidget
 from src.core.web_usage import WebUsageWorker, WebUsageMetrics
 from src.core.unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
+from src.widgets.cost_optimization_widget import CostOptimizationWidget
 
 # --- Suppress Warnings (Use with caution) ---
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
@@ -590,11 +591,16 @@ class CombinedViewerApp(QMainWindow):
         # Add models tab to main tabs
         self.main_tabs.addTab(self.models_tab, "Models")
 
-        # Create third tab: Model Comparison & Analytics
-        self.create_comparison_tab()
-
-        # Initialize model comparison with current data
-        self.update_model_comparison_data()
+        # Create third tab: Cost Optimization & Analytics
+        self._create_cost_optimization_tab()
+        
+        # Create fourth tab: Compare & Analyze (Phase 2)
+        if PHASE2_AVAILABLE:
+            self.create_comparison_tab()
+        
+        # Create fifth tab: Usage Leaderboard (Phase 2)
+        if PHASE2_AVAILABLE:
+            self.create_leaderboard_tab()
 
         # Initialize holding entry with proper value format
         self.holding_entry.setText(str(int(Config.COINGECKO_HOLDING_AMOUNT)) if Config.COINGECKO_HOLDING_AMOUNT.is_integer() else f"{Config.COINGECKO_HOLDING_AMOUNT:.2f}")
@@ -886,6 +892,177 @@ class CombinedViewerApp(QMainWindow):
         self.price_display_usd.set_validation_state(self.validation_state.value)
         self.price_display_aud.set_validation_state(self.validation_state.value)
     
+    def _create_cost_optimization_tab(self):
+        """Create the Cost Optimization & Analytics tab"""
+        self.cost_optimization_tab = QWidget()
+        cost_tab_layout = QVBoxLayout(self.cost_optimization_tab)
+        cost_tab_layout.setContentsMargins(5, 5, 5, 5)
+        cost_tab_layout.setSpacing(10)
+        
+        # Create cost optimization widget
+        self.cost_optimizer_widget = CostOptimizationWidget(self.theme, self)
+        self.cost_optimizer_widget.refresh_requested.connect(self._refresh_cost_analysis)
+        cost_tab_layout.addWidget(self.cost_optimizer_widget)
+        
+        # Add tab to main tabs
+        self.main_tabs.addTab(self.cost_optimization_tab, "💰 Cost Optimization")
+        
+        logger.debug("Cost optimization tab created successfully")
+    
+    def _refresh_cost_analysis(self):
+        """Refresh cost optimization analysis with latest billing data"""
+        try:
+            # Fetch billing data (last 7 days with intelligent caching)
+            from src.core.venice_api_client import VeniceAPIClient
+            from datetime import datetime, timedelta, timezone
+            import requests
+            import json
+            from pathlib import Path
+            
+            client = VeniceAPIClient(Config.VENICE_ADMIN_KEY)
+            
+            # Calculate date range (last 7 complete days)
+            end_date = datetime.now(timezone.utc)
+            start_date = end_date - timedelta(days=7)
+            
+            # Setup cache file
+            cache_file = Path("data/billing_cache.json")
+            cache_file.parent.mkdir(exist_ok=True)
+            
+            # Load cached data if exists
+            cached_data = []
+            last_fetch_time = None
+            
+            if cache_file.exists():
+                try:
+                    with open(cache_file, 'r') as f:
+                        cache = json.load(f)
+                        cached_data = cache.get('records', [])
+                        last_fetch_str = cache.get('last_fetch')
+                        if last_fetch_str:
+                            last_fetch_time = datetime.fromisoformat(last_fetch_str.replace('Z', '+00:00'))
+                    logger.debug(f"Loaded {len(cached_data)} cached billing records")
+                except Exception as e:
+                    logger.warning(f"Failed to load billing cache: {e}")
+            
+            # Determine fetch strategy
+            if last_fetch_time and (end_date - last_fetch_time).total_seconds() < 300:
+                # Last fetch was less than 5 minutes ago - skip refresh
+                logger.info(f"Using cached billing data ({len(cached_data)} records, last fetched {int((end_date - last_fetch_time).total_seconds())}s ago)")
+                if cached_data:
+                    # Still need to fetch API key usage data
+                    try:
+                        api_keys_response = client.get("/api_keys")
+                        api_keys_data = api_keys_response.json().get('data', [])
+                        logger.debug(f"Fetched usage data for {len(api_keys_data)} API keys (with cached billing data)")
+                    except Exception as e:
+                        logger.warning(f"Failed to fetch API key data: {e}")
+                        api_keys_data = []
+                    
+                    self.cost_optimizer_widget.update_analysis(cached_data, api_keys_data, analysis_days=7)
+                return
+            
+            # Determine if we need full refresh or incremental update
+            if last_fetch_time and (end_date - last_fetch_time).total_seconds() < 3600:
+                # Last fetch was less than 1 hour ago - fetch only new records
+                fetch_start = last_fetch_time - timedelta(minutes=5)  # Small overlap to avoid gaps
+                logger.info(f"Incremental fetch: Getting records since {fetch_start.strftime('%Y-%m-%d %H:%M')}")
+            else:
+                # Full refresh needed
+                fetch_start = start_date
+                cached_data = []  # Clear cache for full refresh
+                logger.info(f"Full refresh: Getting all records from last 7 days")
+            
+            # Fetch new/updated billing data
+            new_records = []
+            page = 1
+            max_pages = 20
+            
+            while page <= max_pages:
+                params = {
+                    'startDate': fetch_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    'endDate': end_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    'limit': 500,
+                    'page': page,
+                    'sortOrder': 'desc'
+                }
+                
+                response = client.get("/billing/usage", params=params, timeout=60)
+                data = response.json()
+                
+                billing_data = data.get('data', [])
+                pagination = data.get('pagination', {})
+                
+                new_records.extend(billing_data)
+                
+                total_pages = pagination.get('totalPages', 1)
+                logger.debug(f"Fetched page {page}/{total_pages}: {len(billing_data)} records")
+                
+                if page >= total_pages:
+                    break
+                    
+                page += 1
+            
+            # Merge new records with cached data (remove duplicates by timestamp)
+            if cached_data and new_records:
+                # Create a set of existing record IDs (using timestamp as key)
+                existing_ids = {r.get('timestamp', '') for r in cached_data}
+                # Add only truly new records
+                unique_new = [r for r in new_records if r.get('timestamp', '') not in existing_ids]
+                all_records = cached_data + unique_new
+                logger.info(f"✓ Merged data: {len(cached_data)} cached + {len(unique_new)} new = {len(all_records)} total records")
+            else:
+                all_records = new_records or cached_data
+                logger.info(f"✓ Fetched {len(all_records)} total billing entries")
+            
+            # Filter to only last 7 days
+            cutoff_time = start_date.isoformat()
+            all_records = [r for r in all_records if r.get('timestamp', '') >= cutoff_time]
+            
+            # Save to cache
+            try:
+                cache = {
+                    'last_fetch': end_date.isoformat(),
+                    'records': all_records
+                }
+                with open(cache_file, 'w') as f:
+                    json.dump(cache, f)
+                logger.debug(f"Cached {len(all_records)} records to {cache_file}")
+            except Exception as e:
+                logger.warning(f"Failed to save billing cache: {e}")
+            
+            # Update the cost optimizer widget
+            if all_records:
+                # Also fetch API key usage data
+                try:
+                    api_keys_response = client.get("/api_keys")
+                    api_keys_data = api_keys_response.json().get('data', [])
+                    logger.debug(f"Fetched usage data for {len(api_keys_data)} API keys")
+                except Exception as e:
+                    logger.warning(f"Failed to fetch API key data: {e}")
+                    api_keys_data = []
+                
+                # Pass both billing and API key data to the optimizer
+                self.cost_optimizer_widget.update_analysis(all_records, api_keys_data, analysis_days=7)
+            else:
+                logger.warning("No billing data available for cost analysis")
+                
+        except requests.exceptions.HTTPError as e:
+            # Detailed logging for HTTP errors
+            if e.response is not None:
+                logger.error(f"Failed to refresh cost analysis: HTTP {e.response.status_code}")
+                logger.error(f"Request URL: {e.response.url}")
+                if e.response.status_code == 400:
+                    try:
+                        error_body = e.response.json()
+                        logger.error(f"API Error Details: {error_body}")
+                    except:
+                        logger.error(f"API Error Body: {e.response.text[:500]}")
+            else:
+                logger.error(f"Failed to refresh cost analysis: {e}")
+        except Exception as e:
+            logger.error(f"Failed to refresh cost analysis: {type(e).__name__}: {e}")
+    
     def get_coingecko_price(self):
         """Fetch prices for all configured currencies from CoinGecko API."""
         url = f"https://api.coingecko.com/api/v3/simple/price"
@@ -898,7 +1075,7 @@ class CombinedViewerApp(QMainWindow):
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                response = requests.get(url, params=params, timeout=15)
+                response = requests.get(url, params=params, timeout=30)
                 response.raise_for_status()
                 data = response.json()
                 
@@ -1501,6 +1678,10 @@ class CombinedViewerApp(QMainWindow):
             logger.error(f"Analytics update failed, falling back to basic update: {e}")
             # Fallback to original update method
             self._update_balance_display_fallback(balance_info)
+        
+        # Trigger cost analysis refresh when balance data updates
+        if hasattr(self, 'cost_optimizer_widget'):
+            QTimer.singleShot(1000, self._refresh_cost_analysis)  # Delay to avoid blocking UI
     
     def _update_balance_display_fallback(self, balance_info: BalanceInfo):
         """Fallback balance update method (original implementation)."""
@@ -1790,9 +1971,6 @@ class CombinedViewerApp(QMainWindow):
 
         # Add tab to main tabs
         self.main_tabs.addTab(self.comparison_tab, "📊 Compare & Analyze")
-        
-        # Create fourth tab: Usage Leaderboard
-        self.create_leaderboard_tab()
 
     def create_leaderboard_tab(self):
         """Create the usage leaderboard tab"""

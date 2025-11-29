@@ -347,18 +347,26 @@ class UsageLeaderboardModel(QAbstractTableModel):
             if col == self.COL_IDENTIFIER:
                 if entry.entry_type == "api_key":
                     return f"API Key ID: {entry.id}"
+                elif entry.entry_type == "web_group":
+                    return f"Web App Usage Group\nTotal Requests: {entry.request_count}"
+                elif entry.entry_type.startswith("web_"):
+                    # web_video, web_image, web_llm
+                    category = entry.entry_type.replace("web_", "").title()
+                    return f"Web App {category} Usage\nSKU: {entry.sku}\nRequests: {entry.request_count}"
                 else:
                     return f"Web App Usage\nSKU: {entry.id}"
             elif col == self.COL_USAGE:
                 daily_avg = entry.usage.diem / 7.0
                 tooltip = f"7-Day Usage: {entry.usage.diem:.4f} DIEM (${entry.usage.usd:.2f} USD)\nDaily Average: {daily_avg:.4f} DIEM/day"
-                if entry.entry_type == "web_sku" and entry.model_details:
+                if entry.request_count > 0:
+                    tooltip += f"\nTotal Requests: {entry.request_count}"
+                if hasattr(entry, 'model_details') and entry.model_details:
                     tooltip += f"\n\nModel Details:\n{entry.model_details}"
                 return tooltip
             elif col == self.COL_STATUS:
                 if entry.last_used_at:
                     return f"Last used: {entry.last_used_at}"
-                return "Never used"
+                return "Never used" if entry.entry_type == "api_key" else "Active (web usage)"
             elif col == self.COL_VISUAL_BAR_7DAY:
                 percentile = self._get_usage_percentile(entry.usage.diem)
                 return f"7-Day Total: {entry.usage.diem:.4f} DIEM ({percentile*100:.1f}th percentile)"
@@ -367,19 +375,45 @@ class UsageLeaderboardModel(QAbstractTableModel):
                 percentile = self._get_usage_percentile(entry.usage.diem)
                 return f"Daily Average: {daily_avg:.4f} DIEM/day ({percentile*100:.1f}th percentile)"
         
-        # Background role - heat map coloring with distinction for web entries
+        # Background role - heat map coloring with distinction by category
         elif role == Qt.BackgroundRole:
             percentile = self._get_usage_percentile(entry.usage.diem)
             
-            # Different color tint for web entries
-            if entry.entry_type == "web_sku":
+            # Different color tints by entry type/category
+            if entry.entry_type == "web_video":
+                # Purple tint for video
                 if percentile >= 0.75:
-                    return QBrush(QColor(200, 200, 255, 30))  # Light blue-red
+                    return QBrush(QColor(220, 200, 255, 35))
                 elif percentile >= 0.50:
-                    return QBrush(QColor(220, 220, 255, 30))  # Light blue-orange
+                    return QBrush(QColor(230, 220, 255, 30))
                 elif percentile >= 0.25:
-                    return QBrush(QColor(240, 240, 255, 30))  # Light blue-yellow
-            else:
+                    return QBrush(QColor(240, 235, 255, 25))
+            elif entry.entry_type == "web_image":
+                # Cyan tint for images
+                if percentile >= 0.75:
+                    return QBrush(QColor(200, 240, 255, 35))
+                elif percentile >= 0.50:
+                    return QBrush(QColor(220, 245, 255, 30))
+                elif percentile >= 0.25:
+                    return QBrush(QColor(235, 250, 255, 25))
+            elif entry.entry_type == "web_llm":
+                # Green tint for LLM/text
+                if percentile >= 0.75:
+                    return QBrush(QColor(200, 255, 220, 35))
+                elif percentile >= 0.50:
+                    return QBrush(QColor(220, 255, 235, 30))
+                elif percentile >= 0.25:
+                    return QBrush(QColor(235, 255, 245, 25))
+            elif entry.entry_type == "web_group":
+                # Blue tint for web groups
+                if percentile >= 0.75:
+                    return QBrush(QColor(200, 210, 255, 30))
+                elif percentile >= 0.50:
+                    return QBrush(QColor(220, 225, 255, 25))
+                elif percentile >= 0.25:
+                    return QBrush(QColor(235, 240, 255, 20))
+            elif entry.entry_type == "api_key":
+                # Standard warm colors for API keys
                 if percentile >= 0.75:
                     return QBrush(QColor(255, 200, 200, 30))  # Light red
                 elif percentile >= 0.50:
