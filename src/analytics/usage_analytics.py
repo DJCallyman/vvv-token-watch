@@ -11,8 +11,11 @@ from dataclasses import dataclass
 import statistics
 import json
 import os
+import logging
 
 from src.core.usage_tracker import APIKeyUsage, UsageMetrics, BalanceInfo
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -331,7 +334,7 @@ class UsageAnalytics:
                 json.dump(data, f, indent=2)
                 
         except Exception as e:
-            print(f"Warning: Failed to save usage history: {e}")
+            logger.warning(f"Failed to save usage history: {e}")
     
     def load_historical_data(self) -> None:
         """Load historical usage data from storage file."""
@@ -350,10 +353,10 @@ class UsageAnalytics:
                     )
                     self.usage_history.append(snapshot)
                 
-                print(f"Loaded {len(self.usage_history)} historical usage snapshots")
+                logger.debug(f"Loaded {len(self.usage_history)} historical usage snapshots")
                 
         except Exception as e:
-            print(f"Warning: Failed to load usage history: {e}")
+            logger.warning(f"Failed to load usage history: {e}")
             self.usage_history = []
 
 

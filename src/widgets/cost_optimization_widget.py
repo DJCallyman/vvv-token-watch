@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushB
                               QSizePolicy, QScrollArea)
 from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QFont, QColor, QBrush
+from shiboken6 import isValid
 from typing import List, Dict, Optional
 import logging
 
@@ -28,11 +29,12 @@ class CostOptimizerWorker(QThread):
     analysis_complete = Signal(object)  # CostOptimizationReport
     error_occurred = Signal(str)
     
-    def __init__(self, billing_data: List[Dict], api_keys_data: List[Dict] = None, analysis_days: int = 7):
-        super().__init__()
+    def __init__(self, billing_data: List[Dict], api_keys_data: List[Dict] = None, analysis_days: int = 7, parent=None):
+        super().__init__(parent)  # Important: parent prevents premature garbage collection
         self.billing_data = billing_data
         self.api_keys_data = api_keys_data or []
         self.analysis_days = analysis_days
+        # Note: finished signal connections are set up by the caller (update_analysis)
     
     def run(self):
         """Run cost analysis in background thread"""
@@ -47,8 +49,8 @@ class CostOptimizerWorker(QThread):
             report = optimizer.generate_report(self.analysis_days)
             self.analysis_complete.emit(report)
         except Exception as e:
-            logger.error(f"Cost analysis failed: {e}")
-            self.error_occurred.emit(str(e))
+            # Don't use logger in worker thread - emit signal for main thread to log
+            self.error_occurred.emit(f"Cost analysis failed: {e}")
 
 
 class CostOptimizationWidget(QWidget):
@@ -71,6 +73,41 @@ class CostOptimizationWidget(QWidget):
         self.worker: Optional[CostOptimizerWorker] = None
         
         self.init_ui()
+    
+    def _cleanup_worker(self):
+        """Safely stop and clean up any running worker."""
+        if self.worker is not None:
+            # Check if C++ object is still valid before accessing it
+            if not isValid(self.worker):
+                self.worker = None
+                return
+            
+            # Disconnect signals first to prevent callbacks during cleanup
+            try:
+                self.worker.analysis_complete.disconnect()
+                self.worker.error_occurred.disconnect()
+                self.worker.finished.disconnect()
+            except (RuntimeError, TypeError):
+                pass  # Signals may already be disconnected
+            
+            if self.worker.isRunning():
+                self.worker.quit()
+                # Wait with a longer timeout - don't terminate, let it finish
+                if not self.worker.wait(5000):
+                    # Only terminate as last resort
+                    self.worker.terminate()
+                    self.worker.wait(1000)
+            
+            self.worker = None
+    
+    def _on_worker_finished(self):
+        """Called when worker finishes - clear reference before deleteLater runs."""
+        self.worker = None
+    
+    def closeEvent(self, event):
+        """Clean up worker when widget is closed."""
+        self._cleanup_worker()
+        super().closeEvent(event)
     
     def init_ui(self):
         """Initialize the user interface"""
@@ -294,10 +331,16 @@ class CostOptimizationWidget(QWidget):
             api_keys_data: List of API key data from /api_keys endpoint (optional)
             analysis_days: Number of days analyzed
         """
-        # Run analysis in background thread
-        self.worker = CostOptimizerWorker(billing_data, api_keys_data, analysis_days)
+        # Stop and clean up any existing worker before creating a new one
+        self._cleanup_worker()
+        
+        # Run analysis in background thread - pass self as parent to prevent GC
+        self.worker = CostOptimizerWorker(billing_data, api_keys_data, analysis_days, parent=self)
         self.worker.analysis_complete.connect(self._handle_analysis_complete)
         self.worker.error_occurred.connect(self._handle_analysis_error)
+        # Clear reference before deleteLater runs to avoid accessing deleted C++ object
+        self.worker.finished.connect(self._on_worker_finished)
+        self.worker.finished.connect(self.worker.deleteLater)
         self.worker.start()
     
     def _handle_analysis_complete(self, report: CostOptimizationReport):
@@ -374,12 +417,10 @@ class CostOptimizationWidget(QWidget):
             self.recommendations_table.setItem(row, 1, rec_item)
             
             # API Keys Using
-            print(f"DEBUG: Rec for {rec.current_model_name}: type={type(rec.api_keys_using)}, value={rec.api_keys_using!r}")
-            
             if rec.api_keys_using and len(rec.api_keys_using) > 0:
                 # Ensure it's a list
                 if isinstance(rec.api_keys_using, str):
-                    print(f"ERROR: BUG - api_keys_using is a string: {rec.api_keys_using!r}")
+                    logger.error(f"BUG - api_keys_using is a string: {rec.api_keys_using!r}")
                     api_keys_text = rec.api_keys_using
                 else:
                     # Join with newlines for better readability if multiple keys
@@ -389,8 +430,6 @@ class CostOptimizationWidget(QWidget):
                         api_keys_text = ", ".join(rec.api_keys_using)
             else:
                 api_keys_text = "Unknown\n(No API key data)"
-            
-            print(f"DEBUG: Display text: {api_keys_text!r}")
             
             api_keys_item = QTableWidgetItem(api_keys_text)
             api_keys_item.setFont(QFont("Arial", 9))

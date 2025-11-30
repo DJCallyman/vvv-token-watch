@@ -4,6 +4,7 @@ Provides comprehensive comparison tools, usage analytics, and enhanced discovery
 """
 
 import sys
+import logging
 from typing import List, Dict, Any, Optional
 import json
 from datetime import datetime, timedelta
@@ -29,6 +30,9 @@ import matplotlib.pyplot as plt
 
 # HTTP requests for API calls
 import requests
+from shiboken6 import isValid
+
+logger = logging.getLogger(__name__)
 from datetime import timezone
 
 from src.config.config import Config
@@ -65,8 +69,8 @@ class ModelAnalyticsWorker(QThread):
     """Worker thread for fetching and processing model analytics data"""
     analytics_ready = Signal(dict)
 
-    def __init__(self, admin_key: str = None):
-        super().__init__()
+    def __init__(self, admin_key: str = None, parent=None):
+        super().__init__(parent)
         self.admin_key = admin_key or Config.VENICE_ADMIN_KEY
         self.api_client = VeniceAPIClient(self.admin_key)
 
@@ -76,11 +80,9 @@ class ModelAnalyticsWorker(QThread):
             # Try to fetch real data from billing/usage endpoint
             usage_data = self._fetch_billing_usage(days=7)
             analytics = self._process_usage_data(usage_data)
-            print(f"DEBUG: Successfully fetched real analytics data for {len(analytics.get('model_usage', {}))} models")
+            # Don't use logger in worker thread - can cause crashes on macOS
             
         except Exception as e:
-            print(f"WARNING: Failed to fetch real analytics data: {e}")
-            print("DEBUG: Falling back to mock data")
             # Fallback to mock data if API call fails
             analytics = self._get_mock_analytics()
         
@@ -109,15 +111,13 @@ class ModelAnalyticsWorker(QThread):
         performance_data = {}
         request_tracker = {}  # Track unique requests per model
         
-        print(f"DEBUG: Processing {len(usage_entries)} usage entries")
+        logger.debug(f"Processing {len(usage_entries)} usage entries")
         
         for entry in usage_entries:
             sku = entry.get('sku', 'unknown')
             amount = entry.get('amount', 0)
             currency = entry.get('currency', 'USD')
             inference = entry.get('inferenceDetails') or {}  # Handle None values
-            
-            print(f"DEBUG: Processing entry - SKU: {sku}, Amount: {amount}, Inference: {type(inference)}")
             
             # Use absolute value (negative amounts represent actual usage costs)
             abs_amount = abs(amount)
@@ -151,11 +151,7 @@ class ModelAnalyticsWorker(QThread):
             if request_id and request_id not in request_tracker[model_name]:
                 request_tracker[model_name].add(request_id)
                 model_usage[model_name]['requests'] += 1
-                print(f"DEBUG: Found request {request_id} for model {model_name}")
             elif not request_id:
-                # Only print debug for missing request IDs, not for duplicates
-                if 'requestId' not in str(inference):
-                    print(f"DEBUG: No requestId field in inference: {inference}")
                 # For entries without requestId, we'll still count them but they might be double-counted
                 # This is better than missing data entirely
                 model_usage[model_name]['requests'] += 1
@@ -195,10 +191,10 @@ class ModelAnalyticsWorker(QThread):
         
         # If no data was found, fall back to mock data
         if not model_usage:
-            print("DEBUG: No valid usage data found, using mock data")
+            logger.debug("No valid usage data found, using mock data")
             return self._get_mock_analytics()
         
-        print(f"DEBUG: Processed analytics for {len(model_usage)} models: {list(model_usage.keys())}")
+        logger.debug(f"Processed analytics for {len(model_usage)} models: {list(model_usage.keys())}")
         
         analytics = {
             'model_usage': model_usage,
@@ -1003,9 +999,24 @@ class ModelComparisonWidget(QWidget):
 
     def start_analytics_update(self):
         """Start periodic analytics updates"""
-        self.analytics_worker = ModelAnalyticsWorker()
+        # Clean up existing worker first
+        if hasattr(self, 'analytics_worker') and self.analytics_worker is not None:
+            if isValid(self.analytics_worker) and self.analytics_worker.isRunning():
+                self.analytics_worker.quit()
+                self.analytics_worker.wait(2000)
+            self.analytics_worker = None
+        
+        self.analytics_worker = ModelAnalyticsWorker(parent=self)
         self.analytics_worker.analytics_ready.connect(self.update_analytics_display)
+        self.analytics_worker.finished.connect(self._on_analytics_worker_finished)
         self.analytics_worker.start()
+    
+    def _on_analytics_worker_finished(self):
+        """Handle analytics worker completion - clear reference before deleteLater"""
+        worker = self.analytics_worker
+        self.analytics_worker = None
+        if worker and isValid(worker):
+            worker.deleteLater()
 
     def update_analytics_display(self, analytics):
         """Update the analytics display with new data"""
@@ -1330,14 +1341,18 @@ class ModelComparisonWidget(QWidget):
 
     def refresh_data(self):
         """Refresh all data and analytics"""
-        if self.analytics_worker and self.analytics_worker.isRunning():
-            return  # Already updating
+        if hasattr(self, 'analytics_worker') and self.analytics_worker is not None:
+            if isValid(self.analytics_worker) and self.analytics_worker.isRunning():
+                return  # Already updating
+            # Clean up old worker
+            self.analytics_worker = None
 
         self.refresh_btn.setText("🔄 Refreshing...")
         self.refresh_btn.setEnabled(False)
 
-        self.analytics_worker = ModelAnalyticsWorker()
+        self.analytics_worker = ModelAnalyticsWorker(parent=self)
         self.analytics_worker.analytics_ready.connect(self.on_refresh_complete)
+        self.analytics_worker.finished.connect(self._on_analytics_worker_finished)
         self.analytics_worker.start()
 
     def connect_from_compare_tab(self):

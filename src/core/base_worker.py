@@ -53,21 +53,18 @@ class BaseAPIWorker(QThread):
         result = {'success': False, 'data': None, 'error': None}
         
         try:
-            logger.debug(f"{self.__class__.__name__} starting data fetch")
+            # Don't use logger in worker thread - can cause crashes on macOS
             data = self.fetch_data()
             
             if self._should_stop:
-                logger.debug(f"{self.__class__.__name__} stopped by request")
                 return
             
             result['success'] = True
             result['data'] = data
-            logger.debug(f"{self.__class__.__name__} fetch completed successfully")
             
         except Exception as e:
             error_msg = self.handle_error(e)
             result['error'] = error_msg
-            logger.error(f"{self.__class__.__name__} failed: {error_msg}", exc_info=True)
         
         finally:
             self.result.emit(result)

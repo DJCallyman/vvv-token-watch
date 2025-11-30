@@ -1,6 +1,5 @@
 import sys
 import json
-import threading
 import traceback
 import time
 import queue
@@ -44,6 +43,8 @@ from src.widgets.usage_leaderboard import UsageLeaderboardWidget
 from src.core.web_usage import WebUsageWorker, WebUsageMetrics
 from src.core.unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
 from src.widgets.cost_optimization_widget import CostOptimizationWidget
+from src.core.price_worker import PriceWorker
+from src.core.cost_analysis_worker import CostAnalysisWorker
 
 # --- Suppress Warnings (Use with caution) ---
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
@@ -910,236 +911,139 @@ class CombinedViewerApp(QMainWindow):
         logger.debug("Cost optimization tab created successfully")
     
     def _refresh_cost_analysis(self):
-        """Refresh cost optimization analysis with latest billing data"""
+        """Refresh cost optimization analysis via worker thread (non-blocking)."""
         try:
-            # Fetch billing data (last 7 days with intelligent caching)
-            from src.core.venice_api_client import VeniceAPIClient
-            from datetime import datetime, timedelta, timezone
-            import requests
-            import json
-            from pathlib import Path
-            
-            client = VeniceAPIClient(Config.VENICE_ADMIN_KEY)
-            
-            # Calculate date range (last 7 complete days)
-            end_date = datetime.now(timezone.utc)
-            start_date = end_date - timedelta(days=7)
-            
-            # Setup cache file
-            cache_file = Path("data/billing_cache.json")
-            cache_file.parent.mkdir(exist_ok=True)
-            
-            # Load cached data if exists
-            cached_data = []
-            last_fetch_time = None
-            
-            if cache_file.exists():
+            # Clean up any existing worker before creating a new one
+            if hasattr(self, 'cost_analysis_worker') and self.cost_analysis_worker is not None:
                 try:
-                    with open(cache_file, 'r') as f:
-                        cache = json.load(f)
-                        cached_data = cache.get('records', [])
-                        last_fetch_str = cache.get('last_fetch')
-                        if last_fetch_str:
-                            last_fetch_time = datetime.fromisoformat(last_fetch_str.replace('Z', '+00:00'))
-                    logger.debug(f"Loaded {len(cached_data)} cached billing records")
-                except Exception as e:
-                    logger.warning(f"Failed to load billing cache: {e}")
+                    from shiboken6 import isValid
+                    if not isValid(self.cost_analysis_worker):
+                        self.cost_analysis_worker = None
+                    else:
+                        if self.cost_analysis_worker.isRunning():
+                            self.cost_analysis_worker.quit()
+                            self.cost_analysis_worker.wait(2000)
+                        try:
+                            self.cost_analysis_worker.billing_data_ready.disconnect()
+                            self.cost_analysis_worker.error_occurred.disconnect()
+                            self.cost_analysis_worker.status_update.disconnect()
+                        except (RuntimeError, TypeError):
+                            pass
+                        self.cost_analysis_worker = None
+                except Exception:
+                    self.cost_analysis_worker = None
             
-            # Determine fetch strategy
-            if last_fetch_time and (end_date - last_fetch_time).total_seconds() < 300:
-                # Last fetch was less than 5 minutes ago - skip refresh
-                logger.info(f"Using cached billing data ({len(cached_data)} records, last fetched {int((end_date - last_fetch_time).total_seconds())}s ago)")
-                if cached_data:
-                    # Still need to fetch API key usage data
-                    try:
-                        api_keys_response = client.get("/api_keys")
-                        api_keys_data = api_keys_response.json().get('data', [])
-                        logger.debug(f"Fetched usage data for {len(api_keys_data)} API keys (with cached billing data)")
-                    except Exception as e:
-                        logger.warning(f"Failed to fetch API key data: {e}")
-                        api_keys_data = []
-                    
-                    self.cost_optimizer_widget.update_analysis(cached_data, api_keys_data, analysis_days=7)
-                return
+            # Create and start the cost analysis worker
+            self.cost_analysis_worker = CostAnalysisWorker(
+                admin_key=Config.VENICE_ADMIN_KEY,
+                analysis_days=7,
+                parent=self
+            )
+            self.cost_analysis_worker.billing_data_ready.connect(self._handle_billing_data_ready)
+            self.cost_analysis_worker.error_occurred.connect(self._handle_cost_analysis_error)
+            self.cost_analysis_worker.status_update.connect(self._handle_cost_analysis_status)
+            self.cost_analysis_worker.finished.connect(self.cost_analysis_worker.deleteLater)
+            self.cost_analysis_worker.start()
             
-            # Determine if we need full refresh or incremental update
-            if last_fetch_time and (end_date - last_fetch_time).total_seconds() < 3600:
-                # Last fetch was less than 1 hour ago - fetch only new records
-                fetch_start = last_fetch_time - timedelta(minutes=5)  # Small overlap to avoid gaps
-                logger.info(f"Incremental fetch: Getting records since {fetch_start.strftime('%Y-%m-%d %H:%M')}")
-            else:
-                # Full refresh needed
-                fetch_start = start_date
-                cached_data = []  # Clear cache for full refresh
-                logger.info(f"Full refresh: Getting all records from last 7 days")
+            logger.debug("Cost analysis worker started")
             
-            # Fetch new/updated billing data
-            new_records = []
-            page = 1
-            max_pages = 20
-            
-            while page <= max_pages:
-                params = {
-                    'startDate': fetch_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    'endDate': end_date.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                    'limit': 500,
-                    'page': page,
-                    'sortOrder': 'desc'
-                }
-                
-                response = client.get("/billing/usage", params=params, timeout=60)
-                data = response.json()
-                
-                billing_data = data.get('data', [])
-                pagination = data.get('pagination', {})
-                
-                new_records.extend(billing_data)
-                
-                total_pages = pagination.get('totalPages', 1)
-                logger.debug(f"Fetched page {page}/{total_pages}: {len(billing_data)} records")
-                
-                if page >= total_pages:
-                    break
-                    
-                page += 1
-            
-            # Merge new records with cached data (remove duplicates by timestamp)
-            if cached_data and new_records:
-                # Create a set of existing record IDs (using timestamp as key)
-                existing_ids = {r.get('timestamp', '') for r in cached_data}
-                # Add only truly new records
-                unique_new = [r for r in new_records if r.get('timestamp', '') not in existing_ids]
-                all_records = cached_data + unique_new
-                logger.info(f"✓ Merged data: {len(cached_data)} cached + {len(unique_new)} new = {len(all_records)} total records")
-            else:
-                all_records = new_records or cached_data
-                logger.info(f"✓ Fetched {len(all_records)} total billing entries")
-            
-            # Filter to only last 7 days
-            cutoff_time = start_date.isoformat()
-            all_records = [r for r in all_records if r.get('timestamp', '') >= cutoff_time]
-            
-            # Save to cache
-            try:
-                cache = {
-                    'last_fetch': end_date.isoformat(),
-                    'records': all_records
-                }
-                with open(cache_file, 'w') as f:
-                    json.dump(cache, f)
-                logger.debug(f"Cached {len(all_records)} records to {cache_file}")
-            except Exception as e:
-                logger.warning(f"Failed to save billing cache: {e}")
-            
-            # Update the cost optimizer widget
-            if all_records:
-                # Also fetch API key usage data
-                try:
-                    api_keys_response = client.get("/api_keys")
-                    api_keys_data = api_keys_response.json().get('data', [])
-                    logger.debug(f"Fetched usage data for {len(api_keys_data)} API keys")
-                except Exception as e:
-                    logger.warning(f"Failed to fetch API key data: {e}")
-                    api_keys_data = []
-                
-                # Pass both billing and API key data to the optimizer
-                self.cost_optimizer_widget.update_analysis(all_records, api_keys_data, analysis_days=7)
-            else:
-                logger.warning("No billing data available for cost analysis")
-                
-        except requests.exceptions.HTTPError as e:
-            # Detailed logging for HTTP errors
-            if e.response is not None:
-                logger.error(f"Failed to refresh cost analysis: HTTP {e.response.status_code}")
-                logger.error(f"Request URL: {e.response.url}")
-                if e.response.status_code == 400:
-                    try:
-                        error_body = e.response.json()
-                        logger.error(f"API Error Details: {error_body}")
-                    except:
-                        logger.error(f"API Error Body: {e.response.text[:500]}")
-            else:
-                logger.error(f"Failed to refresh cost analysis: {e}")
         except Exception as e:
-            logger.error(f"Failed to refresh cost analysis: {type(e).__name__}: {e}")
+            logger.error(f"Failed to start cost analysis: {type(e).__name__}: {e}")
     
-    def get_coingecko_price(self):
-        """Fetch prices for all configured currencies from CoinGecko API."""
-        url = f"https://api.coingecko.com/api/v3/simple/price"
-        vs_currencies_str = ','.join(Config.COINGECKO_CURRENCIES)
-        params = {
-            'ids': Config.COINGECKO_TOKEN_ID,
-            'vs_currencies': vs_currencies_str
-        }
-        
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = requests.get(url, params=params, timeout=30)
-                response.raise_for_status()
-                data = response.json()
-                
-                if Config.COINGECKO_TOKEN_ID in data:
-                    price_data = {}
-                    for currency in Config.COINGECKO_CURRENCIES:
-                        if currency in data[Config.COINGECKO_TOKEN_ID]:
-                            price_data[currency] = data[Config.COINGECKO_TOKEN_ID][currency]
-                    return price_data
-                return None
-            except requests.exceptions.RequestException as e:
-                error_msg = f"Error fetching data from CoinGecko API (attempt {attempt + 1}/{max_retries}): {e}"
-                logger.error(error_msg)
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-                else:
-                    return None
-    
-    def update_price_label(self):
-        """Updates price display for all configured currencies."""
-        price_data = self.get_coingecko_price()
-        
-        if price_data:
-            status_messages = []
-            failed_currencies = []
-            
-            for currency in Config.COINGECKO_CURRENCIES:
-                if currency in price_data:
-                    self.price_data[currency]['price'] = price_data[currency]
-                    self.price_data[currency]['total'] = price_data[currency] * self.holding_amount
-                    
-                    price_str = format_currency(price_data[currency], currency)
-                    status_messages.append(f"{currency.upper()}: {price_str}")
-                else:
-                    failed_currencies.append(currency)
-                    status_messages.append(f"{currency.upper()}: Error")
-            
-            if failed_currencies:
-                if len(failed_currencies) == len(Config.COINGECKO_CURRENCIES):
-                    status_str = "Price Update Error. Retrying..."
-                    status_color = self.theme.error
-                    QMessageBox.warning(self, "Price Update Failed", "Failed to retrieve price data from CoinGecko API. Retrying...")
-                else:
-                    failed_str = ", ".join([c.upper() for c in failed_currencies])
-                    status_str = f"Partial update: {failed_str} failed | {', '.join(status_messages)} | Last updated: {time.strftime('%H:%M:%S')}"
-                    status_color = self.theme.error
-                    QMessageBox.warning(self, "Partial Price Update", f"Failed to retrieve {failed_str} prices. Other prices updated successfully.")
-            else:
-                status_str = f"Prices updated: {', '.join(status_messages)} | Last updated: {time.strftime('%H:%M:%S')}"
-                status_color = self.theme.text
-            
-            self.price_status_label.setText(status_str)
-            self.price_status_label.setStyleSheet(f"color: {status_color};")
+    def _handle_billing_data_ready(self, billing_data: list, api_keys_data: list, analysis_days: int):
+        """Handle billing data received from worker thread."""
+        if billing_data:
+            self.cost_optimizer_widget.update_analysis(billing_data, api_keys_data, analysis_days)
+            logger.info(f"Cost analysis updated with {len(billing_data)} billing records")
         else:
-            status_str = "Price Update Error. Retrying..."
-            status_color = self.theme.error
-            self.price_status_label.setText(status_str)
-            self.price_status_label.setStyleSheet(f"color: {status_color};")
-            QMessageBox.warning(self, "Price Update Failed", "Failed to connect to CoinGecko API. Retrying...")
+            logger.warning("No billing data available for cost analysis")
+    
+    def _handle_cost_analysis_error(self, error_msg: str):
+        """Handle cost analysis error from worker thread."""
+        logger.error(f"Cost analysis error: {error_msg}")
+        # Could update UI to show error state if needed
+    
+    def _handle_cost_analysis_status(self, status_msg: str):
+        """Handle status updates from cost analysis worker."""
+        logger.debug(f"Cost analysis: {status_msg}")
+    
+    def _start_price_worker(self):
+        """Start the price worker thread to fetch CoinGecko prices."""
+        # Clean up any existing worker before creating a new one
+        if hasattr(self, 'price_worker') and self.price_worker is not None:
+            # Check if C++ object still exists
+            try:
+                from shiboken6 import isValid
+                if not isValid(self.price_worker):
+                    self.price_worker = None
+                else:
+                    if self.price_worker.isRunning():
+                        self.price_worker.quit()
+                        self.price_worker.wait(2000)
+                    try:
+                        self.price_worker.price_updated.disconnect()
+                        self.price_worker.error_occurred.disconnect()
+                    except (RuntimeError, TypeError):
+                        pass
+                    self.price_worker = None
+            except Exception:
+                self.price_worker = None
+        
+        # Create and configure worker
+        self.price_worker = PriceWorker(
+            token_id=Config.COINGECKO_TOKEN_ID,
+            currencies=Config.COINGECKO_CURRENCIES,
+            parent=self
+        )
+        self.price_worker.price_updated.connect(self._handle_price_update)
+        self.price_worker.error_occurred.connect(self._handle_price_error)
+        self.price_worker.finished.connect(self.price_worker.deleteLater)
+        self.price_worker.start()
+    
+    def _handle_price_update(self, price_data: dict):
+        """Handle price data received from worker thread."""
+        status_messages = []
+        failed_currencies = []
+        
+        for currency in Config.COINGECKO_CURRENCIES:
+            if currency in price_data:
+                self.price_data[currency]['price'] = price_data[currency]
+                self.price_data[currency]['total'] = price_data[currency] * self.holding_amount
+                
+                price_str = format_currency(price_data[currency], currency)
+                status_messages.append(f"{currency.upper()}: {price_str}")
+            else:
+                failed_currencies.append(currency)
+                status_messages.append(f"{currency.upper()}: N/A")
+        
+        if failed_currencies:
+            status_str = f"Partial update: {', '.join(status_messages)} | {time.strftime('%H:%M:%S')}"
+            status_color = self.theme.warning if hasattr(self.theme, 'warning') else self.theme.error
+        else:
+            status_str = f"Prices: {', '.join(status_messages)} | {time.strftime('%H:%M:%S')}"
+            status_color = self.theme.text
+        
+        self.price_status_label.setText(status_str)
+        self.price_status_label.setStyleSheet(f"color: {status_color};")
         
         # Update price displays
         self._update_price_display()
         
-        QTimer.singleShot(Config.COINGECKO_REFRESH_INTERVAL_MS, self.update_price_label)
+        # Schedule next update
+        QTimer.singleShot(Config.COINGECKO_REFRESH_INTERVAL_MS, self._start_price_worker)
+    
+    def _handle_price_error(self, error_msg: str):
+        """Handle price fetch error from worker thread."""
+        logger.error(f"Price fetch error: {error_msg}")
+        self.price_status_label.setText(f"Price update failed | {time.strftime('%H:%M:%S')}")
+        self.price_status_label.setStyleSheet(f"color: {self.theme.error};")
+        
+        # Schedule retry
+        QTimer.singleShot(Config.COINGECKO_REFRESH_INTERVAL_MS, self._start_price_worker)
+    
+    def update_price_label(self):
+        """Start price update via worker thread (non-blocking)."""
+        self._start_price_worker()
     
     def connect_thread(self):
         """Starts the API connection in a separate thread."""
@@ -1462,15 +1366,15 @@ class CombinedViewerApp(QMainWindow):
     
     def _init_usage_tracking(self):
         """Initialize the usage tracking system."""
-        # Create and connect the usage worker
-        self.usage_worker = UsageWorker(Config.VENICE_ADMIN_KEY)
+        # Create and connect the usage worker - pass self as parent to prevent GC
+        self.usage_worker = UsageWorker(Config.VENICE_ADMIN_KEY, parent=self)
         self.usage_worker.usage_data_updated.connect(self._update_usage_display)
         self.usage_worker.balance_data_updated.connect(self._update_balance_display)
         self.usage_worker.daily_usage_updated.connect(self._update_daily_usage_display)
         self.usage_worker.error_occurred.connect(self._handle_usage_error)
         
-        # Initialize web usage worker for unified leaderboard
-        self.web_usage_worker = WebUsageWorker(Config.VENICE_ADMIN_KEY)
+        # Initialize web usage worker for unified leaderboard - pass self as parent
+        self.web_usage_worker = WebUsageWorker(Config.VENICE_ADMIN_KEY, parent=self)
         self.web_usage_worker.progress_updated.connect(self._on_web_usage_progress)
         self.web_usage_worker.web_usage_updated.connect(self._on_web_usage_finished)
         self.web_usage_worker.error_occurred.connect(self._on_web_usage_error)
@@ -1603,12 +1507,12 @@ class CombinedViewerApp(QMainWindow):
             if hasattr(self, 'exchange_rate_service') and self.exchange_rate_service:
                 try:
                     rate_data = self.exchange_rate_service.get_rate()
-                    exchange_rate = rate_data.rate if rate_data else 0.72
+                    exchange_rate = rate_data.rate if rate_data else Config.DEFAULT_EXCHANGE_RATE
                 except Exception as e:
                     logger.warning(f"Failed to get exchange rate: {e}")
-                    exchange_rate = 0.72
+                    exchange_rate = Config.DEFAULT_EXCHANGE_RATE
             else:
-                exchange_rate = 0.72
+                exchange_rate = Config.DEFAULT_EXCHANGE_RATE
             
             self.hero_balance.update_usage_breakdown(
                 api_keys_diem=api_diem,
@@ -2214,7 +2118,7 @@ class CombinedViewerApp(QMainWindow):
             trend = self.usage_analytics.get_usage_trend(days=7)
             
             # Calculate days remaining estimate
-            current_rate = getattr(self.exchange_rate_service.current_rate, 'rate', 0.72) if self.exchange_rate_service.current_rate else 0.72
+            current_rate = getattr(self.exchange_rate_service.current_rate, 'rate', Config.DEFAULT_EXCHANGE_RATE) if self.exchange_rate_service.current_rate else Config.DEFAULT_EXCHANGE_RATE
             days_remaining = self.usage_analytics.estimate_days_remaining(balance_info.usd)
             trend.days_remaining_estimate = days_remaining
             
@@ -2237,7 +2141,7 @@ class CombinedViewerApp(QMainWindow):
                 self.hero_balance_display.update_balance(
                     balance_info.diem, 
                     balance_info.usd, 
-                    0.72  # Fallback rate
+                    Config.DEFAULT_EXCHANGE_RATE  # Fallback rate
                 )
     
     def get_usage_analytics_summary(self) -> Dict[str, any]:
