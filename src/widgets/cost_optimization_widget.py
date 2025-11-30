@@ -8,9 +8,9 @@ opportunities to switch to more cost-effective models.
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                               QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
                               QProgressBar, QFrame, QTabWidget, QComboBox, QSpinBox,
-                              QSizePolicy, QScrollArea)
-from PySide6.QtCore import Qt, Signal, QThread
-from PySide6.QtGui import QFont, QColor, QBrush
+                              QSizePolicy, QScrollArea, QStyledItemDelegate, QStyleOptionViewItem)
+from PySide6.QtCore import Qt, Signal, QThread, QModelIndex
+from PySide6.QtGui import QFont, QColor, QBrush, QPainter, QPen
 from shiboken6 import isValid
 from typing import List, Dict, Optional
 import logging
@@ -51,6 +51,70 @@ class CostOptimizerWorker(QThread):
         except Exception as e:
             # Don't use logger in worker thread - emit signal for main thread to log
             self.error_occurred.emit(f"Cost analysis failed: {e}")
+
+
+class PercentageBarDelegate(QStyledItemDelegate):
+    """Custom delegate for rendering percentage bars with proportional width and threshold colors"""
+    
+    def __init__(self, theme, parent=None):
+        super().__init__(parent)
+        self.theme = theme
+    
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index: QModelIndex):
+        """Paint the percentage bar with proportional width"""
+        # Get the percentage value from user role
+        percentage = index.data(Qt.UserRole)
+        if percentage is None:
+            super().paint(painter, option, index)
+            return
+        
+        painter.save()
+        
+        # Draw background
+        bg_color = QColor(self.theme.card_background)
+        painter.fillRect(option.rect, bg_color)
+        
+        # Calculate bar dimensions
+        rect = option.rect.adjusted(4, 4, -4, -4)
+        bar_width = int(rect.width() * (percentage / 100.0))
+        bar_rect = rect.adjusted(0, 0, 0, 0)
+        bar_rect.setWidth(max(bar_width, 2))  # Minimum width of 2 pixels
+        
+        # Determine bar color based on percentage thresholds
+        if percentage > 30:
+            bar_color = QColor(self.theme.error)
+        elif percentage > 15:
+            bar_color = QColor(self.theme.warning)
+        else:
+            bar_color = QColor(self.theme.success)
+        
+        # Draw the bar with rounded corners
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(bar_color)
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(bar_rect, 3, 3)
+        
+        # Draw the percentage text
+        text = index.data(Qt.DisplayRole)
+        if text:
+            # Draw text with contrasting color
+            text_color = QColor(self.theme.text)
+            painter.setPen(text_color)
+            painter.setFont(option.font)
+            # Position text to the right of the bar or inside if bar is wide enough
+            if bar_width > 50:
+                painter.drawText(bar_rect.adjusted(6, 0, 0, 0), Qt.AlignLeft | Qt.AlignVCenter, text)
+            else:
+                text_rect = rect.adjusted(bar_width + 6, 0, 0, 0)
+                painter.drawText(text_rect, Qt.AlignLeft | Qt.AlignVCenter, text)
+        
+        painter.restore()
+    
+    def sizeHint(self, option: QStyleOptionViewItem, index: QModelIndex):
+        """Provide size hint for the item"""
+        size = super().sizeHint(option, index)
+        size.setHeight(max(size.height(), 28))
+        return size
 
 
 class CostOptimizationWidget(QWidget):
@@ -195,9 +259,22 @@ class CostOptimizationWidget(QWidget):
         self.breakdown_table.setHorizontalHeaderLabels([
             "Model", "Requests", "Avg Tokens", "Total Cost", "% of Total"
         ])
-        self.breakdown_table.horizontalHeader().setStretchLastSection(True)
+        # Set column resize modes - all columns resize to content, last section stretches to fill
+        header = self.breakdown_table.horizontalHeader()
+        header.setStretchLastSection(True)  # Last column (% of Total) stretches to fill remaining space
+        header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # Model
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Requests
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Avg Tokens
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Total Cost
+        header.setSectionResizeMode(4, QHeaderView.Stretch)  # % of Total - stretches to fill
+        header.setMinimumSectionSize(80)  # Minimum width for any column
+        
         self.breakdown_table.setStyleSheet(self._get_table_style())
         self.breakdown_table.setAlternatingRowColors(True)
+        
+        # Install custom delegate for percentage column to render proportional bars
+        self.percentage_delegate = PercentageBarDelegate(self.theme, self.breakdown_table)
+        self.breakdown_table.setItemDelegateForColumn(4, self.percentage_delegate)
         
         breakdown_layout.addWidget(self.breakdown_table)
         breakdown_group.setLayout(breakdown_layout)
@@ -381,21 +458,14 @@ class CostOptimizationWidget(QWidget):
             cost_text = f"{format_currency(total_cost, 'DIEM')}"
             self.breakdown_table.setItem(row, 3, QTableWidgetItem(cost_text))
             
-            # Percentage
+            # Percentage - store both display text and raw value for delegate
             pct_item = QTableWidgetItem(f"{stats.percentage_of_total:.1f}%")
+            pct_item.setData(Qt.UserRole, stats.percentage_of_total)  # Store raw value for bar rendering
             self.breakdown_table.setItem(row, 4, pct_item)
-            
-            # Color code by percentage
-            if stats.percentage_of_total > 30:
-                color = QColor(self.theme.error if hasattr(self.theme, 'error') else "#ff6b6b")
-            elif stats.percentage_of_total > 15:
-                color = QColor(self.theme.warning if hasattr(self.theme, 'warning') else "#ffa500")
-            else:
-                color = QColor(self.theme.success if hasattr(self.theme, 'success') else "#51cf66")
-            
-            pct_item.setBackground(QBrush(color))
         
-        self.breakdown_table.resizeColumnsToContents()
+        # Resize only content columns (0-3), not the fixed-width percentage column (4)
+        for col in range(4):
+            self.breakdown_table.resizeColumnToContents(col)
     
     def _update_recommendations_tab(self, report: CostOptimizationReport):
         """Update the recommendations tab with report data"""
@@ -434,13 +504,13 @@ class CostOptimizationWidget(QWidget):
             api_keys_item = QTableWidgetItem(api_keys_text)
             api_keys_item.setFont(QFont("Arial", 9))
             
-            # Color code by confidence level
+            # Color code by confidence level using theme colors
             if api_keys_text.startswith("Confirmed:"):
-                api_keys_item.setForeground(QBrush(QColor("#51cf66")))  # Green - confirmed
+                api_keys_item.setForeground(QBrush(QColor(self.theme.success)))  # Green - confirmed
             elif api_keys_text.startswith("Likely:"):
                 api_keys_item.setForeground(QBrush(QColor(self.theme.accent)))  # Accent - likely
             else:
-                api_keys_item.setForeground(QBrush(QColor("#ffa500")))  # Orange - possibly/unknown
+                api_keys_item.setForeground(QBrush(QColor(self.theme.warning)))  # Warning - possibly/unknown
             
             self.recommendations_table.setItem(row, 2, api_keys_item)
             
@@ -453,14 +523,14 @@ class CostOptimizationWidget(QWidget):
             savings_item.setForeground(QBrush(QColor(self.theme.accent)))
             self.recommendations_table.setItem(row, 4, savings_item)
             
-            # Confidence
+            # Confidence using theme colors
             confidence_item = QTableWidgetItem(rec.confidence.upper())
             if rec.confidence == "high":
-                confidence_item.setForeground(QBrush(QColor("#51cf66")))
+                confidence_item.setForeground(QBrush(QColor(self.theme.success)))
             elif rec.confidence == "medium":
-                confidence_item.setForeground(QBrush(QColor("#ffa500")))
+                confidence_item.setForeground(QBrush(QColor(self.theme.warning)))
             else:
-                confidence_item.setForeground(QBrush(QColor("#ff6b6b")))
+                confidence_item.setForeground(QBrush(QColor(self.theme.error)))
             self.recommendations_table.setItem(row, 5, confidence_item)
             
             # Reason
