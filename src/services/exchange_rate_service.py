@@ -14,6 +14,11 @@ from PySide6.QtCore import QThread, Signal, QTimer, QObject, Qt
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
 import json
 import os
+import logging
+
+from src.config.config import Config
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -172,7 +177,7 @@ class ExchangeRateService(QObject):
                     json.dump(cache_data, f, indent=2)
                     
         except Exception as e:
-            print(f"Warning: Failed to save rate cache: {e}")
+            logger.warning(f"Failed to save rate cache: {e}")
     
     def load_cached_rate(self) -> None:
         """Load cached rate from file."""
@@ -193,10 +198,10 @@ class ExchangeRateService(QObject):
                         source=cache_data.get("source", "cached"),
                         confidence=float(cache_data.get("confidence", 0.8))
                     )
-                    print(f"Loaded cached exchange rate: {self.current_rate.rate}")
+                    logger.debug(f"Loaded cached exchange rate: {self.current_rate.rate}")
                 
         except Exception as e:
-            print(f"Warning: Failed to load rate cache: {e}")
+            logger.warning(f"Failed to load rate cache: {e}")
 
 
 class ExchangeRateWorker(QThread):
@@ -224,8 +229,8 @@ class ExchangeRateWorker(QThread):
             if rate_data:
                 self.rate_fetched.emit(rate_data)
                 return
-        except Exception as e:
-            print(f"Venice API rate fetch failed: {e}")
+        except Exception:
+            pass  # Try next source
         
         # Fallback to CoinGecko
         try:
@@ -233,8 +238,8 @@ class ExchangeRateWorker(QThread):
             if rate_data:
                 self.rate_fetched.emit(rate_data)
                 return
-        except Exception as e:
-            print(f"CoinGecko rate fetch failed: {e}")
+        except Exception:
+            pass  # Try next source
         
         # Fallback to fixed rate (last resort)
         try:
@@ -242,8 +247,8 @@ class ExchangeRateWorker(QThread):
             if rate_data:
                 self.rate_fetched.emit(rate_data)
                 return
-        except Exception as e:
-            print(f"Fallback rate failed: {e}")
+        except Exception:
+            pass  # All sources failed
         
         # If all sources fail
         self.error_occurred.emit("Failed to fetch exchange rate from all sources")
@@ -282,7 +287,7 @@ class ExchangeRateWorker(QThread):
                     )
             
         except Exception as e:
-            print(f"Venice API request failed: {e}")
+            logger.error(f"Venice API request failed: {e}")
         
         return None
     
@@ -328,7 +333,7 @@ class ExchangeRateWorker(QThread):
                         )
             
         except Exception as e:
-            print(f"CoinGecko request failed: {e}")
+            logger.debug(f"CoinGecko request failed: {e}")
         
         return None
     
@@ -339,8 +344,8 @@ class ExchangeRateWorker(QThread):
         Returns:
             ExchangeRateData with estimated rate
         """
-        # Use a reasonable fallback rate (should be configurable)
-        fallback_rate = 0.72  # Example rate
+        # Use configurable fallback rate
+        fallback_rate = Config.DEFAULT_EXCHANGE_RATE
         
         return ExchangeRateData(
             rate=fallback_rate,

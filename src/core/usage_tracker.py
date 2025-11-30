@@ -7,11 +7,14 @@ from dataclasses import dataclass
 from typing import List, Dict, Any
 import requests
 import json
+import logging
 from datetime import datetime, timezone
 from PySide6.QtCore import QThread, Signal
 
 from src.core.venice_api_client import VeniceAPIClient
 from src.utils.date_utils import DateFormatter
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -98,7 +101,7 @@ class UsageWorker(QThread):
         Returns:
             List of APIKeyUsage objects containing usage information for each key
         """
-        print("WARNING: Using deprecated fetch_api_keys_usage method. Use fetch_api_keys_with_daily_usage instead.")
+        logger.warning("Using deprecated fetch_api_keys_usage method. Use fetch_api_keys_with_daily_usage instead.")
         try:
             # Get list of API keys
             keys_response = self.api_client.get("/api_keys")

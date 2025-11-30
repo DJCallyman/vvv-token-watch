@@ -3,12 +3,17 @@
 ## Project Overview
 PySide6 desktop application for monitoring Venice AI API usage, model status, and cryptocurrency prices. Built on Qt6 with threaded architecture for non-blocking API calls and real-time data updates.
 
+## Features NOT Needed
+- **Rate Limit Tracking** - Not a feature I use or need. Do not implement rate limit monitoring, `/api_keys/rate_limits/log` endpoint integration, or rate limit header parsing.
+
 ## Architecture & Core Patterns
 
 ### Threading Model (Critical)
 All API calls MUST run in `QThread` workers to prevent UI freezing:
 - `UsageWorker` - Venice API usage/billing data (emits: `usage_data_updated`, `balance_data_updated`, `daily_usage_updated`)
 - `WebUsageWorker` - Web app usage tracking (emits: `web_usage_updated`)
+- `PriceWorker` - CoinGecko price fetching (emits: `price_updated`, `error_occurred`)
+- `CostAnalysisWorker` - Billing data for cost optimization (emits: `billing_data_ready`, `error_occurred`)
 - `APIWorker` - Generic API requests (emits: `result` via `WorkerSignals`)
 
 **Never call `requests.get()` directly from main thread** - always use worker threads.
@@ -23,10 +28,10 @@ python run.py  # NOT python src/main.py
 `VeniceAPIClient` (in `src/core/venice_api_client.py`) is the base class for all API interactions:
 ```python
 client = VeniceAPIClient(api_key)
-response = client.get("/billing/usage", params={}, timeout=30)
+response = client.get("/billing/usage", params={}, timeout=30)  # Has automatic retry with exponential backoff
 data = response.json()
 ```
-Provides shared config: `BASE_URL`, headers with Bearer auth, GET/POST methods. Workers inherit or instantiate this.
+Provides shared config: `BASE_URL`, headers with Bearer auth, GET/POST methods with retry logic (3 attempts, exponential backoff). Workers inherit or instantiate this.
 
 ### Configuration System
 `Config` class (in `src/config/config.py`) loads from `.env` via `python-dotenv`:

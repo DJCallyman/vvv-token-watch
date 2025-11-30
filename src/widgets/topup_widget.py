@@ -6,12 +6,15 @@ including preset amounts and custom input options.
 """
 
 import webbrowser
+import logging
 from typing import Dict, Optional
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                                 QLabel, QFrame, QComboBox, QLineEdit, QDialog,
                                 QDialogButtonBox, QMessageBox, QSpacerItem, QSizePolicy)
 from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve, QTimer
 from PySide6.QtGui import QFont, QPalette, QColor
+
+logger = logging.getLogger(__name__)
 
 
 class CustomTopUpDialog(QDialog):
@@ -387,7 +390,7 @@ class TopUpWidget(QWidget):
                 self.show_feedback("Please visit venice.ai/billing to add credits")
                 
         except Exception as e:
-            print(f"Failed to open billing page: {e}")
+            logger.error(f"Failed to open billing page: {e}")
             self.show_feedback("Please visit venice.ai/billing to add credits")
     
     def animate_button_click(self):
@@ -416,9 +419,9 @@ class TopUpWidget(QWidget):
         Args:
             message: Feedback message to display
         """
-        # For now, print to console. In a full implementation, 
+        # For now, log to console. In a full implementation, 
         # this could show a temporary tooltip or status message
-        print(f"TopUp Feedback: {message}")
+        logger.info(f"TopUp Feedback: {message}")
         
         # Could also emit a signal for the main app to show in status bar
         # self.feedback_message.emit(message)
@@ -496,7 +499,7 @@ def create_compact_topup_button(theme_colors: Dict[str, str], parent=None) -> QP
         try:
             webbrowser.open("https://venice.ai/billing")
         except Exception as e:
-            print(f"Failed to open billing page: {e}")
+            logger.error(f"Failed to open billing page: {e}")
     
     button.clicked.connect(handle_click)
     return button

@@ -7,9 +7,12 @@ from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta
 import json
 import os
+import logging
 from dataclasses import dataclass
 
 from src.core.usage_tracker import APIKeyUsage, UsageMetrics
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -45,7 +48,7 @@ class UsageReportGenerator:
                 with open(data_file, 'r') as f:
                     self.historical_data = json.load(f)
         except Exception as e:
-            print(f"Warning: Could not load historical usage data: {e}")
+            logger.warning(f"Could not load historical usage data: {e}")
             self.historical_data = {}
     
     def save_historical_data(self):
@@ -57,7 +60,7 @@ class UsageReportGenerator:
             with open(data_file, 'w') as f:
                 json.dump(self.historical_data, f, indent=2)
         except Exception as e:
-            print(f"Warning: Could not save historical usage data: {e}")
+            logger.warning(f"Could not save historical usage data: {e}")
     
     def record_usage_snapshot(self, api_key_usage: APIKeyUsage):
         """Record a usage snapshot for historical tracking"""

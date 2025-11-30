@@ -88,7 +88,7 @@ class APIWorkerFactory:
         from src.analytics.model_comparison import ModelAnalyticsWorker
         
         key = api_key or Config.VENICE_ADMIN_KEY
-        return ModelAnalyticsWorker(key)
+        return ModelAnalyticsWorker(key, parent)
     
     @staticmethod
     def create_exchange_rate_worker(parent=None):

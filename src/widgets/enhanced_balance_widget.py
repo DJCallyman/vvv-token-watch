@@ -21,6 +21,7 @@ from src.widgets.status_indicator import StatusIndicator, UsageStatusIndicator
 from src.analytics.usage_analytics import UsageAnalytics, UsageTrend, format_trend_display, format_days_remaining
 from src.services.exchange_rate_service import ExchangeRateData, format_rate_display
 from src.utils.date_utils import DateFormatter
+from src.config.config import Config
 
 
 class HeroBalanceWidget(QWidget):
@@ -492,7 +493,7 @@ class HeroBalanceWidget(QWidget):
         self.current_rate_data = rate_data
         
         # Update basic balance
-        self.update_balance(balance_info.diem, balance_info.usd, rate_data.rate if rate_data else 0.72)
+        self.update_balance(balance_info.diem, balance_info.usd, rate_data.rate if rate_data else Config.DEFAULT_EXCHANGE_RATE)
         
         # Update trend display
         trend_text = format_trend_display(trend)

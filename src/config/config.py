@@ -12,6 +12,17 @@ class Config:
     VENICE_API_KEY = os.getenv('VENICE_API_KEY')
     VENICE_ADMIN_KEY = os.getenv('VENICE_ADMIN_KEY')  # Must be explicitly set to a Venice Admin API key
     
+    # API Pagination Settings
+    API_PAGE_SIZE = int(os.getenv('API_PAGE_SIZE', '500'))
+    API_MAX_PAGES = int(os.getenv('API_MAX_PAGES', '20'))
+    
+    # Default Limits (conservative daily spending limits)
+    DEFAULT_DAILY_DIEM_LIMIT = float(os.getenv('DEFAULT_DAILY_DIEM_LIMIT', '100.0'))
+    DEFAULT_DAILY_USD_LIMIT = float(os.getenv('DEFAULT_DAILY_USD_LIMIT', '25.0'))
+    
+    # Fallback Exchange Rate (DIEM to USD) when APIs are unavailable
+    DEFAULT_EXCHANGE_RATE = float(os.getenv('DEFAULT_EXCHANGE_RATE', '0.72'))
+    
     # IMPORTANT: For billing/usage endpoints, you MUST use a Venice Admin API key
     # Regular API keys will return 401 Unauthorized for /billing/usage endpoint
     
@@ -43,10 +54,19 @@ class Config:
         
     @classmethod
     def get_all_settings(cls) -> Dict[str, Any]:
-        """Get all configuration settings for debugging purposes."""
+        """Get all configuration settings for debugging purposes.
+        
+        Note: API keys are masked for security - only first 8 characters shown.
+        """
+        def mask_key(key: str) -> str:
+            """Mask API key showing only first 8 characters."""
+            if not key:
+                return None
+            return f"{key[:8]}..." if len(key) > 8 else "***"
+        
         return {
-            'VENICE_API_KEY': cls.VENICE_API_KEY,
-            'VENICE_ADMIN_KEY': cls.VENICE_ADMIN_KEY,
+            'VENICE_API_KEY': mask_key(cls.VENICE_API_KEY),
+            'VENICE_ADMIN_KEY': mask_key(cls.VENICE_ADMIN_KEY),
             'COINGECKO_TOKEN_ID': cls.COINGECKO_TOKEN_ID,
             'COINGECKO_CURRENCIES': cls.COINGECKO_CURRENCIES,
             'COINGECKO_HOLDING_AMOUNT': cls.COINGECKO_HOLDING_AMOUNT,

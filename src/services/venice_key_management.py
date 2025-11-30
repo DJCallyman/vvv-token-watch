@@ -4,12 +4,15 @@ Handles actual API calls to Venice.ai for key management operations.
 """
 
 import requests
+import logging
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 import json
 
 from src.config.config import Config
 from src.core.venice_api_client import VeniceAPIClient
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -71,7 +74,7 @@ class VeniceKeyManagementService:
             return keys
             
         except Exception as e:
-            print(f"ERROR: Failed to fetch API keys: {e}")
+            logger.error(f"Failed to fetch API keys: {e}")
             return []
     
     def rename_api_key(self, key_id: str, new_description: str) -> bool:
@@ -88,12 +91,12 @@ class VeniceKeyManagementService:
         Returns:
             False - This operation is not supported by Venice API
         """
-        print(f"WARNING: Venice API does not support renaming existing keys")
-        print(f"The Venice API specification only provides GET, POST, and DELETE operations for API keys")
-        print(f"To change a key's description, you would need to:")
-        print(f"  1. Create a new key with the desired description")
-        print(f"  2. Update your applications to use the new key")
-        print(f"  3. Delete the old key")
+        logger.warning("Venice API does not support renaming existing keys")
+        logger.warning("The Venice API specification only provides GET, POST, and DELETE operations for API keys")
+        logger.warning("To change a key's description, you would need to:")
+        logger.warning("  1. Create a new key with the desired description")
+        logger.warning("  2. Update your applications to use the new key")
+        logger.warning("  3. Delete the old key")
         return False
     
     def revoke_api_key(self, key_id: str) -> bool:
@@ -112,17 +115,17 @@ class VeniceKeyManagementService:
             if response.status_code == 200:
                 result = response.json()
                 if result.get("success", False):
-                    print(f"SUCCESS: Key {key_id} revoked successfully")
+                    logger.info(f"Key {key_id} revoked successfully")
                     return True
                 else:
-                    print(f"ERROR: Revocation failed - API returned success=false")
+                    logger.error("Revocation failed - API returned success=false")
                     return False
             else:
-                print(f"ERROR: Revocation failed: {response.status_code} - {response.text}")
+                logger.error(f"Revocation failed: {response.status_code} - {response.text}")
                 return False
                 
         except Exception as e:
-            print(f"ERROR: Exception during revocation: {e}")
+            logger.error(f"Exception during revocation: {e}")
             return False
     
     def set_consumption_limits(self, key_id: str, usd_limit: Optional[float] = None, 
@@ -141,13 +144,13 @@ class VeniceKeyManagementService:
         Returns:
             False - This operation is not supported by Venice API
         """
-        print(f"WARNING: Venice API does not support setting consumption limits on existing keys")
-        print(f"The Venice API specification only provides GET, POST, and DELETE operations for API keys")
-        print(f"Consumption limits can only be set during key creation (POST /api_keys)")
-        print(f"To set limits on an existing key, you would need to:")
-        print(f"  1. Create a new key with the desired consumption limits")
-        print(f"  2. Update your applications to use the new key")
-        print(f"  3. Delete the old key")
+        logger.warning("Venice API does not support setting consumption limits on existing keys")
+        logger.warning("The Venice API specification only provides GET, POST, and DELETE operations for API keys")
+        logger.warning("Consumption limits can only be set during key creation (POST /api_keys)")
+        logger.warning("To set limits on an existing key, you would need to:")
+        logger.warning("  1. Create a new key with the desired consumption limits")
+        logger.warning("  2. Update your applications to use the new key")
+        logger.warning("  3. Delete the old key")
         return False
     
     def create_api_key(self, description: str, api_key_type: str = "INFERENCE",
@@ -189,17 +192,17 @@ class VeniceKeyManagementService:
             if response.status_code == 200:
                 result = response.json()
                 if result.get("success", False):
-                    print(f"SUCCESS: Created new API key '{description}'")
+                    logger.info(f"Created new API key '{description}'")
                     return result.get("data")
                 else:
-                    print(f"ERROR: Creation failed - API returned success=false")
+                    logger.error("Creation failed - API returned success=false")
                     return None
             else:
-                print(f"ERROR: Creation failed: {response.status_code} - {response.text}")
+                logger.error(f"Creation failed: {response.status_code} - {response.text}")
                 return None
                 
         except Exception as e:
-            print(f"ERROR: Exception during key creation: {e}")
+            logger.error(f"Exception during key creation: {e}")
             return None
     
     def test_key_management_capabilities(self) -> Dict[str, bool]:
@@ -227,7 +230,7 @@ class VeniceKeyManagementService:
             capabilities["list_keys"] = (response.status_code == 200)
             
         except Exception as e:
-            print(f"WARNING: Exception during capability testing: {e}")
+            logger.warning(f"Exception during capability testing: {e}")
             # Fall back to API spec-based capabilities
         
         return capabilities
@@ -245,6 +248,6 @@ def get_key_management_service() -> Optional[VeniceKeyManagementService]:
         if admin_key:
             _key_management_service = VeniceKeyManagementService(admin_key)
         else:
-            print("WARNING: No VENICE_ADMIN_KEY configured - key management unavailable")
+            logger.warning("No VENICE_ADMIN_KEY configured - key management unavailable")
     
     return _key_management_service
