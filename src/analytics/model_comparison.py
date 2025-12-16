@@ -663,14 +663,23 @@ class ModelComparisonWidget(QWidget):
         
         self.comparison_table.setStyleSheet(f"""
             QTableWidget {{
-                background-color: {self.theme.card_background};
+                background-color: {self.theme.background};
                 color: {self.theme.text};
                 border: 1px solid {self.theme.accent};
                 border-radius: 4px;
                 gridline-color: {self.theme.accent};
             }}
-            QHeaderView::section {{
+            QTableWidget::item {{
                 background-color: {self.theme.background};
+                color: {self.theme.text};
+                padding: 5px;
+            }}
+            QTableWidget::item:selected {{
+                background-color: {self.theme.accent};
+                color: {self.theme.text};
+            }}
+            QHeaderView::section {{
+                background-color: {self.theme.card_background};
                 color: {self.theme.text};
                 padding: 8px;
                 border: 1px solid {self.theme.accent};
@@ -1113,14 +1122,7 @@ class ModelComparisonWidget(QWidget):
         requests = [requests[i] for i in sorted_indices]
         
         # Define vibrant color palette based on theme - use accent as primary
-        primary_colors = [
-            accent_color,  # Theme accent
-            self.theme.success,  # Green
-            '#2196F3',  # Blue
-            '#FF9800',  # Orange
-            '#9C27B0',  # Purple
-            '#00BCD4',  # Cyan
-        ]
+        primary_colors = self.theme.chart_colors
         bar_colors = [primary_colors[i % len(primary_colors)] for i in range(len(models))]
         
         # Shorten model names for display if they're too long
@@ -1215,14 +1217,7 @@ class ModelComparisonWidget(QWidget):
         tokens = [tokens[i] for i in sorted_indices]
         
         # Define vibrant color palette
-        primary_colors = [
-            '#2196F3',  # Blue
-            accent_color,  # Theme accent
-            self.theme.success,  # Green
-            '#FF9800',  # Orange
-            '#9C27B0',  # Purple
-            '#00BCD4',  # Cyan
-        ]
+        primary_colors = self.theme.chart_colors
         bar_colors = [primary_colors[i % len(primary_colors)] for i in range(len(models))]
         
         # Shorten model names for display if they're too long
@@ -1320,15 +1315,9 @@ class ModelComparisonWidget(QWidget):
         costs = [costs[i] for i in sorted_indices]
         
         # Define vibrant color palette matching other charts
-        colors_pie = [
-            accent_color,  # Theme accent
-            self.theme.success,  # Green
-            '#2196F3',  # Blue
-            '#FF9800',  # Orange
-            '#9C27B0',  # Purple
-            '#00BCD4',  # Cyan
-            '#E91E63',  # Pink
-            '#795548',  # Brown
+        colors_pie = self.theme.chart_colors + [
+            '#E91E63',  # Additional pink for more slices
+            '#795548',  # Additional brown for more slices
         ]
         
         # Filter to non-zero costs only
@@ -1457,3 +1446,226 @@ class ModelComparisonWidget(QWidget):
 
         # Also refresh model data if needed
         # This would typically fetch new model data from the API
+    
+    def update_theme(self, new_theme):
+        """Update widget theme and redraw all components.
+        
+        Args:
+            new_theme: New Theme object
+        """
+        self.theme = new_theme
+        
+        # Update all styled components
+        self._apply_theme_to_widgets()
+        
+        # Redraw charts with new theme colors
+        if self.current_analytics:
+            self.render_requests_chart(self.current_analytics)
+            self.render_tokens_chart(self.current_analytics)
+            self.render_cost_chart(self.current_analytics)
+    
+    def _apply_theme_to_widgets(self):
+        """Apply theme to all widgets in the comparison view."""
+        # Update all components with theme-dependent styling
+        
+        # Update buttons
+        if hasattr(self, 'connect_btn'):
+            self.connect_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {self.theme.card_background};
+                    color: {self.theme.text};
+                    border: 1px solid {self.theme.accent};
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: {self.theme.accent};
+                }}
+            """)
+        
+        if hasattr(self, 'refresh_btn'):
+            self.refresh_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {self.theme.card_background};
+                    color: {self.theme.text};
+                    border: 1px solid {self.theme.accent};
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                }}
+                QPushButton:hover {{
+                    background-color: {self.theme.accent};
+                }}
+            """)
+        
+        # Update tab widget
+        if hasattr(self, 'tab_widget'):
+            self.tab_widget.setStyleSheet(f"""
+                QTabWidget::pane {{
+                    border: 1px solid {self.theme.border};
+                    background-color: {self.theme.card_background};
+                }}
+                QTabBar::tab {{
+                    background-color: {self.theme.button_background};
+                    color: {self.theme.text};
+                    padding: 8px 16px;
+                    border: 1px solid {self.theme.border};
+                }}
+                QTabBar::tab:selected {{
+                    background-color: {self.theme.accent};
+                    color: {self.theme.text};
+                }}
+            """)
+        
+        # Update chart backgrounds
+        if hasattr(self, 'requests_chart'):
+            self.requests_chart.setStyleSheet(f"background-color: {self.theme.card_background};")
+        if hasattr(self, 'tokens_chart'):
+            self.tokens_chart.setStyleSheet(f"background-color: {self.theme.card_background};")
+        if hasattr(self, 'cost_chart'):
+            self.cost_chart.setStyleSheet(f"background-color: {self.theme.card_background};")
+        
+        # Update chart tabs widget
+        if hasattr(self, 'chart_tabs'):
+            self.chart_tabs.setStyleSheet(f"""
+                QTabWidget::pane {{
+                    border: 1px solid {self.theme.accent};
+                    background-color: {self.theme.background};
+                }}
+                QTabBar::tab {{
+                    background-color: {self.theme.card_background};
+                    color: {self.theme.text};
+                    padding: 10px 20px;
+                    margin-right: 2px;
+                    border-radius: 4px 4px 0 0;
+                    font-size: 13px;
+                }}
+                QTabBar::tab:selected {{
+                    background-color: {self.theme.accent};
+                    color: {self.theme.text};
+                    font-weight: bold;
+                }}
+            """)
+        
+        # Update comparison table
+        if hasattr(self, 'comparison_table'):
+            self.comparison_table.setStyleSheet(f"""
+                QTableWidget {{
+                    background-color: {self.theme.background};
+                    alternate-background-color: {self.theme.card_background};
+                    color: {self.theme.text};
+                    gridline-color: {self.theme.border};
+                    border: 1px solid {self.theme.border};
+                }}
+                QTableWidget::item {{
+                    background-color: {self.theme.background};
+                    color: {self.theme.text};
+                    padding: 5px;
+                }}
+                QTableWidget::item:selected {{
+                    background-color: {self.theme.accent};
+                    color: {self.theme.text};
+                }}
+                QHeaderView::section {{
+                    background-color: {self.theme.card_background};
+                    color: {self.theme.text};
+                    padding: 5px;
+                    border: 1px solid {self.theme.border};
+                    font-weight: bold;
+                }}
+            """)
+        
+        # Update search input
+        if hasattr(self, 'search_input'):
+            self.search_input.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {self.theme.input_background};
+                    color: {self.theme.text};
+                    border: 1px solid {self.theme.border};
+                    border-radius: 4px;
+                    padding: 6px;
+                }}
+                QLineEdit:focus {{
+                    border: 2px solid {self.theme.accent};
+                }}
+            """)
+        
+        # Update comboboxes
+        if hasattr(self, 'type_filter'):
+            self.type_filter.setStyleSheet(self._get_combobox_style())
+        
+        # Update recommendation text
+        if hasattr(self, 'recommendations_text'):
+            self.recommendations_text.setStyleSheet(f"""
+                QTextEdit {{
+                    background-color: {self.theme.card_background};
+                    color: {self.theme.text};
+                    border: 1px solid {self.theme.border};
+                    border-radius: 4px;
+                    padding: 10px;
+                }}
+            """)
+        
+        # Update Smart Recommendations QGroupBox
+        for groupbox in self.findChildren(QGroupBox):
+            if groupbox.title() == "Smart Recommendations":
+                groupbox.setStyleSheet(f"""
+                    QGroupBox {{
+                        font-weight: bold;
+                        border: 1px solid {self.theme.accent};
+                        border-radius: 4px;
+                        margin-top: 10px;
+                        padding: 10px;
+                        background-color: {self.theme.card_background};
+                        color: {self.theme.text};
+                    }}
+                    QGroupBox::title {{
+                        subcontrol-origin: margin;
+                        left: 10px;
+                        padding: 0 5px 0 5px;
+                        color: {self.theme.accent};
+                    }}
+                """)
+            elif "Search & Filter Models" in groupbox.title():
+                groupbox.setStyleSheet(f"""
+                    QGroupBox {{
+                        font-weight: bold;
+                        border: 1px solid {self.theme.accent};
+                        border-radius: 4px;
+                        margin-top: 10px;
+                        padding: 10px;
+                        background-color: {self.theme.card_background};
+                        color: {self.theme.text};
+                    }}
+                    QGroupBox::title {{
+                        subcontrol-origin: margin;
+                        left: 10px;
+                        padding: 0 5px 0 5px;
+                        color: {self.theme.accent};
+                    }}
+                """)
+        
+        # Update Browse Models filter controls
+        if hasattr(self, 'vision_chk'):
+            for chk in [self.vision_chk, self.web_chk, self.function_chk, self.reasoning_chk]:
+                chk.setStyleSheet(f"color: {self.theme.text}; margin-right: 10px;")
+        
+        # Update filter labels
+        for label in self.findChildren(QLabel):
+            # Skip labels that have specific styling (like results count)
+            style = label.styleSheet()
+            if "Type:" in label.text() or "Capabilities:" in label.text() or "Max Input" in label.text():
+                label.setStyleSheet(f"color: {self.theme.text};")
+            elif "models" in label.text() and hasattr(self, 'results_count_label') and label == self.results_count_label:
+                label.setStyleSheet(f"color: {self.theme.text_secondary}; font-size: 12px;")
+        
+        # Update price filter input
+        if hasattr(self, 'price_filter'):
+            self.price_filter.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {self.theme.input_background};
+                    color: {self.theme.text};
+                    border: 1px solid {self.theme.accent};
+                    border-radius: 4px;
+                    padding: 4px;
+                }}
+            """)
