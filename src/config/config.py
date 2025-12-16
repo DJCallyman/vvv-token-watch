@@ -26,12 +26,17 @@ class Config:
     # IMPORTANT: For billing/usage endpoints, you MUST use a Venice Admin API key
     # Regular API keys will return 401 Unauthorized for /billing/usage endpoint
     
-    # CoinGecko Configuration
+    # CoinGecko Configuration - Venice Token
     COINGECKO_TOKEN_ID = os.getenv('COINGECKO_TOKEN_ID', 'venice-token')
     COINGECKO_CURRENCIES = os.getenv('COINGECKO_CURRENCIES', 'usd,aud').split(',')
     COINGECKO_HOLDING_AMOUNT = float(os.getenv('COINGECKO_HOLDING_AMOUNT', '2750'))
     COINGECKO_REFRESH_INTERVAL_MS = int(os.getenv('COINGECKO_REFRESH_INTERVAL_MS', '60000'))
     COINGECKO_INITIAL_DELAY_MS = int(os.getenv('COINGECKO_INITIAL_DELAY_MS', '500'))
+    
+    # CoinGecko Configuration - DIEM Token
+    DIEM_TOKEN_ID = os.getenv('DIEM_TOKEN_ID', 'diem')
+    DIEM_HOLDING_AMOUNT = float(os.getenv('DIEM_HOLDING_AMOUNT', '0'))
+    
     THEME_MODE = os.getenv('THEME_MODE', 'dark')
     
     # Usage tracking configuration
@@ -40,9 +45,13 @@ class Config:
     # Validation
     @classmethod
     def validate(cls) -> tuple[bool, str]:
-        """Validate configuration settings."""
-        if not cls.VENICE_API_KEY:
-            return False, "VENICE_API_KEY is required but not set in environment variables or .env file"
+        """Validate configuration settings.
+        
+        Note: VENICE_ADMIN_KEY is required for the monitoring application.
+        VENICE_API_KEY is optional and reserved for future inference features.
+        """
+        if not cls.VENICE_ADMIN_KEY:
+            return False, "VENICE_ADMIN_KEY is required - must be a Venice Admin API key from https://venice.ai/settings/api (regular inference keys won't work for billing endpoints)"
         return True, "Configuration is valid"
         
     @classmethod
@@ -72,6 +81,8 @@ class Config:
             'COINGECKO_HOLDING_AMOUNT': cls.COINGECKO_HOLDING_AMOUNT,
             'COINGECKO_REFRESH_INTERVAL_MS': cls.COINGECKO_REFRESH_INTERVAL_MS,
             'COINGECKO_INITIAL_DELAY_MS': cls.COINGECKO_INITIAL_DELAY_MS,
+            'DIEM_TOKEN_ID': cls.DIEM_TOKEN_ID,
+            'DIEM_HOLDING_AMOUNT': cls.DIEM_HOLDING_AMOUNT,
             'THEME_MODE': cls.THEME_MODE,
             'USAGE_REFRESH_INTERVAL_MS': cls.USAGE_REFRESH_INTERVAL_MS
         }

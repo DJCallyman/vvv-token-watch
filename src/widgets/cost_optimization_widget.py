@@ -135,6 +135,7 @@ class CostOptimizationWidget(QWidget):
         self.theme = theme
         self.current_report: Optional[CostOptimizationReport] = None
         self.worker: Optional[CostOptimizerWorker] = None
+        self.models_data: Optional[Dict] = None  # Dynamic models from Venice API
         
         self.init_ui()
     
@@ -542,23 +543,36 @@ class CostOptimizationWidget(QWidget):
         self.recommendations_table.setColumnWidth(2, max(180, self.recommendations_table.columnWidth(2)))
     
     def _populate_model_combos(self):
-        """Populate model combo boxes in calculator"""
-        from src.data.model_pricing import ModelPricingDatabase
-        
-        # Include beta models since they're commonly used
-        chat_models = ModelPricingDatabase.get_chat_models(include_beta=True)
-        
+        """Populate model combo boxes in calculator from dynamic API data"""
         self.model1_combo.clear()
         self.model2_combo.clear()
         
-        # Sort by display name for easier selection
-        sorted_models = sorted(chat_models.items(), key=lambda x: x[1].display_name)
-        
-        for model_id, pricing in sorted_models:
-            beta_marker = " (β)" if pricing.is_beta else ""
-            display_text = f"{pricing.display_name}{beta_marker} (${pricing.input_price:.2f}/${pricing.output_price:.2f})"
-            self.model1_combo.addItem(display_text, model_id)
-            self.model2_combo.addItem(display_text, model_id)
+        # Use dynamic models data from Venice API if available
+        if self.models_data and 'data' in self.models_data:
+            # Filter to text models only (they have input/output pricing)
+            text_models = [
+                model for model in self.models_data['data']
+                if model.get('type') == 'text'
+            ]
+            
+            # Sort by model ID for consistent ordering
+            text_models.sort(key=lambda m: m.get('id', ''))
+            
+            for model in text_models:
+                model_id = model.get('id', '')
+                model_spec = model.get('model_spec', {})
+                pricing = model_spec.get('pricing', {})
+                
+                # Get pricing (per 1M tokens, convert to per 1K)
+                input_price = pricing.get('input', {}).get('usd', 0)
+                output_price = pricing.get('output', {}).get('usd', 0)
+                
+                # Format display text with pricing
+                display_text = f"{model_id} (${input_price:.2f}/${output_price:.2f} per 1M)"
+                
+                # Store full model data for calculation
+                self.model1_combo.addItem(display_text, model)
+                self.model2_combo.addItem(display_text, model)
         
         # Set defaults
         if self.model1_combo.count() > 0:
@@ -566,40 +580,62 @@ class CostOptimizationWidget(QWidget):
         if self.model2_combo.count() > 1:
             self.model2_combo.setCurrentIndex(1)
     
+    def update_models_data(self, models_data: Dict):
+        """Update the models data from Venice API and refresh the calculator combos"""
+        self.models_data = models_data
+        self._populate_model_combos()
+    
     def _calculate_comparison(self):
-        """Calculate and display model cost comparison"""
-        from src.analytics.cost_optimizer import CostOptimizer
-        
-        model1_id = self.model1_combo.currentData()
-        model2_id = self.model2_combo.currentData()
+        """Calculate and display model cost comparison using dynamic API pricing"""
+        model1_data = self.model1_combo.currentData()
+        model2_data = self.model2_combo.currentData()
         prompt_tokens = self.prompt_tokens_spin.value()
         completion_tokens = self.completion_tokens_spin.value()
         
-        if not model1_id or not model2_id:
+        if not model1_data or not model2_data:
             self.calc_results_label.setText("Please select both models")
             return
         
-        optimizer = CostOptimizer()
-        comparison = optimizer.get_model_comparison(
-            model1_id, model2_id, prompt_tokens, completion_tokens
-        )
+        # Extract pricing from model data (API returns price per 1M tokens)
+        model1_id = model1_data.get('id', 'Unknown')
+        model1_spec = model1_data.get('model_spec', {})
+        model1_pricing = model1_spec.get('pricing', {})
+        model1_input = model1_pricing.get('input', {}).get('usd', 0)
+        model1_output = model1_pricing.get('output', {}).get('usd', 0)
         
-        if not comparison:
-            self.calc_results_label.setText("Unable to compare selected models")
-            return
+        model2_id = model2_data.get('id', 'Unknown')
+        model2_spec = model2_data.get('model_spec', {})
+        model2_pricing = model2_spec.get('pricing', {})
+        model2_input = model2_pricing.get('input', {}).get('usd', 0)
+        model2_output = model2_pricing.get('output', {}).get('usd', 0)
+        
+        # Calculate cost per request (price is per 1M tokens)
+        model1_cost = (prompt_tokens * model1_input / 1_000_000) + (completion_tokens * model1_output / 1_000_000)
+        model2_cost = (prompt_tokens * model2_input / 1_000_000) + (completion_tokens * model2_output / 1_000_000)
+        
+        # Determine cheaper model
+        if model1_cost < model2_cost:
+            cheaper_model = model1_id
+            savings_usd = model2_cost - model1_cost
+        else:
+            cheaper_model = model2_id
+            savings_usd = model1_cost - model2_cost
+        
+        # Calculate savings percentage
+        max_cost = max(model1_cost, model2_cost)
+        savings_percent = (savings_usd / max_cost * 100) if max_cost > 0 else 0
+        
+        # Cost per 1K requests
+        cost_per_1k_diff = savings_usd * 1000
         
         # Format results
-        model1 = comparison['model1']
-        model2 = comparison['model2']
-        comp = comparison['comparison']
-        
         results_text = f"""
-<b>{model1['name']}</b>: ${model1['cost']:.6f} per request<br>
-<b>{model2['name']}</b>: ${model2['cost']:.6f} per request<br>
+<b>{model1_id}</b>: ${model1_cost:.6f} per request<br>
+<b>{model2_id}</b>: ${model2_cost:.6f} per request<br>
 <br>
-<b style="color: {self.theme.accent};">Cheaper Option:</b> {comparison['comparison']['cheaper_model']}<br>
-<b>Cost Difference:</b> ${comp['savings_usd']:.6f} per request ({comp['savings_percent']:.1f}%)<br>
-<b>Annual Savings (1K req/day):</b> ${comp['cost_per_1k_requests_diff'] * 365:.2f}
+<b style="color: {self.theme.accent};">Cheaper Option:</b> {cheaper_model}<br>
+<b>Cost Difference:</b> ${savings_usd:.6f} per request ({savings_percent:.1f}%)<br>
+<b>Annual Savings (1K req/day):</b> ${cost_per_1k_diff * 365:.2f}
         """
         
         self.calc_results_label.setText(results_text)
