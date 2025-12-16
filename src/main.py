@@ -162,6 +162,14 @@ class CombinedViewerApp(QMainWindow):
         self.holding_amount = Config.COINGECKO_HOLDING_AMOUNT
         self.validation_state = ValidationState.VALID
         
+        # DIEM token price tracking
+        self.diem_price_data = {
+            'usd': {'price': None, 'total': None},
+            'aud': {'price': None, 'total': None}
+        }
+        self.diem_holding_amount = Config.DIEM_HOLDING_AMOUNT
+        self.diem_validation_state = ValidationState.VALID
+        
         # Initialize API usage tracking components
         self.usage_worker = None
         self.web_usage_worker = None
@@ -389,18 +397,32 @@ class CombinedViewerApp(QMainWindow):
         except Exception as e:
             logger.error(f"Failed to create action buttons: {e}")
         
-        # Create price display components
+        # Create price display components - Venice Token
         self.price_display_usd = PriceDisplayWidget(self.theme)
         self.price_display_aud = PriceDisplayWidget(self.theme)
+        
+        # Create price display components - DIEM Token
+        self.price_display_diem_usd = PriceDisplayWidget(self.theme)
+        self.price_display_diem_aud = PriceDisplayWidget(self.theme)
 
-        # Create price container
+        # Create price container with horizontal layout for both tokens
         self.price_container = QWidget()
         self.price_container.setStyleSheet(f"background-color: {self.theme.background};")
         price_layout = QVBoxLayout(self.price_container)
         price_layout.setSpacing(10)
         price_layout.setContentsMargins(10, 10, 10, 10)
 
-        # Token name
+        # Create horizontal layout for Venice and DIEM tokens side by side
+        tokens_horizontal_layout = QHBoxLayout()
+        tokens_horizontal_layout.setSpacing(20)
+        
+        # --- VENICE TOKEN (Left Side) ---
+        venice_container = QWidget()
+        venice_layout = QVBoxLayout(venice_container)
+        venice_layout.setSpacing(10)
+        venice_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Venice Token name
         token_name_text = Config.COINGECKO_TOKEN_ID.replace('-', ' ').capitalize()
         self.token_name_label = QLabel(token_name_text)
         font = QFont()
@@ -409,15 +431,15 @@ class CombinedViewerApp(QMainWindow):
         self.token_name_label.setFont(font)
         self.token_name_label.setStyleSheet(f"color: {self.theme.text};")
         self.token_name_label.setAlignment(Qt.AlignCenter)
-        price_layout.addWidget(self.token_name_label)
+        venice_layout.addWidget(self.token_name_label)
 
-        # Holding amount
+        # Venice Holding amount
         self.holding_frame = QFrame()
         self.holding_frame.setStyleSheet(f"background-color: {self.theme.background};")
         holding_layout = QHBoxLayout(self.holding_frame)
         holding_layout.setContentsMargins(0, 0, 0, 0)
 
-        holding_label = QLabel("Holding Amount:")
+        holding_label = QLabel("Holding:")
         holding_label.setStyleSheet(f"color: {self.theme.text};")
         holding_layout.addWidget(holding_label)
 
@@ -432,9 +454,9 @@ class CombinedViewerApp(QMainWindow):
         token_label.setStyleSheet(f"color: {self.theme.text};")
         holding_layout.addWidget(token_label)
 
-        price_layout.addWidget(self.holding_frame, alignment=Qt.AlignCenter)
+        venice_layout.addWidget(self.holding_frame, alignment=Qt.AlignCenter)
 
-        # Price displays
+        # Venice Price displays
         self.prices_frame = QFrame()
         self.prices_frame.setStyleSheet(f"background-color: {self.theme.background};")
         prices_layout = QHBoxLayout(self.prices_frame)
@@ -484,13 +506,118 @@ class CombinedViewerApp(QMainWindow):
         aud_layout.addWidget(self.price_display_aud)
         prices_layout.addWidget(self.aud_group)
 
-        price_layout.addWidget(self.prices_frame)
+        venice_layout.addWidget(self.prices_frame)
 
-        # Price status
+        # Venice Price status
         self.price_status_label = QLabel("Initializing...")
         self.price_status_label.setStyleSheet(f"color: {self.theme.text};")
         self.price_status_label.setAlignment(Qt.AlignCenter)
-        price_layout.addWidget(self.price_status_label)
+        venice_layout.addWidget(self.price_status_label)
+        
+        tokens_horizontal_layout.addWidget(venice_container)
+        
+        # --- DIEM TOKEN (Right Side) ---
+        diem_container = QWidget()
+        diem_layout = QVBoxLayout(diem_container)
+        diem_layout.setSpacing(10)
+        diem_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # DIEM Token name
+        diem_token_name_text = "DIEM Token"
+        self.diem_token_name_label = QLabel(diem_token_name_text)
+        diem_font = QFont()
+        diem_font.setPointSize(16)
+        diem_font.setBold(True)
+        self.diem_token_name_label.setFont(diem_font)
+        self.diem_token_name_label.setStyleSheet(f"color: {self.theme.text};")
+        self.diem_token_name_label.setAlignment(Qt.AlignCenter)
+        diem_layout.addWidget(self.diem_token_name_label)
+        
+        # DIEM Holding amount
+        self.diem_holding_frame = QFrame()
+        self.diem_holding_frame.setStyleSheet(f"background-color: {self.theme.background};")
+        diem_holding_layout = QHBoxLayout(self.diem_holding_frame)
+        diem_holding_layout.setContentsMargins(0, 0, 0, 0)
+        
+        diem_holding_label = QLabel("Holding:")
+        diem_holding_label.setStyleSheet(f"color: {self.theme.text};")
+        diem_holding_layout.addWidget(diem_holding_label)
+        
+        self.diem_holding_entry = QLineEdit(str(Config.DIEM_HOLDING_AMOUNT))
+        self.diem_holding_entry.setFixedWidth(80)
+        self.diem_holding_entry.textChanged.connect(self._on_diem_holding_text_changed)
+        self.diem_holding_entry.editingFinished.connect(self.update_diem_holding_amount)
+        self.diem_holding_entry.setValidator(QDoubleValidator(0.0, 1000000.0, 2))
+        diem_holding_layout.addWidget(self.diem_holding_entry)
+        
+        diem_token_label = QLabel("tokens")
+        diem_token_label.setStyleSheet(f"color: {self.theme.text};")
+        diem_holding_layout.addWidget(diem_token_label)
+        
+        diem_layout.addWidget(self.diem_holding_frame, alignment=Qt.AlignCenter)
+        
+        # DIEM Price displays
+        self.diem_prices_frame = QFrame()
+        self.diem_prices_frame.setStyleSheet(f"background-color: {self.theme.background};")
+        diem_prices_layout = QHBoxLayout(self.diem_prices_frame)
+        diem_prices_layout.setSpacing(10)
+        
+        # DIEM USD Display
+        self.diem_usd_group = QGroupBox(" USD ")
+        self.diem_usd_group.setStyleSheet(f"""
+            QGroupBox {{
+                background-color: {self.theme.background};
+                border: 1px solid {self.theme.accent};
+                border-radius: 5px;
+                margin-top: 10px;
+                padding: 10px;
+                color: {self.theme.text};
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 0 5px;
+                background-color: {self.theme.background};
+            }}
+        """)
+        diem_usd_layout = QVBoxLayout(self.diem_usd_group)
+        diem_usd_layout.addWidget(self.price_display_diem_usd)
+        diem_prices_layout.addWidget(self.diem_usd_group)
+        
+        # DIEM AUD Display
+        self.diem_aud_group = QGroupBox(" AUD ")
+        self.diem_aud_group.setStyleSheet(f"""
+            QGroupBox {{
+                background-color: {self.theme.background};
+                border: 1px solid {self.theme.accent};
+                border-radius: 5px;
+                margin-top: 10px;
+                padding: 10px;
+                color: {self.theme.text};
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                subcontrol-position: top center;
+                padding: 0 5px;
+                background-color: {self.theme.background};
+            }}
+        """)
+        diem_aud_layout = QVBoxLayout(self.diem_aud_group)
+        diem_aud_layout.addWidget(self.price_display_diem_aud)
+        diem_prices_layout.addWidget(self.diem_aud_group)
+        
+        diem_layout.addWidget(self.diem_prices_frame)
+        
+        # DIEM Price status
+        self.diem_price_status_label = QLabel("Initializing...")
+        self.diem_price_status_label.setStyleSheet(f"color: {self.theme.text};")
+        self.diem_price_status_label.setAlignment(Qt.AlignCenter)
+        diem_layout.addWidget(self.diem_price_status_label)
+        
+        tokens_horizontal_layout.addWidget(diem_container)
+        
+        # Add the horizontal layout to main price layout
+        price_layout.addLayout(tokens_horizontal_layout)
 
         # Theme toggle
         self.theme_frame = QFrame()
@@ -614,10 +741,8 @@ class CombinedViewerApp(QMainWindow):
         
         # Start periodic updates
         QTimer.singleShot(Config.COINGECKO_INITIAL_DELAY_MS, self.update_price_label)
+        QTimer.singleShot(Config.COINGECKO_INITIAL_DELAY_MS + 1000, self.update_diem_price_label)  # Stagger DIEM updates
         QTimer.singleShot(1000, self._start_usage_updates)  # Start usage updates after a short delay
-        
-        # Initial actions
-        QTimer.singleShot(Config.COINGECKO_INITIAL_DELAY_MS, self.update_price_label)
         
         logger.debug("CombinedViewerApp initialization complete.")
     
@@ -644,6 +769,20 @@ class CombinedViewerApp(QMainWindow):
             self.validation_state = ValidationState.INVALID
             self.price_display_usd.set_validation_state(ValidationState.INVALID.value)
             self.price_display_aud.set_validation_state(ValidationState.INVALID.value)
+    
+    def _on_diem_holding_text_changed(self, text: str):
+        """Validate DIEM holding amount input as user types."""
+        try:
+            amount, state = validate_holding_amount(text)
+            self.diem_validation_state = state
+            self.price_display_diem_usd.set_validation_state(state.value)
+            self.price_display_diem_aud.set_validation_state(state.value)
+        except Exception as e:
+            logging.error(f"Error validating DIEM holding amount input: {e}")
+            # Set to invalid state on error
+            self.diem_validation_state = ValidationState.INVALID
+            self.price_display_diem_usd.set_validation_state(ValidationState.INVALID.value)
+            self.price_display_diem_aud.set_validation_state(ValidationState.INVALID.value)
     
     def update_holding_amount(self):
         """Validates and processes user input for holding amount."""
@@ -673,6 +812,34 @@ class CombinedViewerApp(QMainWindow):
             # Ensure price display is updated with current valid holding amount
             self._update_price_display()
     
+    def update_diem_holding_amount(self):
+        """Validates and processes user input for DIEM holding amount."""
+        try:
+            new_amount = float(self.diem_holding_entry.text())
+            if new_amount < 0:  # Allow 0 for DIEM
+                raise ValueError("Amount must be non-negative")
+            self.diem_holding_amount = new_amount
+            for currency in Config.COINGECKO_CURRENCIES:
+                if self.diem_price_data[currency]['price'] is not None:
+                    self.diem_price_data[currency]['total'] = self.diem_price_data[currency]['price'] * self.diem_holding_amount
+            
+            # Update price displays
+            self._update_diem_price_display()
+            
+            # Update status
+            self.diem_price_status_label.setText(f"Holding amount updated to {new_amount:.2f}. Price updates automatically.")
+            self.diem_price_status_label.setStyleSheet(f"color: {self.theme.text};")
+            
+            # Update theme for all components
+            self._apply_theme()
+        
+        except ValueError:
+            self.diem_holding_entry.setText(str(int(self.diem_holding_amount)) if self.diem_holding_amount.is_integer() else f"{self.diem_holding_amount:.2f}")
+            self.diem_price_status_label.setText("Invalid holding amount. Must be a non-negative number.")
+            self.diem_price_status_label.setStyleSheet(f"color: {self.theme.error};")
+            # Ensure price display is updated with current valid holding amount
+            self._update_diem_price_display()
+    
     def _update_price_display(self):
         """Update price display based on current price_data and holding_amount"""
         # Update USD display
@@ -690,6 +857,24 @@ class CombinedViewerApp(QMainWindow):
         else:
             self.price_display_aud.set_price(0)
             self.price_display_aud.set_holding_value(0)
+    
+    def _update_diem_price_display(self):
+        """Update DIEM price display based on current diem_price_data and diem_holding_amount"""
+        # Update USD display
+        if self.diem_price_data['usd']['price'] is not None:
+            self.price_display_diem_usd.set_price(self.diem_price_data['usd']['price'])
+            self.price_display_diem_usd.set_holding_value(self.diem_price_data['usd']['total'])
+        else:
+            self.price_display_diem_usd.set_price(0)
+            self.price_display_diem_usd.set_holding_value(0)
+        
+        # Update AUD display
+        if self.diem_price_data['aud']['price'] is not None:
+            self.price_display_diem_aud.set_price(self.diem_price_data['aud']['price'])
+            self.price_display_diem_aud.set_holding_value(self.diem_price_data['aud']['total'])
+        else:
+            self.price_display_diem_aud.set_price(0)
+            self.price_display_diem_aud.set_holding_value(0)
     
     def _apply_theme(self):
         """Apply current theme to all UI elements"""
@@ -866,6 +1051,8 @@ class CombinedViewerApp(QMainWindow):
         self._apply_theme()
         self.price_display_usd.theme = self.theme
         self.price_display_aud.theme = self.theme
+        self.price_display_diem_usd.theme = self.theme
+        self.price_display_diem_aud.theme = self.theme
         
         # Update model comparison widget theme if it exists
         if hasattr(self, 'model_comparison_widget') and self.model_comparison_widget:
@@ -892,6 +1079,8 @@ class CombinedViewerApp(QMainWindow):
         # Update validation state display
         self.price_display_usd.set_validation_state(self.validation_state.value)
         self.price_display_aud.set_validation_state(self.validation_state.value)
+        self.price_display_diem_usd.set_validation_state(self.diem_validation_state.value)
+        self.price_display_diem_aud.set_validation_state(self.diem_validation_state.value)
     
     def _create_cost_optimization_tab(self):
         """Create the Cost Optimization & Analytics tab"""
@@ -1044,6 +1233,84 @@ class CombinedViewerApp(QMainWindow):
     def update_price_label(self):
         """Start price update via worker thread (non-blocking)."""
         self._start_price_worker()
+    
+    def _start_diem_price_worker(self):
+        """Start the DIEM price worker thread to fetch CoinGecko prices."""
+        # Clean up any existing worker before creating a new one
+        if hasattr(self, 'diem_price_worker') and self.diem_price_worker is not None:
+            # Check if C++ object still exists
+            try:
+                from shiboken6 import isValid
+                if not isValid(self.diem_price_worker):
+                    self.diem_price_worker = None
+                else:
+                    if self.diem_price_worker.isRunning():
+                        self.diem_price_worker.quit()
+                        self.diem_price_worker.wait(2000)
+                    try:
+                        self.diem_price_worker.price_updated.disconnect()
+                        self.diem_price_worker.error_occurred.disconnect()
+                    except (RuntimeError, TypeError):
+                        pass
+                    self.diem_price_worker = None
+            except Exception:
+                self.diem_price_worker = None
+        
+        # Create and configure worker
+        self.diem_price_worker = PriceWorker(
+            token_id=Config.DIEM_TOKEN_ID,
+            currencies=Config.COINGECKO_CURRENCIES,
+            parent=self
+        )
+        self.diem_price_worker.price_updated.connect(self._handle_diem_price_update)
+        self.diem_price_worker.error_occurred.connect(self._handle_diem_price_error)
+        self.diem_price_worker.finished.connect(self.diem_price_worker.deleteLater)
+        self.diem_price_worker.start()
+    
+    def _handle_diem_price_update(self, price_data: dict):
+        """Handle DIEM price data received from worker thread."""
+        status_messages = []
+        failed_currencies = []
+        
+        for currency in Config.COINGECKO_CURRENCIES:
+            if currency in price_data:
+                self.diem_price_data[currency]['price'] = price_data[currency]
+                self.diem_price_data[currency]['total'] = price_data[currency] * self.diem_holding_amount
+                
+                price_str = format_currency(price_data[currency], currency)
+                status_messages.append(f"{currency.upper()}: {price_str}")
+            else:
+                failed_currencies.append(currency)
+                status_messages.append(f"{currency.upper()}: N/A")
+        
+        if failed_currencies:
+            status_str = f"Partial update: {', '.join(status_messages)} | {time.strftime('%H:%M:%S')}"
+            status_color = self.theme.warning if hasattr(self.theme, 'warning') else self.theme.error
+        else:
+            status_str = f"Prices: {', '.join(status_messages)} | {time.strftime('%H:%M:%S')}"
+            status_color = self.theme.text
+        
+        self.diem_price_status_label.setText(status_str)
+        self.diem_price_status_label.setStyleSheet(f"color: {status_color};")
+        
+        # Update price displays
+        self._update_diem_price_display()
+        
+        # Schedule next update
+        QTimer.singleShot(Config.COINGECKO_REFRESH_INTERVAL_MS, self._start_diem_price_worker)
+    
+    def _handle_diem_price_error(self, error_msg: str):
+        """Handle DIEM price fetch error from worker thread."""
+        logger.error(f"DIEM price fetch error: {error_msg}")
+        self.diem_price_status_label.setText(f"Price update failed | {time.strftime('%H:%M:%S')}")
+        self.diem_price_status_label.setStyleSheet(f"color: {self.theme.error};")
+        
+        # Schedule retry
+        QTimer.singleShot(Config.COINGECKO_REFRESH_INTERVAL_MS, self._start_diem_price_worker)
+    
+    def update_diem_price_label(self):
+        """Start DIEM price update via worker thread (non-blocking)."""
+        self._start_diem_price_worker()
     
     def connect_thread(self):
         """Starts the API connection in a separate thread."""
@@ -1897,7 +2164,10 @@ class CombinedViewerApp(QMainWindow):
             self.model_comparison_widget.models_data = self.models_data.copy() if self.models_data else {}
             # Refresh the displays
             self.model_comparison_widget.populate_comparison_table()
-            self.model_comparison_widget.populate_discovery_results()
+        
+        # Also update cost optimizer widget with dynamic model data
+        if hasattr(self, 'cost_optimizer_widget') and self.cost_optimizer_widget:
+            self.cost_optimizer_widget.update_models_data(self.models_data)
 
     def _copy_models_data(self):
         """Create a deep copy of models data to prevent filtering from modifying the original data"""
