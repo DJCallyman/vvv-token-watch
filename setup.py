@@ -209,32 +209,56 @@ class SetupWizard:
         return True, "Format looks valid"
 
     def test_admin_key(self, admin_key: str) -> bool:
-        """Test Venice Admin API key by making a test request."""
+        """Test Venice Admin API key by making a test request using venv's Python."""
         self.print_info("Testing admin key connectivity...")
         
+        # Create a test script to run in the venv
+        test_script = """
+import sys
+import requests
+
+admin_key = sys.argv[1]
+url = "https://api.venice.ai/api/v1/billing/usage"
+headers = {
+    "Authorization": f"Bearer {admin_key}",
+    "Content-Type": "application/json"
+}
+
+try:
+    response = requests.get(url, headers=headers, timeout=10)
+    sys.exit(response.status_code)
+except Exception as e:
+    print(f"ERROR: {e}", file=sys.stderr)
+    sys.exit(500)
+"""
+        
         try:
-            import requests
-            url = "https://api.venice.ai/api/v1/billing/usage"
-            headers = {
-                "Authorization": f"Bearer {admin_key}",
-                "Content-Type": "application/json"
-            }
+            python_cmd = self.get_python_venv_cmd()
+            result = subprocess.run(
+                [python_cmd, '-c', test_script, admin_key],
+                capture_output=True,
+                text=True,
+                timeout=15
+            )
             
-            response = requests.get(url, headers=headers, timeout=10)
-            
-            if response.status_code == 200:
+            if result.returncode == 200:
                 self.print_success("Admin key verified! Successfully connected to Venice API")
                 return True
-            elif response.status_code == 401:
+            elif result.returncode == 401:
                 self.print_error("Admin key authentication failed (401)")
                 self.print_warning("Make sure you're using an ADMIN key, not an inference key")
                 return False
+            elif result.returncode == 500:
+                error_msg = result.stderr.strip() if result.stderr else "Unknown error"
+                self.print_warning(f"Could not test key: {error_msg}")
+                self.print_info("Key will be validated when you run the application")
+                return True
             else:
-                self.print_warning(f"Unexpected response code: {response.status_code}")
+                self.print_warning(f"Unexpected response code: {result.returncode}")
                 self.print_info("Key may still work, but couldn't verify")
-                return True  # Allow proceeding
-        except ImportError:
-            self.print_warning("Cannot test key - 'requests' library not installed yet")
+                return True
+        except subprocess.TimeoutExpired:
+            self.print_warning("API test timed out")
             self.print_info("Key will be validated when you run the application")
             return True
         except Exception as e:
