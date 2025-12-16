@@ -148,8 +148,15 @@ class SetupWizard:
         print(f"{Colors.CYAN}This may take a few minutes...{Colors.ENDC}\n")
         
         try:
-            # Upgrade pip first
-            subprocess.run([pip_cmd, 'install', '--upgrade', 'pip'], check=True)
+            # Try to upgrade pip first (may fail on Windows, which is okay)
+            python_cmd = self.get_python_venv_cmd()
+            try:
+                subprocess.run([python_cmd, '-m', 'pip', 'install', '--upgrade', 'pip'], 
+                              check=True, capture_output=True, text=True)
+                self.print_success("pip upgraded successfully")
+            except subprocess.CalledProcessError:
+                # Pip upgrade failed (common on Windows) - not critical, continue anyway
+                self.print_warning("Could not upgrade pip (this is okay, continuing...)")
             
             # Install requirements
             subprocess.run([pip_cmd, 'install', '-r', str(self.requirements_file)], check=True)
