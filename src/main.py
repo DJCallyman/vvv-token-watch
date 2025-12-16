@@ -214,6 +214,9 @@ class CombinedViewerApp(QMainWindow):
             self.usage_report_generator = None
             self.key_management_enabled = False
         
+        # Connect theme change signal before initializing UI
+        self.theme.theme_changed.connect(self._on_theme_changed)
+        
         # Initialize UI
         self.init_ui()
     
@@ -892,6 +895,49 @@ class CombinedViewerApp(QMainWindow):
         if hasattr(self, 'usage_container'):
             self.usage_container.setStyleSheet(f"background-color: {bg_color};")
         
+        # Update usage frame (API key cards container)
+        if hasattr(self, 'usage_frame'):
+            self.usage_frame.setStyleSheet(f"background-color: {bg_color};")
+        
+        # Update Models tab containers
+        if hasattr(self, 'display_frame'):
+            self.display_frame.setStyleSheet(f"background-color: {bg_color};")
+        if hasattr(self, 'models_tab'):
+            self.models_tab.setStyleSheet(f"background-color: {bg_color};")
+        
+        # Update tab containers
+        if hasattr(self, 'balance_tab'):
+            self.balance_tab.setStyleSheet(f"background-color: {bg_color};")
+        if hasattr(self, 'cost_optimization_tab'):
+            self.cost_optimization_tab.setStyleSheet(f"background-color: {bg_color};")
+        if hasattr(self, 'comparison_tab'):
+            self.comparison_tab.setStyleSheet(f"background-color: {bg_color};")
+        if hasattr(self, 'leaderboard_tab'):
+            self.leaderboard_tab.setStyleSheet(f"background-color: {bg_color};")
+        
+        # Update main tabs widget
+        if hasattr(self, 'main_tabs'):
+            self.main_tabs.setStyleSheet(f"""
+                QTabWidget::pane {{
+                    border: 1px solid {border_color};
+                    background-color: {bg_color};
+                }}
+                QTabBar::tab {{
+                    background-color: {card_bg};
+                    color: {text_color};
+                    padding: 8px 16px;
+                    border: 1px solid {border_color};
+                    margin-right: 2px;
+                }}
+                QTabBar::tab:selected {{
+                    background-color: {accent_color};
+                    color: {text_color};
+                }}
+                QTabBar::tab:hover {{
+                    background-color: {accent_color};
+                }}
+            """)
+        
         # Update token name label
         self.token_name_label.setStyleSheet(f"color: {text_color};")
         
@@ -899,6 +945,18 @@ class CombinedViewerApp(QMainWindow):
         self.holding_frame.setStyleSheet(f"background-color: {bg_color};")
         for child in self.holding_frame.findChildren(QLabel):
             child.setStyleSheet(f"color: {text_color};")
+        
+        # Update holding entry input
+        if hasattr(self, 'holding_entry'):
+            self.holding_entry.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {card_bg};
+                    color: {text_color};
+                    border: 1px solid {border_color};
+                    border-radius: 4px;
+                    padding: 4px;
+                }}
+            """)
         
         # Update price frames
         self.prices_frame.setStyleSheet(f"background-color: {bg_color};")
@@ -922,6 +980,49 @@ class CombinedViewerApp(QMainWindow):
         
         # Update status label
         self.price_status_label.setStyleSheet(f"color: {text_color};")
+        
+        # Update DIEM token components
+        self.diem_token_name_label.setStyleSheet(f"color: {text_color};")
+        
+        # Update DIEM holding frame
+        self.diem_holding_frame.setStyleSheet(f"background-color: {bg_color};")
+        for child in self.diem_holding_frame.findChildren(QLabel):
+            child.setStyleSheet(f"color: {text_color};")
+        
+        # Update DIEM holding entry input
+        if hasattr(self, 'diem_holding_entry'):
+            self.diem_holding_entry.setStyleSheet(f"""
+                QLineEdit {{
+                    background-color: {card_bg};
+                    color: {text_color};
+                    border: 1px solid {border_color};
+                    border-radius: 4px;
+                    padding: 4px;
+                }}
+            """)
+        
+        # Update DIEM price frames
+        self.diem_prices_frame.setStyleSheet(f"background-color: {bg_color};")
+        for group in [self.diem_usd_group, self.diem_aud_group]:
+            group.setStyleSheet(f"""
+                QGroupBox {{
+                    background-color: {bg_color};
+                    border: 1px solid {accent_color};
+                    border-radius: 5px;
+                    margin-top: 10px;
+                    padding: 10px;
+                    color: {text_color};
+                }}
+                QGroupBox::title {{
+                    subcontrol-origin: margin;
+                    subcontrol-position: top center;
+                    padding: 0 5px;
+                    background-color: {bg_color};
+                }}
+            """)
+        
+        # Update DIEM status label
+        self.diem_price_status_label.setStyleSheet(f"color: {text_color};")
         
         # Update theme toggle
         self.theme_frame.setStyleSheet(f"background-color: {bg_color};")
@@ -1044,19 +1145,57 @@ class CombinedViewerApp(QMainWindow):
             self.scroll_area.setStyleSheet(scroll_style)
         if hasattr(self, 'usage_scroll_area'):
             self.usage_scroll_area.setStyleSheet(scroll_style)
+        
+        # Update models tab display frame background
+        if hasattr(self, 'display_frame'):
+            self.display_frame.setStyleSheet(f"background-color: {bg_color};")
     
     def toggle_theme(self, theme_name):
-        """Toggle between dark and light themes"""
-        self.theme = Theme('dark' if theme_name == "Dark" else 'light')
-        self._apply_theme()
-        self.price_display_usd.theme = self.theme
-        self.price_display_aud.theme = self.theme
-        self.price_display_diem_usd.theme = self.theme
-        self.price_display_diem_aud.theme = self.theme
+        """Toggle between dark and light themes using signal-based updates."""
+        new_mode = 'dark' if theme_name == "Dark" else 'light'
+        self.theme.set_mode(new_mode)
         
-        # Update model comparison widget theme if it exists
-        if hasattr(self, 'model_comparison_widget') and self.model_comparison_widget:
-            self.model_comparison_widget.theme = self.theme
+        # Apply global palette to application
+        self.theme.apply_palette(QApplication.instance())
+        
+        # Apply global stylesheet to main window for consistent backgrounds
+        self.setStyleSheet(f"""
+            QMainWindow, QWidget {{
+                background-color: {self.theme.background};
+                color: {self.theme.text};
+            }}
+        """)
+        
+        # Trigger local UI updates
+        self._apply_theme()
+        
+        # Update validation state display
+        self.price_display_usd.set_validation_state(self.validation_state.value)
+        self.price_display_aud.set_validation_state(self.validation_state.value)
+        self.price_display_diem_usd.set_validation_state(self.diem_validation_state.value)
+        self.price_display_diem_aud.set_validation_state(self.diem_validation_state.value)
+    
+    def _on_theme_changed(self, new_mode):
+        """Handle theme change signal from Theme class.
+        
+        This method is called whenever theme.set_mode() is invoked,
+        providing automatic theme propagation to all connected widgets.
+        
+        Args:
+            new_mode: 'dark' or 'light'
+        """
+        # Update price display widgets
+        for widget in [self.price_display_usd, self.price_display_aud, 
+                       self.price_display_diem_usd, self.price_display_diem_aud]:
+            if hasattr(widget, 'update_theme'):
+                widget.update_theme(self.theme)
+            else:
+                widget.theme = self.theme
+        
+        # Update balance display widget
+        if hasattr(self, 'balance_display') and self.balance_display:
+            if hasattr(self.balance_display, 'set_theme_colors'):
+                self.balance_display.set_theme_colors(self.theme.theme_colors)
         
         # Update enhanced components theme
         if hasattr(self, 'hero_balance_display') and self.hero_balance_display:
@@ -1071,16 +1210,40 @@ class CombinedViewerApp(QMainWindow):
                 if hasattr(widget, 'set_theme_colors'):
                     widget.set_theme_colors(self.theme.theme_colors)
         
-        # Update leaderboard theme
+        # Update leaderboard theme and delegates
         if hasattr(self, 'leaderboard_widget') and self.leaderboard_widget:
             self.leaderboard_widget.theme_colors = self.theme.theme_colors
+            self.leaderboard_widget.theme = self.theme
+            # Update delegates with new theme
+            if hasattr(self.leaderboard_widget, 'bar_delegate_7day'):
+                self.leaderboard_widget.bar_delegate_7day.theme = self.theme
+            if hasattr(self.leaderboard_widget, 'bar_delegate_daily'):
+                self.leaderboard_widget.bar_delegate_daily.theme = self.theme
             self.leaderboard_widget.apply_theme()
-
-        # Update validation state display
-        self.price_display_usd.set_validation_state(self.validation_state.value)
-        self.price_display_aud.set_validation_state(self.validation_state.value)
-        self.price_display_diem_usd.set_validation_state(self.diem_validation_state.value)
-        self.price_display_diem_aud.set_validation_state(self.diem_validation_state.value)
+        
+        # Update cost optimizer widget theme
+        if hasattr(self, 'cost_optimizer_widget') and self.cost_optimizer_widget:
+            self.cost_optimizer_widget.theme = self.theme
+            self.cost_optimizer_widget._apply_theme()
+        
+        # Update all dynamically created API key widgets
+        if hasattr(self, 'api_key_widgets'):
+            for widget in self.api_key_widgets:
+                if hasattr(widget, 'set_theme_colors'):
+                    widget.set_theme_colors(self.theme.theme_colors)
+        
+        # Update model comparison widget theme and redraw charts
+        if hasattr(self, 'model_comparison_widget') and self.model_comparison_widget:
+            self.model_comparison_widget.update_theme(self.theme)
+        
+        # Re-display models if they're currently shown to update theme
+        if hasattr(self, 'models_data') and self.models_data and hasattr(self, 'display_layout'):
+            # Check if there are currently displayed models
+            if self.display_layout.count() > 0:
+                # Re-run display to update all model cards with new theme
+                self.display_filtered_models()
+        
+        logger.debug(f"Theme changed to {new_mode} mode via signal")
     
     def _create_cost_optimization_tab(self):
         """Create the Cost Optimization & Analytics tab"""
@@ -1588,7 +1751,7 @@ class CombinedViewerApp(QMainWindow):
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
-        separator.setStyleSheet(f"color: #555555;")
+        separator.setStyleSheet(f"color: {self.theme.border};")
         layout.addWidget(separator)
     
     def _add_section_heading(self, layout, text, row=None):
@@ -2038,7 +2201,7 @@ class CombinedViewerApp(QMainWindow):
             model_frame.setStyleSheet(f"""
                 QGroupBox {{
                     background-color: {self.theme.background};
-                    border: 1px solid #555555;
+                    border: 1px solid {self.theme.border};
                     border-radius: 5px;
                     margin-top: 10px;
                     padding: 10px;
@@ -2150,7 +2313,7 @@ class CombinedViewerApp(QMainWindow):
         tab_layout.setContentsMargins(0, 0, 0, 0)
         
         # Create the leaderboard widget
-        self.leaderboard_widget = UsageLeaderboardWidget(self.theme.theme_colors)
+        self.leaderboard_widget = UsageLeaderboardWidget(self.theme.theme_colors, theme=self.theme)
         tab_layout.addWidget(self.leaderboard_widget)
         
         # Add tab to main tabs

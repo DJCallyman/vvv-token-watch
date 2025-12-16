@@ -204,6 +204,78 @@ class CostOptimizationWidget(QWidget):
         
         self.setLayout(layout)
     
+    def _apply_theme(self):
+        """Apply theme colors to all components."""
+        # Update tab styling
+        if hasattr(self, 'tabs'):
+            self.tabs.setStyleSheet(self._get_tab_style())
+        
+        # Update table if it exists
+        if hasattr(self, 'breakdown_table'):
+            self.breakdown_table.setStyleSheet(f"""
+                QTableWidget {{
+                    background-color: {self.theme.background};
+                    alternate-background-color: {self.theme.card_background};
+                    color: {self.theme.text};
+                    gridline-color: {self.theme.border};
+                    border: 1px solid {self.theme.border};
+                }}
+                QHeaderView::section {{
+                    background-color: {self.theme.card_background};
+                    color: {self.theme.text};
+                    padding: 5px;
+                    border: 1px solid {self.theme.border};
+                }}
+            """)
+        
+        # Update recommendations table if it exists
+        if hasattr(self, 'recommendations_table'):
+            self.recommendations_table.setStyleSheet(f"""
+                QTableWidget {{
+                    background-color: {self.theme.background};
+                    alternate-background-color: {self.theme.card_background};
+                    color: {self.theme.text};
+                    gridline-color: {self.theme.border};
+                    border: 1px solid {self.theme.border};
+                }}
+                QHeaderView::section {{
+                    background-color: {self.theme.card_background};
+                    color: {self.theme.text};
+                    padding: 5px;
+                    border: 1px solid {self.theme.border};
+                }}
+            """)
+        
+        # Update labels
+        if hasattr(self, 'total_diem_label'):
+            self.total_diem_label.setStyleSheet(f"color: {self.theme.text}; font-size: 14px;")
+        if hasattr(self, 'total_usd_label'):
+            self.total_usd_label.setStyleSheet(f"color: {self.theme.text}; font-size: 14px;")
+        if hasattr(self, 'monthly_savings_label'):
+            self.monthly_savings_label.setStyleSheet(f"color: {self.theme.success}; font-size: 16px; font-weight: bold;")
+        
+        # Update all QGroupBox widgets
+        groupbox_style = self._get_groupbox_style()
+        for groupbox in self.findChildren(QGroupBox):
+            groupbox.setStyleSheet(groupbox_style)
+        
+        # Update all labels to use theme text color
+        for label in self.findChildren(QLabel):
+            if not label.styleSheet() or 'font-size' not in label.styleSheet():
+                label.setStyleSheet(f"color: {self.theme.text};")
+        
+        # Update calculator widgets
+        if hasattr(self, 'model1_combo'):
+            self.model1_combo.setStyleSheet(self._get_combo_style())
+        if hasattr(self, 'model2_combo'):
+            self.model2_combo.setStyleSheet(self._get_combo_style())
+        if hasattr(self, 'prompt_tokens_spin'):
+            self.prompt_tokens_spin.setStyleSheet(self._get_spin_style())
+        if hasattr(self, 'completion_tokens_spin'):
+            self.completion_tokens_spin.setStyleSheet(self._get_spin_style())
+        if hasattr(self, 'calc_results_label'):
+            self.calc_results_label.setStyleSheet(f"color: {self.theme.text}; padding: 15px; background-color: {self.theme.card_background}; border-radius: 5px;")
+    
     def _create_header(self) -> QWidget:
         """Create header with title and controls"""
         header_widget = QWidget()

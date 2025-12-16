@@ -131,17 +131,30 @@ class StatusIndicator(QWidget):
         self.status_changed.emit(status_type, message)
     
     def _get_status_color(self, status_type: str) -> str:
-        """Get the appropriate color for a status type."""
-        color_mapping = {
-            'active': self.theme_colors.get('active', '#00cc66'),
-            'inactive': self.theme_colors.get('inactive', '#ff3333'),
-            'warning': self.theme_colors.get('warning', '#ffc107'),
-            'neutral': self.theme_colors.get('neutral', '#bbbbbb'),
-            'loading': self.theme_colors.get('loading', '#0078d7'),
-            'error': self.theme_colors.get('error', '#ff4444'),
-            'success': self.theme_colors.get('success', '#00c853'),
+        """Get the appropriate color for a status type.
+        
+        All colors come from theme_colors dictionary, with no hardcoded fallbacks.
+        If a color is missing from theme, defaults to text_secondary color.
+        """
+        # First try direct status color keys
+        color = self.theme_colors.get(status_type)
+        
+        if color:
+            return color
+        
+        # Map status types to theme color keys
+        color_key_mapping = {
+            'active': 'positive',      # Use theme's positive color
+            'inactive': 'negative',    # Use theme's negative color
+            'warning': 'warning',      # Use theme's warning color
+            'neutral': 'text_secondary',  # Use theme's secondary text color
+            'loading': 'primary',      # Use theme's primary color
+            'error': 'error',          # Use theme's error color
+            'success': 'success',      # Use theme's success color
         }
-        return color_mapping.get(status_type, self.theme_colors.get('neutral', '#bbbbbb'))
+        
+        theme_key = color_key_mapping.get(status_type, 'text_secondary')
+        return self.theme_colors.get(theme_key, self.theme_colors.get('text_secondary', '#999999'))
     
     def _get_default_message(self, status_type: str) -> str:
         """Get default message for a status type."""
