@@ -5,7 +5,7 @@ This module provides usage trend analysis, spending estimates, and usage forecas
 based on historical API usage data.
 """
 
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 import statistics
@@ -13,7 +13,7 @@ import json
 import os
 import logging
 
-from src.core.usage_tracker import APIKeyUsage, UsageMetrics, BalanceInfo
+from src.core.usage_tracker import APIKeyUsage, BalanceInfo
 
 logger = logging.getLogger(__name__)
 

@@ -5,13 +5,10 @@ Provides interactive management with dropdown menus and actions.
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                               QMenu, QDialog, QLineEdit, QTextEdit, QDialogButtonBox,
-                              QMessageBox, QProgressBar, QFrame, QApplication)
-from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QFont, QIcon, QCursor, QClipboard, QAction
-from typing import Dict, Any, Optional
-import webbrowser
-import json
-from datetime import datetime
+                              QMessageBox, QFrame)
+from PySide6.QtCore import Signal, QTimer
+from PySide6.QtGui import QFont, QAction
+from typing import Dict, Optional
 
 from src.core.usage_tracker import APIKeyUsage, BalanceInfo
 from src.utils.date_utils import DateFormatter
@@ -457,7 +454,7 @@ class APIKeyManagementWidget(QWidget):
                 self.last_used_label.setText(f"Last used: {formatted_time}")
                 
                 # Color code based on recency
-                from datetime import datetime, timedelta
+                from datetime import datetime
                 last_used = datetime.fromisoformat(last_used_at.replace('Z', '+00:00'))
                 now = datetime.now(last_used.tzinfo)
                 days_ago = (now - last_used).days
@@ -487,7 +484,6 @@ class APIKeyManagementWidget(QWidget):
         """
         # This method is now a no-op since we removed progress bars
         # The labels are updated directly in update_usage() method
-        pass
     
     def update_usage(self, api_key_usage: APIKeyUsage):
         """Update the widget with new API key usage data"""

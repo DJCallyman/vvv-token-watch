@@ -5,13 +5,12 @@ This module provides real-time exchange rate fetching, caching, and display form
 for the Venice AI Dashboard.
 """
 
-import asyncio
 import requests
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, Tuple, List
+from typing import Optional, Dict, Tuple, List
 from dataclasses import dataclass
 from PySide6.QtCore import QThread, Signal, QTimer, QObject, Qt
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 import json
 import os
 import logging

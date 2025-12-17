@@ -4,11 +4,10 @@ Contains widgets for showing token prices, model information, and API usage metr
 """
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                              QScrollArea, QFrame, QProgressBar)
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QColor
-import sys
-from typing import List, Dict, Any
+                              QFrame)
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QFont
+from typing import Dict, Any
 
 # Import the data models and worker from usage_tracker
 from src.core.usage_tracker import APIKeyUsage, BalanceInfo
@@ -466,37 +465,6 @@ class APIKeyUsageWidget(QWidget):
                 border: 1px solid {self.theme_colors['border']};
             }}
         """)
-    
-    def _update_progress_bars(self):
-        """Deprecated: Progress bars removed. Kept for compatibility."""
-        pass
-    
-    def update_usage(self, api_key_usage: APIKeyUsage):
-        """
-        Update the widget with new API key usage data.
-        
-        Args:
-            api_key_usage: New APIKeyUsage object with updated data
-        """
-        self.api_key_usage = api_key_usage
-        
-        # Update labels
-        self.name_label.setText(api_key_usage.name)
-        
-        # Update active status
-        color = self.theme_colors['positive'] if api_key_usage.is_active else self.theme_colors['negative']
-        self.active_status.setStyleSheet(f"background-color: {color}; border-radius: 5px;")
-        self.active_label.setText("Active" if api_key_usage.is_active else "Inactive")
-        
-        # Update DIEM usage value
-        self.diem_usage_label.setText(f"{api_key_usage.usage.diem:.4f}")
-        
-        # Update USD usage value only if label exists
-        if self.usd_usage_label is not None:
-            self.usd_usage_label.setText(f"${api_key_usage.usage.usd:.2f}")
-        
-        # Set initial progress values
-        self._update_progress_bars()
     
     def set_theme_colors(self, theme_colors: Dict[str, str]):
         """Update theme colors and re-apply styling.

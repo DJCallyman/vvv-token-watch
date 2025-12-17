@@ -5,12 +5,9 @@ This module provides enhanced action buttons that replace generic "Connect" butt
 with specific, clear actions and visual feedback.
 """
 
-from typing import Dict, Optional, Callable
-from PySide6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QPushButton, 
-                                QLabel, QProgressBar, QSizePolicy, QSpacerItem)
-from PySide6.QtCore import Qt, Signal, QTimer, QPropertyAnimation, QEasingCurve
-from PySide6.QtGui import QFont, QIcon, QPixmap, QPainter
-from src.widgets.status_indicator import StatusIndicator
+from typing import Dict
+from PySide6.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QSizePolicy)
+from PySide6.QtCore import Signal, QTimer
 
 
 class ActionButton(QPushButton):
