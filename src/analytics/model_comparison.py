@@ -670,7 +670,6 @@ class ModelComparisonWidget(QWidget):
                 gridline-color: {self.theme.accent};
             }}
             QTableWidget::item {{
-                background-color: {self.theme.background};
                 color: {self.theme.text};
                 padding: 5px;
             }}
@@ -1557,7 +1556,6 @@ class ModelComparisonWidget(QWidget):
                     border: 1px solid {self.theme.border};
                 }}
                 QTableWidget::item {{
-                    background-color: {self.theme.background};
                     color: {self.theme.text};
                     padding: 5px;
                 }}
