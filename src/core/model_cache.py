@@ -54,9 +54,11 @@ class ModelCacheManager:
         Initialize the model cache manager.
         
         Args:
-            api_client: Optional VeniceAPIClient. If None, creates one with regular API key
+            api_client: Optional VeniceAPIClient. If None, creates one with admin API key (required for reliable model fetching)
         """
-        self.api_client = api_client or VeniceAPIClient(Config.VENICE_API_KEY)
+        # Use VENICE_ADMIN_KEY for model fetching - it's always set and more reliable
+        # VENICE_API_KEY may be empty or unavailable, causing incomplete model lists
+        self.api_client = api_client or VeniceAPIClient(Config.VENICE_ADMIN_KEY)
         self.models: Dict[str, CachedModel] = {}
         self.raw_api_data: Optional[Dict] = None  # Store raw API response for full details
         self.cache_timestamp: Optional[str] = None  # ISO format timestamp
