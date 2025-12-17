@@ -110,6 +110,35 @@ class TokenDisplayWidget(QWidget):
             self.change_label.setStyleSheet(f"color: {self.theme_colors['negative']};")
         else:
             self.change_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+    
+    def set_theme_colors(self, theme_colors: Dict[str, str]):
+        """Update theme colors and re-apply styling.
+        
+        Args:
+            theme_colors: New theme colors dictionary
+        """
+        self.theme_colors = theme_colors
+        
+        # Reapply all color-dependent styles
+        self.name_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        self.price_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        
+        # Reapply widget background
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.theme_colors['card_background']};
+                border-radius: 8px;
+                border: 1px solid {self.theme_colors['border']};
+            }}
+        """)
+        
+        # Update price change color
+        if self.price_change > 0:
+            self.change_label.setStyleSheet(f"color: {self.theme_colors['positive']};")
+        elif self.price_change < 0:
+            self.change_label.setStyleSheet(f"color: {self.theme_colors['negative']};")
+        else:
+            self.change_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
 
 class ModelDisplayWidget(QWidget):
     """
@@ -287,6 +316,26 @@ class BalanceDisplayWidget(QWidget):
                 border: 1px solid {self.theme_colors['border']};
             }}
         """)
+    
+    def set_theme_colors(self, theme_colors: Dict[str, str]):
+        """Update theme colors and re-apply styling.
+        
+        Args:
+            theme_colors: New theme colors dictionary
+        """
+        self.theme_colors = theme_colors
+        
+        # Reinitialize UI with new theme
+        # Clear existing layout
+        if self.layout():
+            QWidget().setLayout(self.layout())
+        
+        # Recreate UI with new theme colors
+        self.init_ui()
+        
+        # Re-apply balance if it exists
+        if self.balance_info:
+            self.update_balance(self.balance_info)
 
     def update_balance(self, balance_info: BalanceInfo):
         """
@@ -448,6 +497,45 @@ class APIKeyUsageWidget(QWidget):
         
         # Set initial progress values
         self._update_progress_bars()
+    
+    def set_theme_colors(self, theme_colors: Dict[str, str]):
+        """Update theme colors and re-apply styling.
+        
+        Args:
+            theme_colors: New theme colors dictionary
+        """
+        self.theme_colors = theme_colors
+        
+        # Reapply all color-dependent styles
+        self.name_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        self.active_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        self.created_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        
+        # Update status indicator color
+        color = self.theme_colors['positive'] if self.api_key_usage.is_active else self.theme_colors['negative']
+        self.active_status.setStyleSheet(f"background-color: {color}; border-radius: 5px;")
+        
+        # Update usage labels (find all labels that need secondary color)
+        for label in self.findChildren(QLabel):
+            text = label.text()
+            if 'DIEM 7d:' in text or 'USD 7d:' in text:
+                label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+            elif 'Created:' in text:
+                label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
+        
+        if hasattr(self, 'diem_usage_label'):
+            self.diem_usage_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        if hasattr(self, 'usd_usage_label') and self.usd_usage_label is not None:
+            self.usd_usage_label.setStyleSheet(f"color: {self.theme_colors['text_primary']};")
+        
+        # Force reapply widget background with important flag to override
+        self.setStyleSheet(f"""
+            QWidget {{
+                background-color: {self.theme_colors['card_background']} !important;
+                border-radius: 8px;
+                border: 1px solid {self.theme_colors['border']};
+            }}
+        """)
     
     def _update_progress_bars(self):
         """Update the progress bars based on usage values."""

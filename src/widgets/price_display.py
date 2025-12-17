@@ -7,6 +7,7 @@ class PriceDisplayWidget(QWidget):
         super().__init__(parent)
         self.theme = theme
         self.holding_value = 0.0
+        self.current_price = 0.0
         self.init_ui()
         
     def init_ui(self):
@@ -35,11 +36,33 @@ class PriceDisplayWidget(QWidget):
         self.setLayout(layout)
         
     def set_price(self, price: float):
+        self.current_price = price
         self.price_label.setText(f"${price:.2f}")
         
     def set_holding_value(self, value: float):
         self.holding_value = value
         self.holding_label.setText(f"Holding: ${value:,.2f}")
+    
+    def update_theme(self, new_theme: Theme):
+        """Update theme and refresh all styling."""
+        self.theme = new_theme
+        # Update price label styling
+        self.price_label.setStyleSheet(f"""
+            color: {self.theme.text};
+            background-color: {self.theme.input_background};
+            font-size: 24px;
+            padding: 10px;
+            border-radius: 4px;
+        """)
+        # Update holding label styling
+        self.holding_label.setStyleSheet(f"""
+            color: {self.theme.text};
+            font-size: 16px;
+            margin-top: 5px;
+        """)
+        # Restore current values
+        self.set_price(self.current_price)
+        self.set_holding_value(self.holding_value)
         
     def set_validation_state(self, state: str):
         """Update styling based on validation state"""
