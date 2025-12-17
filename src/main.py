@@ -747,6 +747,10 @@ class CombinedViewerApp(QMainWindow):
         QTimer.singleShot(Config.COINGECKO_INITIAL_DELAY_MS + 1000, self.update_diem_price_label)  # Stagger DIEM updates
         QTimer.singleShot(1000, self._start_usage_updates)  # Start usage updates after a short delay
         
+        # Apply theme after all widgets are created (important for Windows)
+        self.theme.apply_palette(QApplication.instance())
+        self._apply_theme()
+        
         logger.debug("CombinedViewerApp initialization complete.")
     
     def _on_holding_text_changed(self, text: str) -> None:
