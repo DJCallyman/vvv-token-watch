@@ -5,19 +5,16 @@ Provides a sortable, filterable leaderboard view of API token consumption with l
 
 import math
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional, Tuple
+from typing import List, Optional
 from enum import Enum
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
                                QComboBox, QRadioButton, QButtonGroup, QTableView, 
-                               QHeaderView, QStyledItemDelegate, QStyle, QStyleOptionViewItem)
-from PySide6.QtCore import (Qt, QAbstractTableModel, QModelIndex, QSortFilterProxyModel, 
-                           Signal, QRectF, QPointF)
-from PySide6.QtGui import (QPalette, QFont, QColor, QBrush, QPen, QPainter, QIcon, QPixmap)
+                               QHeaderView, QStyledItemDelegate, QStyleOptionViewItem)
+from PySide6.QtCore import (Qt, QAbstractTableModel, QModelIndex, Signal)
+from PySide6.QtGui import (QFont, QColor, QBrush, QPainter, QIcon, QPixmap)
 
-from src.core.usage_tracker import APIKeyUsage
 from src.core.unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
-from src.core.web_usage import WebUsageMetrics
 
 
 class SortMode(Enum):
@@ -65,7 +62,7 @@ class UsageBarDelegate(QStyledItemDelegate):
             bar_width_ratio = 0
         
         bar_width = int(option.rect.width() * 0.8 * bar_width_ratio)
-        bar_height = option.rect.height() - 8
+        option.rect.height() - 8
         
         # Draw background
         painter.save()

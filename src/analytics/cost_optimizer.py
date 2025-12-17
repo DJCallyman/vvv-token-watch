@@ -5,12 +5,12 @@ This module analyzes usage patterns and provides intelligent recommendations
 for reducing costs while maintaining model capabilities.
 """
 
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 
-from src.data.model_pricing import ModelPricingDatabase, ModelPricing, ModelCapability
+from src.data.model_pricing import ModelPricingDatabase, ModelPricing
 from src.utils.model_utils import ModelNameParser
 
 
@@ -124,7 +124,7 @@ class CostOptimizer:
         
         for entry in billing_entries:
             sku = entry.get('sku', '')
-            units = entry.get('units', 0)
+            entry.get('units', 0)
             amount = abs(entry.get('amount', 0))  # Cost is negative in API
             currency = entry.get('currency', 'DIEM')
             inference_details = entry.get('inferenceDetails') or {}

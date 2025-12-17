@@ -3,23 +3,17 @@ Model Comparison and Analytics Widget for Venice AI Model Viewer
 Provides comprehensive comparison tools, usage analytics, and enhanced discovery features.
 """
 
-import sys
 import logging
-from typing import List, Dict, Any, Optional
-import json
-from datetime import datetime, timedelta
-import math
+from typing import List, Dict, Any
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QTableWidget, QTableWidgetItem,
-    QComboBox, QCheckBox, QGroupBox, QScrollArea,
-    QFrame, QSplitter, QTextEdit, QLineEdit,
-    QSizePolicy, QHeaderView, QProgressBar,
-    QTabWidget, QApplication
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QPushButton, QTableWidget, QTableWidgetItem, QComboBox,
+    QCheckBox, QGroupBox, QScrollArea, QTextEdit,
+    QLineEdit, QHeaderView, QTabWidget, QApplication
 )
 from PySide6.QtCore import Qt, Signal, QObject, QTimer, QThread
-from PySide6.QtGui import QFont, QColor, QBrush, QIcon
+from PySide6.QtGui import QFont, QColor
 
 # Matplotlib imports for chart rendering
 import matplotlib
@@ -29,15 +23,12 @@ from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 
 # HTTP requests for API calls
-import requests
 from shiboken6 import isValid
 
 logger = logging.getLogger(__name__)
-from datetime import timezone
 
 from src.config.config import Config
 from src.config.theme import Theme
-from src.core.usage_tracker import UsageWorker, APIKeyUsage
 from src.core.venice_api_client import VeniceAPIClient
 from src.utils.date_utils import DateFormatter
 from src.utils.model_utils import ModelNameParser
@@ -98,7 +89,7 @@ class ModelAnalyticsWorker(QThread):
             analytics = self._process_usage_data(usage_data)
             # Don't use logger in worker thread - can cause crashes on macOS
             
-        except Exception as e:
+        except Exception:
             # Fallback to mock data if API call fails
             analytics = self._get_mock_analytics()
         
@@ -132,7 +123,7 @@ class ModelAnalyticsWorker(QThread):
         for entry in usage_entries:
             sku = entry.get('sku', 'unknown')
             amount = entry.get('amount', 0)
-            currency = entry.get('currency', 'USD')
+            entry.get('currency', 'USD')
             inference = entry.get('inferenceDetails') or {}  # Handle None values
             
             # Use absolute value (negative amounts represent actual usage costs)
@@ -1102,11 +1093,10 @@ class ModelComparisonWidget(QWidget):
         # Create single subplot for requests
         ax = self.requests_chart.fig.add_subplot(111)
         
-        # Get theme colors - determine if we're in dark mode
-        is_dark = self.theme.background == "#1e1e1e"
+        # Get theme colors
         text_color = self.theme.text
         bg_color = self.theme.card_background
-        accent_color = self.theme.accent
+        self.theme.accent
         
         # Configure chart colors
         self.requests_chart.fig.patch.set_facecolor(bg_color)
@@ -1166,7 +1156,7 @@ class ModelComparisonWidget(QWidget):
         plt.setp(ax.get_xticklabels(), rotation=45, ha='right', fontsize=9)
         
         # Add value labels on bars with smart positioning
-        max_height = max(requests) if requests else 1
+        max(requests) if requests else 1
         for bar in bars:
             height = bar.get_height()
             if height > 0:
@@ -1201,7 +1191,7 @@ class ModelComparisonWidget(QWidget):
         # Get theme colors
         text_color = self.theme.text
         bg_color = self.theme.card_background
-        accent_color = self.theme.accent
+        self.theme.accent
         
         # Configure chart colors
         self.tokens_chart.fig.patch.set_facecolor(bg_color)
@@ -1298,7 +1288,7 @@ class ModelComparisonWidget(QWidget):
         # Get theme colors
         text_color = self.theme.text
         bg_color = self.theme.card_background
-        accent_color = self.theme.accent
+        self.theme.accent
         
         # Configure chart colors
         self.cost_chart.fig.patch.set_facecolor(bg_color)
@@ -1650,7 +1640,7 @@ class ModelComparisonWidget(QWidget):
         # Update filter labels
         for label in self.findChildren(QLabel):
             # Skip labels that have specific styling (like results count)
-            style = label.styleSheet()
+            label.styleSheet()
             if "Type:" in label.text() or "Capabilities:" in label.text() or "Max Input" in label.text():
                 label.setStyleSheet(f"color: {self.theme.text};")
             elif "models" in label.text() and hasattr(self, 'results_count_label') and label == self.results_count_label:

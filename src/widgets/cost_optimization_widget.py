@@ -7,16 +7,14 @@ opportunities to switch to more cost-effective models.
 
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                               QTableWidget, QTableWidgetItem, QHeaderView, QGroupBox,
-                              QProgressBar, QFrame, QTabWidget, QComboBox, QSpinBox,
-                              QSizePolicy, QScrollArea, QStyledItemDelegate, QStyleOptionViewItem)
+                              QTabWidget, QComboBox, QSpinBox, QStyledItemDelegate, QStyleOptionViewItem)
 from PySide6.QtCore import Qt, Signal, QThread, QModelIndex
-from PySide6.QtGui import QFont, QColor, QBrush, QPainter, QPen
+from PySide6.QtGui import QFont, QColor, QBrush, QPainter
 from shiboken6 import isValid
 from typing import List, Dict, Optional
 import logging
 
-from src.analytics.cost_optimizer import (CostOptimizer, CostOptimizationReport,
-                                          ModelUsageStats, CostSavingsRecommendation)
+from src.analytics.cost_optimizer import (CostOptimizer, CostOptimizationReport)
 from src.config.theme import Theme
 from src.utils.utils import format_currency
 

@@ -14,13 +14,12 @@ Phase 2 enhancements:
 from typing import Dict, Optional
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                                 QFrame, QGraphicsDropShadowEffect, QSizePolicy)
-from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Signal, QTimer
-from PySide6.QtGui import QFont, QPalette, QLinearGradient, QBrush, QColor, QPainter
+from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QFont, QLinearGradient, QBrush, QColor, QPainter
 
 from src.widgets.status_indicator import StatusIndicator, UsageStatusIndicator
-from src.analytics.usage_analytics import UsageAnalytics, UsageTrend, format_trend_display, format_days_remaining
+from src.analytics.usage_analytics import UsageTrend, format_trend_display, format_days_remaining
 from src.services.exchange_rate_service import ExchangeRateData, format_rate_display
-from src.utils.date_utils import DateFormatter
 from src.config.config import Config
 
 
@@ -441,7 +440,7 @@ class HeroBalanceWidget(QWidget):
             
         # Force style ALL other labels to be white as well (defensive approach)
         for label in self.findChildren(QLabel):
-            current_style = label.styleSheet()
+            label.styleSheet()
             # Always override with white text - no exceptions
             if label == getattr(self, 'rate_label', None):
                 # Rate label uses secondary color
@@ -517,7 +516,7 @@ class HeroBalanceWidget(QWidget):
         self.update_balance(balance_info.diem, balance_info.usd, rate_data.rate if rate_data else Config.DEFAULT_EXCHANGE_RATE)
         
         # Update trend display
-        trend_text = format_trend_display(trend)
+        format_trend_display(trend)
         self.usage_indicator.set_usage_trend(trend.trend_direction, trend.daily_average_usd)
         
         # Update days remaining estimate
@@ -593,7 +592,7 @@ class HeroBalanceWidget(QWidget):
         self.current_trend = trend
         
         # Update usage indicator
-        trend_text = format_trend_display(trend)
+        format_trend_display(trend)
         self.usage_indicator.set_usage_trend(trend.trend_direction, trend.daily_average_usd)
         
         # Update days remaining if we have current balance
@@ -701,11 +700,11 @@ class HeroBalanceWidget(QWidget):
             daily_avg = total_diem / 7.0
             # Determine trend based on API key dominance
             if api_keys_diem > web_usage_diem * 2:
-                trend = "api_dominant"
+                pass
             elif web_usage_diem > api_keys_diem * 2:
-                trend = "web_dominant"
+                pass
             else:
-                trend = "balanced"
+                pass
             
             # Update the usage indicator
             self.usage_indicator.set_usage_trend("stable", daily_avg)

@@ -4,8 +4,7 @@ Fetches usage data from /billing/usage endpoint and filters for web app consumpt
 """
 
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timezone, timedelta
+from typing import List, Dict, Any
 from PySide6.QtCore import QThread, Signal
 
 from src.core.venice_api_client import VeniceAPIClient

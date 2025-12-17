@@ -6,7 +6,6 @@ across the entire application to eliminate scattered error handling patterns.
 """
 
 import logging
-import traceback
 from typing import Optional
 from PySide6.QtCore import Signal
 

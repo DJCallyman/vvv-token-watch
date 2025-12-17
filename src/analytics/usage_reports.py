@@ -10,7 +10,7 @@ import os
 import logging
 from dataclasses import dataclass
 
-from src.core.usage_tracker import APIKeyUsage, UsageMetrics
+from src.core.usage_tracker import APIKeyUsage
 
 logger = logging.getLogger(__name__)
 

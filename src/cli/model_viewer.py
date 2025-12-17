@@ -27,4 +27,3 @@ class ModelViewerWidget(QWidget):
         
     def update_model(self, model_data):
         """Placeholder for actual model update logic - will be implemented with 3D rendering"""
-        pass

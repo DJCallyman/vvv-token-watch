@@ -1,22 +1,16 @@
 import sys
-import json
-import traceback
 import time
-import queue
-from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Optional, List
 import logging
-import requests
 import warnings
 import urllib3
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                                  QLabel, QPushButton, QComboBox, QFrame, QScrollArea,
-                                 QScrollBar, QGridLayout, QSpacerItem, QSizePolicy,
-                                 QErrorMessage, QMessageBox, QStatusBar, QTabWidget,
-                                 QGroupBox, QTextEdit, QLineEdit, QSplitter)
-from PySide6.QtCore import Qt, Signal, QObject, QThread, QTimer, QSize
-from PySide6.QtGui import QFont, QPalette, QColor, QCloseEvent, QDoubleValidator
+                                 QMessageBox, QStatusBar, QTabWidget, QGroupBox,
+                                 QTextEdit, QLineEdit)
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont, QDoubleValidator
 
 # Add the project directory to Python path (make it dynamic)
 import os
@@ -26,22 +20,19 @@ sys.path.insert(0, project_root)
 # Import local modules using relative imports (now a standalone repo)
 from src.utils.utils import format_currency, validate_holding_amount, ValidationState
 from src.utils.error_handler import ErrorHandler
-from src.utils.model_utils import ModelNameParser
 from src.config.config import Config
 from src.config.theme import Theme
 from src.config.features import FeatureFlags
 from src.widgets.price_display import PriceDisplayWidget
-from src.cli.model_viewer import ModelViewerWidget
 from src.analytics.model_comparison import ModelComparisonWidget
 from src.core.usage_tracker import UsageWorker, BalanceInfo, APIKeyUsage
-from src.core.worker_factory import APIWorkerFactory, WorkerPool
+from src.core.worker_factory import APIWorkerFactory
 from src.widgets.vvv_display import BalanceDisplayWidget, APIKeyUsageWidget
 from src.widgets.enhanced_balance_widget import HeroBalanceWidget
 from src.widgets.action_buttons import ActionButtonWidget
-from src.utils.date_utils import DateFormatter
 from src.widgets.usage_leaderboard import UsageLeaderboardWidget
 from src.core.web_usage import WebUsageWorker, WebUsageMetrics
-from src.core.unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
+from src.core.unified_usage import UnifiedUsageIntegrator
 from src.widgets.cost_optimization_widget import CostOptimizationWidget
 from src.core.price_worker import PriceWorker
 from src.core.cost_analysis_worker import CostAnalysisWorker
@@ -222,7 +213,7 @@ class CombinedViewerApp(QMainWindow):
     
     def get_combobox_style(self):
         """Get the modern combobox stylesheet"""
-        bg_color = self.theme.background
+        self.theme.background
         text_color = self.theme.text
         accent_color = self.theme.accent
         card_bg = self.theme.card_background
@@ -261,7 +252,7 @@ class CombinedViewerApp(QMainWindow):
     
     def get_button_style(self):
         """Get the modern button stylesheet"""
-        bg_color = self.theme.background
+        self.theme.background
         text_color = self.theme.text
         accent_color = self.theme.accent
         card_bg = self.theme.card_background
@@ -2555,7 +2546,7 @@ class CombinedViewerApp(QMainWindow):
             trend = self.usage_analytics.get_usage_trend(days=7)
             
             # Calculate days remaining estimate
-            current_rate = getattr(self.exchange_rate_service.current_rate, 'rate', Config.DEFAULT_EXCHANGE_RATE) if self.exchange_rate_service.current_rate else Config.DEFAULT_EXCHANGE_RATE
+            getattr(self.exchange_rate_service.current_rate, 'rate', Config.DEFAULT_EXCHANGE_RATE) if self.exchange_rate_service.current_rate else Config.DEFAULT_EXCHANGE_RATE
             days_remaining = self.usage_analytics.estimate_days_remaining(balance_info.usd)
             trend.days_remaining_estimate = days_remaining
             
