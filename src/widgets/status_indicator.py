@@ -5,7 +5,7 @@ This module provides a reusable status indicator component that can display
 various states with appropriate colors and animations.
 """
 
-from typing import Dict, Optional
+from typing import Dict
 from PySide6.QtWidgets import QWidget, QLabel, QHBoxLayout, QGraphicsOpacityEffect
 from PySide6.QtCore import Qt, QPropertyAnimation, QEasingCurve, Signal
 from PySide6.QtGui import QFont

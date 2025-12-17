@@ -4,7 +4,7 @@ Implements worker threads for non-blocking API calls to retrieve usage data.
 """
 
 from dataclasses import dataclass
-from typing import List, Dict, Any
+from typing import List, Dict
 import requests
 import json
 import logging

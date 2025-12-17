@@ -5,7 +5,7 @@ This module provides a QThread worker for fetching CoinGecko price data
 without blocking the main UI thread.
 """
 
-from typing import Dict, Optional, List
+from typing import List
 import requests
 import logging
 import time

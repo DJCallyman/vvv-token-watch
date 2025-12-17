@@ -3,11 +3,9 @@ Venice API Key Management Service for Phase 3 enhancements.
 Handles actual API calls to Venice.ai for key management operations.
 """
 
-import requests
 import logging
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
-import json
 
 from src.config.config import Config
 from src.core.venice_api_client import VeniceAPIClient
