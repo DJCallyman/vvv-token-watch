@@ -203,6 +203,9 @@ class ModelNameParser:
         """
         Get pricing information for a model based on its SKU.
         
+        DEPRECATED: Use ModelCacheManager.get_model() instead for current pricing.
+        This method is kept for backward compatibility and fallback scenarios.
+        
         Args:
             sku: Raw SKU string (e.g., "llama-3.3-70b-llm-input-mtoken")
             
@@ -216,7 +219,10 @@ class ModelNameParser:
     def calculate_sku_cost(sku: str, units: float) -> Optional[float]:
         """
         Calculate cost for a specific SKU based on units consumed.
-        
+
+        DEPRECATED: Use ModelCacheManager.calculate_text_cost() instead for current pricing.
+        This method is kept for backward compatibility and fallback scenarios.
+
         For chat models:
         - Input SKUs: units = tokens, cost = (tokens * input_price) / 1M
         - Output SKUs: units = tokens, cost = (tokens * output_price) / 1M
@@ -260,6 +266,9 @@ class ModelNameParser:
                                min_savings_percent: float = 10.0) -> List[Tuple[str, str, float]]:
         """
         Find cheaper alternative models for a given SKU.
+        
+        DEPRECATED: Use ModelCacheManager._find_cheaper_alternatives_from_cache() instead.
+        This method is kept for backward compatibility and fallback scenarios.
         
         Args:
             current_sku: Current SKU being used

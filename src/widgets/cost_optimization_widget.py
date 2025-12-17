@@ -27,17 +27,19 @@ class CostOptimizerWorker(QThread):
     analysis_complete = Signal(object)  # CostOptimizationReport
     error_occurred = Signal(str)
     
-    def __init__(self, billing_data: List[Dict], api_keys_data: List[Dict] = None, analysis_days: int = 7, parent=None):
+    def __init__(self, billing_data: List[Dict], api_keys_data: List[Dict] = None, 
+                 analysis_days: int = 7, model_cache=None, parent=None):
         super().__init__(parent)  # Important: parent prevents premature garbage collection
         self.billing_data = billing_data
         self.api_keys_data = api_keys_data or []
         self.analysis_days = analysis_days
+        self.model_cache = model_cache  # Pass model cache for dynamic pricing
         # Note: finished signal connections are set up by the caller (update_analysis)
     
     def run(self):
         """Run cost analysis in background thread"""
         try:
-            optimizer = CostOptimizer()
+            optimizer = CostOptimizer(model_cache=self.model_cache)
             
             # Set API key usage data if available
             if self.api_keys_data:
@@ -128,9 +130,10 @@ class CostOptimizationWidget(QWidget):
     
     refresh_requested = Signal()
     
-    def __init__(self, theme: Theme, parent=None):
+    def __init__(self, theme: Theme, model_cache=None, parent=None):
         super().__init__(parent)
         self.theme = theme
+        self.model_cache = model_cache  # Store model cache for dynamic model list
         self.current_report: Optional[CostOptimizationReport] = None
         self.worker: Optional[CostOptimizerWorker] = None
         self.models_data: Optional[Dict] = None  # Dynamic models from Venice API
@@ -482,8 +485,9 @@ class CostOptimizationWidget(QWidget):
         # Stop and clean up any existing worker before creating a new one
         self._cleanup_worker()
         
-        # Run analysis in background thread - pass self as parent to prevent GC
-        self.worker = CostOptimizerWorker(billing_data, api_keys_data, analysis_days, parent=self)
+        # Run analysis in background thread - pass model_cache and self as parent to prevent GC
+        self.worker = CostOptimizerWorker(billing_data, api_keys_data, analysis_days, 
+                                         model_cache=self.model_cache, parent=self)
         self.worker.analysis_complete.connect(self._handle_analysis_complete)
         self.worker.error_occurred.connect(self._handle_analysis_error)
         # Clear reference before deleteLater runs to avoid accessing deleted C++ object
@@ -613,36 +617,57 @@ class CostOptimizationWidget(QWidget):
         self.recommendations_table.setColumnWidth(2, max(180, self.recommendations_table.columnWidth(2)))
     
     def _populate_model_combos(self):
-        """Populate model combo boxes in calculator from dynamic API data"""
+        """Populate model combo boxes in calculator from model cache or API data"""
         self.model1_combo.clear()
         self.model2_combo.clear()
         
-        # Use dynamic models data from Venice API if available
-        if self.models_data and 'data' in self.models_data:
+        text_models = []
+        
+        # Try to use model cache first for current data
+        if self.model_cache:
+            cached_models = self.model_cache.get_text_models()
+            for cached_model in cached_models:
+                # Convert cached model to format compatible with existing code
+                model_data = {
+                    'id': cached_model.id,
+                    'name': cached_model.name,
+                    'input_price_usd': cached_model.input_price_usd,
+                    'output_price_usd': cached_model.output_price_usd,
+                }
+                text_models.append(model_data)
+        
+        # Fallback to API data if cache is unavailable
+        elif self.models_data and 'data' in self.models_data:
             # Filter to text models only (they have input/output pricing)
             text_models = [
                 model for model in self.models_data['data']
                 if model.get('type') == 'text'
             ]
+        
+        # Sort by model ID for consistent ordering
+        text_models.sort(key=lambda m: m.get('id', ''))
+        
+        for model in text_models:
+            model_id = model.get('id', '')
             
-            # Sort by model ID for consistent ordering
-            text_models.sort(key=lambda m: m.get('id', ''))
-            
-            for model in text_models:
-                model_id = model.get('id', '')
+            # Get pricing - from cache or API format
+            if 'input_price_usd' in model:
+                # Cached format
+                input_price = model.get('input_price_usd', 0)
+                output_price = model.get('output_price_usd', 0)
+            else:
+                # API format
                 model_spec = model.get('model_spec', {})
                 pricing = model_spec.get('pricing', {})
-                
-                # Get pricing (per 1M tokens, convert to per 1K)
                 input_price = pricing.get('input', {}).get('usd', 0)
                 output_price = pricing.get('output', {}).get('usd', 0)
-                
-                # Format display text with pricing
-                display_text = f"{model_id} (${input_price:.2f}/${output_price:.2f} per 1M)"
-                
-                # Store full model data for calculation
-                self.model1_combo.addItem(display_text, model)
-                self.model2_combo.addItem(display_text, model)
+            
+            # Format display text with pricing
+            display_text = f"{model_id} (${input_price:.2f}/${output_price:.2f} per 1M)"
+            
+            # Store full model data for calculation
+            self.model1_combo.addItem(display_text, model)
+            self.model2_combo.addItem(display_text, model)
         
         # Set defaults
         if self.model1_combo.count() > 0:
@@ -656,7 +681,7 @@ class CostOptimizationWidget(QWidget):
         self._populate_model_combos()
     
     def _calculate_comparison(self):
-        """Calculate and display model cost comparison using dynamic API pricing"""
+        """Calculate and display model cost comparison using dynamic API pricing or cache"""
         model1_data = self.model1_combo.currentData()
         model2_data = self.model2_combo.currentData()
         prompt_tokens = self.prompt_tokens_spin.value()
@@ -666,18 +691,30 @@ class CostOptimizationWidget(QWidget):
             self.calc_results_label.setText("Please select both models")
             return
         
-        # Extract pricing from model data (API returns price per 1M tokens)
+        # Extract pricing from model data (handle both cached and API formats)
         model1_id = model1_data.get('id', 'Unknown')
-        model1_spec = model1_data.get('model_spec', {})
-        model1_pricing = model1_spec.get('pricing', {})
-        model1_input = model1_pricing.get('input', {}).get('usd', 0)
-        model1_output = model1_pricing.get('output', {}).get('usd', 0)
+        if 'input_price_usd' in model1_data:
+            # Cached format
+            model1_input = model1_data.get('input_price_usd', 0)
+            model1_output = model1_data.get('output_price_usd', 0)
+        else:
+            # API format
+            model1_spec = model1_data.get('model_spec', {})
+            model1_pricing = model1_spec.get('pricing', {})
+            model1_input = model1_pricing.get('input', {}).get('usd', 0)
+            model1_output = model1_pricing.get('output', {}).get('usd', 0)
         
         model2_id = model2_data.get('id', 'Unknown')
-        model2_spec = model2_data.get('model_spec', {})
-        model2_pricing = model2_spec.get('pricing', {})
-        model2_input = model2_pricing.get('input', {}).get('usd', 0)
-        model2_output = model2_pricing.get('output', {}).get('usd', 0)
+        if 'input_price_usd' in model2_data:
+            # Cached format
+            model2_input = model2_data.get('input_price_usd', 0)
+            model2_output = model2_data.get('output_price_usd', 0)
+        else:
+            # API format
+            model2_spec = model2_data.get('model_spec', {})
+            model2_pricing = model2_spec.get('pricing', {})
+            model2_input = model2_pricing.get('input', {}).get('usd', 0)
+            model2_output = model2_pricing.get('output', {}).get('usd', 0)
         
         # Calculate cost per request (price is per 1M tokens)
         model1_cost = (prompt_tokens * model1_input / 1_000_000) + (completion_tokens * model1_output / 1_000_000)

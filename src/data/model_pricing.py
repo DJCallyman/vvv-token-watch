@@ -5,6 +5,15 @@ This module contains comprehensive pricing information for all Venice AI models,
 extracted from the official Venice API documentation. Prices are in USD per 1M tokens
 (for LLMs) or per generation/character (for image/audio models).
 
+DEPRECATED: This module is now primarily used as a fallback. The ModelCacheManager
+(src.core.model_cache) dynamically fetches current models and pricing from the Venice API
+at application startup and is now the recommended source for model data and pricing.
+
+Use this module only as a fallback when:
+- ModelCacheManager is unavailable
+- API calls fail
+- Offline mode is required
+
 Source: https://docs.venice.ai/overview/pricing
 Last Updated: 2025-11-29
 """

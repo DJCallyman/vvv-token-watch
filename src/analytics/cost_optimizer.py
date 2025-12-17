@@ -5,7 +5,7 @@ This module analyzes usage patterns and provides intelligent recommendations
 for reducing costs while maintaining model capabilities.
 """
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 from dataclasses import dataclass
 from datetime import datetime
 import logging
@@ -66,6 +66,9 @@ class CostOptimizer:
     
     This class processes billing/usage data to identify opportunities for
     cost savings through model substitution and usage pattern optimization.
+    
+    Can use a dynamic ModelCacheManager for current pricing or fallback to
+    static ModelPricingDatabase if no cache is provided.
     """
     
     # Thresholds for recommendations
@@ -73,8 +76,15 @@ class CostOptimizer:
     MIN_REQUEST_COUNT = 10  # Minimum requests to analyze
     SMALL_REQUEST_TOKEN_THRESHOLD = 1000  # Tokens threshold for "small" requests
     
-    def __init__(self):
-        """Initialize the cost optimizer"""
+    def __init__(self, model_cache=None):
+        """
+        Initialize the cost optimizer.
+        
+        Args:
+            model_cache: Optional ModelCacheManager instance for dynamic pricing.
+                        If None, will use static ModelPricingDatabase.
+        """
+        self.model_cache = model_cache
         self.model_usage: Dict[str, Dict] = {}
         self.total_cost_diem = 0.0
         self.total_cost_usd = 0.0
@@ -133,8 +143,16 @@ class CostOptimizer:
             model_id = ModelNameParser.clean_sku_name(sku)
             
             if model_id not in self.model_usage:
-                pricing = ModelPricingDatabase.get_model(model_id)
-                display_name = pricing.display_name if pricing else model_id
+                # Try to get display name from cache first, then fall back to static DB
+                display_name = model_id
+                if self.model_cache:
+                    cached_model = self.model_cache.get_model(model_id)
+                    if cached_model:
+                        display_name = cached_model.name
+                else:
+                    pricing = ModelPricingDatabase.get_model(model_id)
+                    if pricing:
+                        display_name = pricing.display_name
                 
                 self.model_usage[model_id] = {
                     'display_name': display_name,
@@ -230,9 +248,26 @@ class CostOptimizer:
             if data['request_count'] < self.MIN_REQUEST_COUNT:
                 continue
             
-            current_pricing = ModelPricingDatabase.get_model(model_id)
-            if not current_pricing or not current_pricing.input_price:
+            # Get current model pricing from cache or static DB
+            current_pricing = None
+            if self.model_cache:
+                cached_model = self.model_cache.get_model(model_id)
+                if cached_model and cached_model.input_price_usd:
+                    current_pricing = cached_model
+            else:
+                current_pricing = ModelPricingDatabase.get_model(model_id)
+            
+            if not current_pricing:
                 continue
+            
+            # For cached models, extract input price
+            if hasattr(current_pricing, 'input_price_usd'):
+                if not current_pricing.input_price_usd:
+                    continue
+            else:
+                # For ModelPricing objects
+                if not current_pricing.input_price:
+                    continue
             
             # Calculate average request size
             avg_tokens = (
@@ -244,19 +279,35 @@ class CostOptimizer:
             is_small_request = avg_tokens < self.SMALL_REQUEST_TOKEN_THRESHOLD
             
             # Get required capabilities
-            required_caps = current_pricing.capabilities if not is_small_request else []
+            if hasattr(current_pricing, 'capabilities'):
+                required_caps = current_pricing.capabilities if not is_small_request else []
+            else:
+                required_caps = []
             
-            # Find cheaper alternatives
-            alternatives = ModelPricingDatabase.find_cheaper_alternatives(
-                model_id,
-                required_capabilities=required_caps
-            )
+            # Find cheaper alternatives - use cache if available, otherwise static DB
+            if self.model_cache:
+                alternatives = self._find_cheaper_alternatives_from_cache(
+                    model_id,
+                    current_pricing,
+                    required_caps
+                )
+            else:
+                alternatives = ModelPricingDatabase.find_cheaper_alternatives(
+                    model_id,
+                    required_capabilities=required_caps
+                )
             
             for alt_id, savings_pct in alternatives:
                 if savings_pct < self.MIN_SAVINGS_PERCENT:
                     continue
                 
-                alt_pricing = ModelPricingDatabase.get_model(alt_id)
+                # Get alternative model pricing
+                alt_pricing = None
+                if self.model_cache:
+                    alt_pricing = self.model_cache.get_model(alt_id)
+                else:
+                    alt_pricing = ModelPricingDatabase.get_model(alt_id)
+                
                 if not alt_pricing:
                     continue
                 
@@ -280,9 +331,9 @@ class CostOptimizer:
                 
                 recommendation = CostSavingsRecommendation(
                     current_model_id=model_id,
-                    current_model_name=current_pricing.display_name,
+                    current_model_name=self._get_model_display_name(current_pricing),
                     recommended_model_id=alt_id,
-                    recommended_model_name=alt_pricing.display_name,
+                    recommended_model_name=self._get_model_display_name(alt_pricing),
                     current_cost=current_cost,
                     potential_cost=potential_cost,
                     savings_amount=savings_amount,
@@ -376,28 +427,93 @@ class CostOptimizer:
     def _determine_confidence(self, current: ModelPricing, alternative: ModelPricing,
                              avg_tokens: float, is_small_request: bool) -> str:
         """Determine confidence level for a recommendation"""
+        # Handle both CachedModel and ModelPricing objects
+        current_caps = current.capabilities if hasattr(current, 'capabilities') else []
+        alt_caps = alternative.capabilities if hasattr(alternative, 'capabilities') else []
+        
         # High confidence: small requests, cheaper model
         if is_small_request and avg_tokens < 500:
             return "high"
         
         # Medium confidence: moderate requests, similar capabilities
-        if set(alternative.capabilities).issuperset(set(current.capabilities)):
+        if alt_caps and set(alt_caps).issuperset(set(current_caps)):
             return "medium"
         
         # Low confidence: might lose some capabilities
         return "low"
     
-    def _generate_recommendation_reason(self, current: ModelPricing, alternative: ModelPricing,
+    def _generate_recommendation_reason(self, current, alternative,
                                        avg_tokens: float, is_small_request: bool) -> str:
         """Generate human-readable reason for recommendation"""
+        alt_name = self._get_model_display_name(alternative)
+        
         if is_small_request:
             return (f"Your requests average {avg_tokens:.0f} tokens - "
-                   f"{alternative.display_name} is optimized for smaller requests")
+                   f"{alt_name} is optimized for smaller requests")
         
-        if set(alternative.capabilities) == set(current.capabilities):
-            return f"{alternative.display_name} offers identical capabilities at lower cost"
+        current_caps = current.capabilities if hasattr(current, 'capabilities') else []
+        alt_caps = alternative.capabilities if hasattr(alternative, 'capabilities') else []
         
-        return f"{alternative.display_name} can handle most of your use cases at lower cost"
+        if current_caps and alt_caps and set(alt_caps) == set(current_caps):
+            return f"{alt_name} offers identical capabilities at lower cost"
+        
+        return f"{alt_name} can handle most of your use cases at lower cost"
+    
+    def _get_model_display_name(self, model) -> str:
+        """Get display name from either CachedModel or ModelPricing object"""
+        if hasattr(model, 'display_name'):
+            return model.display_name
+        elif hasattr(model, 'name'):
+            return model.name
+        elif hasattr(model, 'id'):
+            return model.id
+        return "Unknown Model"
+    
+    def _find_cheaper_alternatives_from_cache(self, current_model_id: str, current_model,
+                                              required_capabilities: List[str]) -> List:
+        """
+        Find cheaper alternatives using the model cache.
+        
+        Args:
+            current_model_id: The current model ID
+            current_model: The current cached model object
+            required_capabilities: Required capabilities to maintain
+            
+        Returns:
+            List of (model_id, savings_percent) tuples
+        """
+        if not self.model_cache:
+            return []
+        
+        alternatives = []
+        current_price = current_model.input_price_usd
+        if not current_price:
+            return []
+        
+        # Get all text models from cache
+        text_models = self.model_cache.get_text_models()
+        
+        for alt_model in text_models:
+            if alt_model.id == current_model_id:
+                continue
+            
+            if not alt_model.input_price_usd:
+                continue
+            
+            # Check if has required capabilities
+            if required_capabilities:
+                has_all_caps = all(cap in alt_model.capabilities for cap in required_capabilities)
+                if not has_all_caps:
+                    continue
+            
+            # Calculate savings
+            if alt_model.input_price_usd < current_price:
+                savings_pct = ((current_price - alt_model.input_price_usd) / current_price) * 100
+                alternatives.append((alt_model.id, savings_pct))
+        
+        # Sort by savings (highest first)
+        alternatives.sort(key=lambda x: x[1], reverse=True)
+        return alternatives
     
     def generate_report(self, analysis_days: int = 7) -> CostOptimizationReport:
         """
