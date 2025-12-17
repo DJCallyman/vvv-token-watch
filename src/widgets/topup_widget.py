@@ -7,12 +7,12 @@ including preset amounts and custom input options.
 
 import webbrowser
 import logging
-from typing import Dict, Optional
+from typing import Dict
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                                QLabel, QFrame, QComboBox, QLineEdit, QDialog,
-                                QDialogButtonBox, QMessageBox, QSpacerItem, QSizePolicy)
-from PySide6.QtCore import Qt, Signal, QPropertyAnimation, QEasingCurve, QTimer
-from PySide6.QtGui import QFont, QPalette, QColor
+                                QLabel, QFrame, QLineEdit, QDialog, QDialogButtonBox,
+                                QMessageBox, QSpacerItem, QSizePolicy)
+from PySide6.QtCore import Qt, Signal, QTimer
+from PySide6.QtGui import QFont
 
 logger = logging.getLogger(__name__)
 
@@ -399,7 +399,7 @@ class TopUpWidget(QWidget):
             self.animation.stop()
         
         # Create a simple scale animation
-        original_size = self.main_add_button.size()
+        self.main_add_button.size()
         
         # Quick scale down and up
         self.main_add_button.setStyleSheet(self.main_add_button.styleSheet() + """

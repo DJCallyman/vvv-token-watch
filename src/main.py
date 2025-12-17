@@ -1,22 +1,16 @@
 import sys
-import json
-import traceback
 import time
-import queue
-from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Optional, List
 import logging
-import requests
 import warnings
 import urllib3
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                                  QLabel, QPushButton, QComboBox, QFrame, QScrollArea,
-                                 QScrollBar, QGridLayout, QSpacerItem, QSizePolicy,
-                                 QErrorMessage, QMessageBox, QStatusBar, QTabWidget,
-                                 QGroupBox, QTextEdit, QLineEdit, QSplitter)
-from PySide6.QtCore import Qt, Signal, QObject, QThread, QTimer, QSize
-from PySide6.QtGui import QFont, QPalette, QColor, QCloseEvent, QDoubleValidator
+                                 QMessageBox, QStatusBar, QTabWidget, QGroupBox,
+                                 QTextEdit, QLineEdit)
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtGui import QFont, QDoubleValidator
 
 # Add the project directory to Python path (make it dynamic)
 import os
@@ -26,25 +20,23 @@ sys.path.insert(0, project_root)
 # Import local modules using relative imports (now a standalone repo)
 from src.utils.utils import format_currency, validate_holding_amount, ValidationState
 from src.utils.error_handler import ErrorHandler
-from src.utils.model_utils import ModelNameParser
 from src.config.config import Config
 from src.config.theme import Theme
 from src.config.features import FeatureFlags
 from src.widgets.price_display import PriceDisplayWidget
-from src.cli.model_viewer import ModelViewerWidget
 from src.analytics.model_comparison import ModelComparisonWidget
 from src.core.usage_tracker import UsageWorker, BalanceInfo, APIKeyUsage
-from src.core.worker_factory import APIWorkerFactory, WorkerPool
+from src.core.worker_factory import APIWorkerFactory
 from src.widgets.vvv_display import BalanceDisplayWidget, APIKeyUsageWidget
 from src.widgets.enhanced_balance_widget import HeroBalanceWidget
 from src.widgets.action_buttons import ActionButtonWidget
-from src.utils.date_utils import DateFormatter
 from src.widgets.usage_leaderboard import UsageLeaderboardWidget
 from src.core.web_usage import WebUsageWorker, WebUsageMetrics
-from src.core.unified_usage import UnifiedUsageEntry, UnifiedUsageIntegrator
+from src.core.unified_usage import UnifiedUsageIntegrator
 from src.widgets.cost_optimization_widget import CostOptimizationWidget
 from src.core.price_worker import PriceWorker
 from src.core.cost_analysis_worker import CostAnalysisWorker
+from src.core.model_cache import ModelCacheManager
 
 # --- Suppress Warnings (Use with caution) ---
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
@@ -146,6 +138,24 @@ class CombinedViewerApp(QMainWindow):
         if not is_valid:
             QMessageBox.critical(self, "Configuration Error", error_msg)
             sys.exit(1)
+        
+        # Initialize model cache early to fetch current models/pricing
+        logger.info("Initializing model cache from Venice API...")
+        self.model_cache = ModelCacheManager()
+        cache_success = self.model_cache.fetch_models()
+        if cache_success:
+            logger.info(f"Model cache initialized with {len(self.model_cache.models)} models")
+        else:
+            logger.warning("Model cache initialization failed, using local cache if available")
+        
+        # Populate models_data from cache for Models & Compare tabs
+        # This ensures these widgets use the same fresh data as the cache
+        if self.model_cache.raw_api_data:
+            self.models_data = self.model_cache.raw_api_data
+            logger.info(f"Models tab will use {len(self.models_data.get('data', []))} models from cache")
+        else:
+            self.models_data = None
+            logger.warning("No model data available for Models tab")
             
         self.setWindowTitle("Venice AI Models & CoinGecko Price Viewer")
         self.setMinimumSize(1200, 850)  # Increased minimum size for better chart display
@@ -153,8 +163,14 @@ class CombinedViewerApp(QMainWindow):
         # Set a good default size for 1470x956 display
         self.resize(1280, 920)
         
-        self.models_data = None
+        # Extract model types from cached data
         self.model_types = ["all"]
+        if self.models_data:
+            types = set(model.get('type', 'Unknown') for model in self.models_data.get('data', []))
+            types = {str(t) if t is not None else 'Unknown' for t in types}
+            self.model_types = ["all"] + sorted(list(types))
+            logger.info(f"Available model types: {self.model_types}")
+        
         self.price_data = {
             'usd': {'price': None, 'total': None},
             'aud': {'price': None, 'total': None}
@@ -222,7 +238,7 @@ class CombinedViewerApp(QMainWindow):
     
     def get_combobox_style(self):
         """Get the modern combobox stylesheet"""
-        bg_color = self.theme.background
+        self.theme.background
         text_color = self.theme.text
         accent_color = self.theme.accent
         card_bg = self.theme.card_background
@@ -261,7 +277,7 @@ class CombinedViewerApp(QMainWindow):
     
     def get_button_style(self):
         """Get the modern button stylesheet"""
-        bg_color = self.theme.background
+        self.theme.background
         text_color = self.theme.text
         accent_color = self.theme.accent
         card_bg = self.theme.card_background
@@ -732,6 +748,10 @@ class CombinedViewerApp(QMainWindow):
         # Create fifth tab: Usage Leaderboard (Phase 2)
         if PHASE2_AVAILABLE:
             self.create_leaderboard_tab()
+        
+        # Initialize Models tab and Compare tab with cached data
+        # This populates them immediately on startup without requiring "Connect" button
+        self._init_models_tabs_from_cache()
 
         # Initialize holding entry with proper value format
         self.holding_entry.setText(str(int(Config.COINGECKO_HOLDING_AMOUNT)) if Config.COINGECKO_HOLDING_AMOUNT.is_integer() else f"{Config.COINGECKO_HOLDING_AMOUNT:.2f}")
@@ -1256,8 +1276,8 @@ class CombinedViewerApp(QMainWindow):
         cost_tab_layout.setContentsMargins(5, 5, 5, 5)
         cost_tab_layout.setSpacing(10)
         
-        # Create cost optimization widget
-        self.cost_optimizer_widget = CostOptimizationWidget(self.theme, self)
+        # Create cost optimization widget with model cache
+        self.cost_optimizer_widget = CostOptimizationWidget(self.theme, model_cache=self.model_cache, parent=self)
         self.cost_optimizer_widget.refresh_requested.connect(self._refresh_cost_analysis)
         cost_tab_layout.addWidget(self.cost_optimizer_widget)
         
@@ -1797,6 +1817,33 @@ class CombinedViewerApp(QMainWindow):
         
         layout.addLayout(row_layout)
         return 0
+    
+    def _init_models_tabs_from_cache(self):
+        """Initialize Models and Compare tabs with cached model data."""
+        if not self.models_data:
+            logger.warning("No models data available for tab initialization")
+            return
+        
+        logger.info("Populating Models tab from cache...")
+        
+        # Populate the type combobox with available model types
+        self.type_combobox.clear()
+        self.type_combobox.blockSignals(True)
+        self.type_combobox.addItems(self.model_types)
+        self.type_combobox.setCurrentText("all")
+        self.type_combobox.blockSignals(False)
+        self.type_combobox.setEnabled(True)
+        
+        # Enable buttons
+        self.display_button.setEnabled(True)
+        self.view_styles_button.setEnabled(True)
+        self.connect_button.setEnabled(True)
+        
+        # Display the "all" models on startup
+        self.display_selected_models_action()
+        
+        # Update the comparison widget if available
+        self.update_model_comparison_data()
     
     def _init_usage_tracking(self):
         """Initialize the usage tracking system."""
@@ -2555,7 +2602,7 @@ class CombinedViewerApp(QMainWindow):
             trend = self.usage_analytics.get_usage_trend(days=7)
             
             # Calculate days remaining estimate
-            current_rate = getattr(self.exchange_rate_service.current_rate, 'rate', Config.DEFAULT_EXCHANGE_RATE) if self.exchange_rate_service.current_rate else Config.DEFAULT_EXCHANGE_RATE
+            getattr(self.exchange_rate_service.current_rate, 'rate', Config.DEFAULT_EXCHANGE_RATE) if self.exchange_rate_service.current_rate else Config.DEFAULT_EXCHANGE_RATE
             days_remaining = self.usage_analytics.estimate_days_remaining(balance_info.usd)
             trend.days_remaining_estimate = days_remaining
             
