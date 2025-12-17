@@ -147,6 +147,15 @@ class CombinedViewerApp(QMainWindow):
             logger.info(f"Model cache initialized with {len(self.model_cache.models)} models")
         else:
             logger.warning("Model cache initialization failed, using local cache if available")
+        
+        # Populate models_data from cache for Models & Compare tabs
+        # This ensures these widgets use the same fresh data as the cache
+        if self.model_cache.raw_api_data:
+            self.models_data = self.model_cache.raw_api_data
+            logger.info(f"Models tab will use {len(self.models_data.get('data', []))} models from cache")
+        else:
+            self.models_data = None
+            logger.warning("No model data available for Models tab")
             
         self.setWindowTitle("Venice AI Models & CoinGecko Price Viewer")
         self.setMinimumSize(1200, 850)  # Increased minimum size for better chart display
@@ -154,8 +163,14 @@ class CombinedViewerApp(QMainWindow):
         # Set a good default size for 1470x956 display
         self.resize(1280, 920)
         
-        self.models_data = None
+        # Extract model types from cached data
         self.model_types = ["all"]
+        if self.models_data:
+            types = set(model.get('type', 'Unknown') for model in self.models_data.get('data', []))
+            types = {str(t) if t is not None else 'Unknown' for t in types}
+            self.model_types = ["all"] + sorted(list(types))
+            logger.info(f"Available model types: {self.model_types}")
+        
         self.price_data = {
             'usd': {'price': None, 'total': None},
             'aud': {'price': None, 'total': None}
@@ -733,6 +748,10 @@ class CombinedViewerApp(QMainWindow):
         # Create fifth tab: Usage Leaderboard (Phase 2)
         if PHASE2_AVAILABLE:
             self.create_leaderboard_tab()
+        
+        # Initialize Models tab and Compare tab with cached data
+        # This populates them immediately on startup without requiring "Connect" button
+        self._init_models_tabs_from_cache()
 
         # Initialize holding entry with proper value format
         self.holding_entry.setText(str(int(Config.COINGECKO_HOLDING_AMOUNT)) if Config.COINGECKO_HOLDING_AMOUNT.is_integer() else f"{Config.COINGECKO_HOLDING_AMOUNT:.2f}")
@@ -1798,6 +1817,33 @@ class CombinedViewerApp(QMainWindow):
         
         layout.addLayout(row_layout)
         return 0
+    
+    def _init_models_tabs_from_cache(self):
+        """Initialize Models and Compare tabs with cached model data."""
+        if not self.models_data:
+            logger.warning("No models data available for tab initialization")
+            return
+        
+        logger.info("Populating Models tab from cache...")
+        
+        # Populate the type combobox with available model types
+        self.type_combobox.clear()
+        self.type_combobox.blockSignals(True)
+        self.type_combobox.addItems(self.model_types)
+        self.type_combobox.setCurrentText("all")
+        self.type_combobox.blockSignals(False)
+        self.type_combobox.setEnabled(True)
+        
+        # Enable buttons
+        self.display_button.setEnabled(True)
+        self.view_styles_button.setEnabled(True)
+        self.connect_button.setEnabled(True)
+        
+        # Display the "all" models on startup
+        self.display_selected_models_action()
+        
+        # Update the comparison widget if available
+        self.update_model_comparison_data()
     
     def _init_usage_tracking(self):
         """Initialize the usage tracking system."""
