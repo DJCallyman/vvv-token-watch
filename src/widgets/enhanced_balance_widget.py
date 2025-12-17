@@ -85,6 +85,26 @@ class HeroBalanceWidget(QWidget):
         
         super().paintEvent(event)
     
+    def _calculate_contrast_text_color(self):
+        """Calculate appropriate text color based on gradient background luminance.
+        
+        Returns white for dark gradients, dark text for light gradients.
+        Uses the perceived luminance formula.
+        """
+        start_color = QColor(self.theme_colors.get('hero_gradient_start', '#2d5aa0'))
+        
+        # Calculate perceived luminance (ITU-R BT.709)
+        r = start_color.red() / 255.0
+        g = start_color.green() / 255.0
+        b = start_color.blue() / 255.0
+        luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        
+        # Return white for dark backgrounds (luminance < 0.5), dark for light backgrounds
+        if luminance < 0.5:
+            return '#ffffff', '#e0e0e0'  # white text, light gray secondary
+        else:
+            return '#000000', '#333333'  # dark text, dark gray secondary
+    
     def init_ui(self):
         """Initialize the user interface."""
         # Set minimum height for hero card
@@ -226,8 +246,9 @@ class HeroBalanceWidget(QWidget):
         amount_font.setPointSize(18)
         amount_font.setBold(True)
         amount_label.setFont(amount_font)
-        # Force white text on transparent background - this is the main balance text
-        amount_label.setStyleSheet("color: #ffffff !important; background-color: transparent !important; font-weight: bold !important;")
+        # Use calculated contrast color for gradient background
+        text_color, _ = self._calculate_contrast_text_color()
+        amount_label.setStyleSheet(f"color: {text_color} !important; background-color: transparent !important; font-weight: bold !important;")
         layout.addWidget(amount_label)
         
         # Currency label
@@ -235,8 +256,9 @@ class HeroBalanceWidget(QWidget):
         currency_font = QFont()
         currency_font.setPointSize(8)
         currency_label.setFont(currency_font)
-        # Force light gray text on transparent background
-        currency_label.setStyleSheet("color: #e0e0e0 !important; background-color: transparent !important;")
+        # Use calculated secondary color for gradient background
+        _, secondary_color = self._calculate_contrast_text_color()
+        currency_label.setStyleSheet(f"color: {secondary_color} !important; background-color: transparent !important;")
         layout.addWidget(currency_label)
         
         return {
@@ -266,9 +288,8 @@ class HeroBalanceWidget(QWidget):
         shadow.setOffset(0, 4)
         self.setGraphicsEffect(shadow)
         
-        # Apply text colors
-        text_color = "#ffffff"  # White text on gradient background
-        secondary_color = "#e0e0e0"
+        # Calculate appropriate text colors based on gradient
+        text_color, secondary_color = self._calculate_contrast_text_color()
         
         # Style specific components directly
         if hasattr(self, 'title_label'):

@@ -524,22 +524,28 @@ def format_rate_display(rate: float) -> str:
     return f"1 DIEM = ${rate:.4f} USD"
 
 
-def format_rate_change(change_percentage: Optional[float]) -> Tuple[str, str]:
+def format_rate_change(change_percentage: Optional[float], theme_colors: Dict[str, str] = None) -> Tuple[str, str]:
     """
-    Format rate change for display.
+    Format rate change for display with theme-aware colors.
     
     Args:
         change_percentage: 24-hour change percentage
+        theme_colors: Optional theme colors dictionary
         
     Returns:
         Tuple of (formatted_text, css_color)
     """
+    # Default colors if theme not provided (for backwards compatibility)
+    neutral_color = theme_colors.get('text_secondary', '#999999') if theme_colors else '#999999'
+    positive_color = theme_colors.get('positive', '#00cc66') if theme_colors else '#00cc66'
+    negative_color = theme_colors.get('negative', '#ff3333') if theme_colors else '#ff3333'
+    
     if change_percentage is None:
-        return ("No change data", "#cccccc")
+        return ("No change data", neutral_color)
     
     if change_percentage > 0:
-        return (f"↗️ +{change_percentage:.2f}%", "#00aa00")
+        return (f"↗️ +{change_percentage:.2f}%", positive_color)
     elif change_percentage < 0:
-        return (f"↘️ {change_percentage:.2f}%", "#aa0000")
+        return (f"↘️ {change_percentage:.2f}%", negative_color)
     else:
-        return ("➡️ 0.00%", "#cccccc")
+        return ("➡️ 0.00%", neutral_color)

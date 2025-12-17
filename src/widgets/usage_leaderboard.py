@@ -36,11 +36,12 @@ class FilterStatus(Enum):
 
 
 class UsageBarDelegate(QStyledItemDelegate):
-    """Custom delegate for rendering logarithmic usage bars"""
+    """Custom delegate for rendering logarithmic usage bars with theme-aware colors"""
     
-    def __init__(self, parent=None):
+    def __init__(self, theme, parent=None):
         super().__init__(parent)
         self.max_log_value = 1.0  # Will be updated dynamically
+        self.theme = theme
     
     def set_max_log_value(self, value: float):
         """Set the maximum logarithmic value for scaling"""
@@ -73,16 +74,19 @@ class UsageBarDelegate(QStyledItemDelegate):
         bar_rect = option.rect.adjusted(4, 4, -4, -4)
         bar_rect.setWidth(max(bar_width, 2))  # Minimum width of 2 pixels
         
-        # Determine bar color based on value percentile
+        # Determine bar color based on value percentile using theme colors
         percentile = index.data(Qt.UserRole + 1)
         if percentile is not None and percentile >= 0.75:
-            bar_color = QColor(220, 100, 100, 200)  # High usage - red
+            bar_color = QColor(self.theme.error)  # High usage - error color
         elif percentile is not None and percentile >= 0.50:
-            bar_color = QColor(220, 180, 100, 200)  # Medium usage - orange
+            bar_color = QColor(self.theme.warning)  # Medium usage - warning color
         elif percentile is not None and percentile >= 0.25:
-            bar_color = QColor(180, 180, 100, 200)  # Low-medium usage - yellow
+            bar_color = QColor(self.theme.success).lighter(140)  # Low-medium - lighter success
         else:
-            bar_color = QColor(120, 180, 120, 200)  # Low usage - green
+            bar_color = QColor(self.theme.success)  # Low usage - success color
+        
+        # Add alpha for visual consistency
+        bar_color.setAlpha(200)
         
         painter.fillRect(bar_rect, bar_color)
         
@@ -475,9 +479,11 @@ class UsageLeaderboardWidget(QWidget):
     # Signals
     row_clicked = Signal(object)  # Emits APIKeyUsage object when row is clicked
     
-    def __init__(self, theme_colors: dict, parent=None):
+    def __init__(self, theme_colors: dict, theme=None, parent=None):
         super().__init__(parent)
         self.theme_colors = theme_colors
+        # Store theme reference for delegates; if not provided, extract from theme_colors context
+        self.theme = theme
         self.model = UsageLeaderboardModel()
         self.setup_ui()
     
@@ -510,9 +516,17 @@ class UsageLeaderboardWidget(QWidget):
         
         self.table_view.setColumnWidth(0, 200)
         
-        # Install custom delegates for visual bar columns
-        self.bar_delegate_7day = UsageBarDelegate()
-        self.bar_delegate_daily = UsageBarDelegate()
+        # Install custom delegates for visual bar columns (pass theme if available)
+        if self.theme:
+            self.bar_delegate_7day = UsageBarDelegate(self.theme)
+            self.bar_delegate_daily = UsageBarDelegate(self.theme)
+        else:
+            # Fallback: create theme from theme_colors (for backwards compatibility)
+            from src.config.theme import Theme
+            fallback_theme = Theme()  # Uses default mode from config
+            self.bar_delegate_7day = UsageBarDelegate(fallback_theme)
+            self.bar_delegate_daily = UsageBarDelegate(fallback_theme)
+        
         self.table_view.setItemDelegateForColumn(UsageLeaderboardModel.COL_VISUAL_BAR_7DAY, self.bar_delegate_7day)
         self.table_view.setItemDelegateForColumn(UsageLeaderboardModel.COL_VISUAL_BAR_DAILY, self.bar_delegate_daily)
         
@@ -723,6 +737,24 @@ class UsageLeaderboardWidget(QWidget):
                 selection-background-color: {accent_color};
             }}
         """)
+        
+        # Update loading label
+        if hasattr(self, 'loading_label'):
+            self.loading_label.setStyleSheet(f"""
+                color: {accent_color};
+                font-size: 13px;
+                padding: 8px;
+                background-color: {self.theme_colors.get('card_background', bg_color)};
+                border-radius: 4px;
+            """)
+        
+        # Update empty state label
+        if hasattr(self, 'empty_label'):
+            self.empty_label.setStyleSheet(f"""
+                color: {text_color};
+                font-size: 14px;
+                padding: 20px;
+            """)
         
         # Style radio buttons
         radio_style = f"""

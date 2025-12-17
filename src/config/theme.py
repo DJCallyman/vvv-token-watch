@@ -1,8 +1,15 @@
+from PySide6.QtGui import QPalette, QColor
+from PySide6.QtCore import QObject, Signal
 from .config import Config
 
 
-class Theme:
+class Theme(QObject):
+    """Centralized theme management with signal-based updates and QPalette support."""
+    
+    theme_changed = Signal(str)  # Emits new theme mode when changed
+    
     def __init__(self, mode=None):
+        super().__init__()
         self.mode = mode or Config.THEME_MODE
         
     @property
@@ -97,6 +104,32 @@ class Theme:
         return '#606060' if self.mode == 'dark' else '#d0d0d0'
     
     @property
+    def chart_colors(self):
+        """Theme-adapted colors for data visualization charts.
+        
+        Returns 6 distinct colors that maintain good contrast in both themes.
+        Colors adapt to theme mode while preserving visual distinction.
+        """
+        if self.mode == 'dark':
+            return [
+                '#5dade2',  # Bright blue (was #2196F3)
+                '#f39c12',  # Bright orange (was #FF9800)
+                '#bb8fce',  # Bright purple (was #9C27B0)
+                '#48c9b0',  # Bright cyan (was #00BCD4)
+                '#ec7063',  # Bright pink/red (was #E91E63)
+                '#aab7b8',  # Bright brown/gray (was #795548)
+            ]
+        else:
+            return [
+                '#2874a6',  # Deep blue
+                '#d68910',  # Deep orange
+                '#7d3c98',  # Deep purple
+                '#117a65',  # Deep cyan/teal
+                '#c0392b',  # Deep red
+                '#5d6d7e',  # Deep gray
+            ]
+    
+    @property
     def status_colors(self):
         """Color coding system for immediate status recognition"""
         return {
@@ -105,8 +138,8 @@ class Theme:
             'warning': self.warning,         # Yellow/orange for warnings
             'neutral': self.text_secondary,  # Gray for neutral states
             'loading': self.primary,         # Blue for loading states
-            'price_positive': '#00cc66',     # Green for positive price change
-            'price_negative': '#ff3333',     # Red for negative price change
+            'price_positive': self.positive, # Use theme's positive color
+            'price_negative': self.negative, # Use theme's negative color
         }
     
     @property
@@ -134,3 +167,48 @@ class Theme:
             'button_pressed': self.button_pressed,
             **self.status_colors
         }
+    
+    def set_mode(self, mode):
+        """Change theme mode and emit signal for all widgets to update.
+        
+        Args:
+            mode: 'dark' or 'light'
+        """
+        if mode != self.mode:
+            self.mode = mode
+            self.theme_changed.emit(mode)
+    
+    def apply_palette(self, app):
+        """Apply theme colors to Qt application's global palette.
+        
+        This ensures native Qt widgets inherit theme colors by default.
+        
+        Args:
+            app: QApplication instance
+        """
+        palette = QPalette()
+        
+        # Base colors
+        palette.setColor(QPalette.Window, QColor(self.background))
+        palette.setColor(QPalette.WindowText, QColor(self.text))
+        palette.setColor(QPalette.Base, QColor(self.input_background))
+        palette.setColor(QPalette.AlternateBase, QColor(self.card_background))
+        palette.setColor(QPalette.Text, QColor(self.text))
+        palette.setColor(QPalette.Button, QColor(self.button_background))
+        palette.setColor(QPalette.ButtonText, QColor(self.text))
+        palette.setColor(QPalette.BrightText, QColor(self.text))
+        
+        # Highlight colors (selections)
+        palette.setColor(QPalette.Highlight, QColor(self.accent))
+        palette.setColor(QPalette.HighlightedText, QColor(self.text))
+        
+        # Disabled state
+        palette.setColor(QPalette.Disabled, QPalette.WindowText, QColor(self.text_secondary))
+        palette.setColor(QPalette.Disabled, QPalette.Text, QColor(self.text_secondary))
+        palette.setColor(QPalette.Disabled, QPalette.ButtonText, QColor(self.text_secondary))
+        
+        # Links
+        palette.setColor(QPalette.Link, QColor(self.accent))
+        palette.setColor(QPalette.LinkVisited, QColor(self.primary))
+        
+        app.setPalette(palette)
