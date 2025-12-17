@@ -36,6 +36,7 @@ from src.core.unified_usage import UnifiedUsageIntegrator
 from src.widgets.cost_optimization_widget import CostOptimizationWidget
 from src.core.price_worker import PriceWorker
 from src.core.cost_analysis_worker import CostAnalysisWorker
+from src.core.model_cache import ModelCacheManager
 
 # --- Suppress Warnings (Use with caution) ---
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
@@ -137,6 +138,15 @@ class CombinedViewerApp(QMainWindow):
         if not is_valid:
             QMessageBox.critical(self, "Configuration Error", error_msg)
             sys.exit(1)
+        
+        # Initialize model cache early to fetch current models/pricing
+        logger.info("Initializing model cache from Venice API...")
+        self.model_cache = ModelCacheManager()
+        cache_success = self.model_cache.fetch_models()
+        if cache_success:
+            logger.info(f"Model cache initialized with {len(self.model_cache.models)} models")
+        else:
+            logger.warning("Model cache initialization failed, using local cache if available")
             
         self.setWindowTitle("Venice AI Models & CoinGecko Price Viewer")
         self.setMinimumSize(1200, 850)  # Increased minimum size for better chart display
@@ -1247,8 +1257,8 @@ class CombinedViewerApp(QMainWindow):
         cost_tab_layout.setContentsMargins(5, 5, 5, 5)
         cost_tab_layout.setSpacing(10)
         
-        # Create cost optimization widget
-        self.cost_optimizer_widget = CostOptimizationWidget(self.theme, self)
+        # Create cost optimization widget with model cache
+        self.cost_optimizer_widget = CostOptimizationWidget(self.theme, model_cache=self.model_cache, parent=self)
         self.cost_optimizer_widget.refresh_requested.connect(self._refresh_cost_analysis)
         cost_tab_layout.addWidget(self.cost_optimizer_widget)
         

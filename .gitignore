@@ -48,6 +48,7 @@ usage_history.json
 usage_reports_history.json
 error_log.txt
 app.log
+model_cache.json
 
 # User-specific cache and data files (contain personal usage data)
 data/billing_cache.json
