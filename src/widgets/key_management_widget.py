@@ -123,7 +123,8 @@ class UsageReportDialog(QDialog):
         # Created date
         try:
             formatted_date = DateFormatter.human_friendly(self.api_key_usage.created_at)
-        except:
+        except (ValueError, AttributeError, TypeError) as e:
+            # Fallback to raw timestamp if formatting fails
             formatted_date = self.api_key_usage.created_at
         
         created_label = QLabel(f"Created: {formatted_date}")
@@ -191,7 +192,8 @@ RECOMMENDATIONS
                 now = datetime.now(timezone.utc)
                 hours_since_used = (now - last_used).total_seconds() / 3600
                 recently_used = hours_since_used < 24
-            except:
+            except (ValueError, AttributeError, TypeError):
+                # Parsing failed, treat as not recently used
                 recently_used = False
         
         if recently_used:
@@ -298,7 +300,8 @@ class APIKeyManagementWidget(QWidget):
         # Created date
         try:
             formatted_date = DateFormatter.relative_time(self.api_key_usage.created_at)
-        except:
+        except (ValueError, AttributeError, TypeError):
+            # Fallback to first 10 chars if formatting fails
             formatted_date = self.api_key_usage.created_at[:10]
         
         self.created_label = QLabel(f"Created {formatted_date}")
@@ -467,7 +470,8 @@ class APIKeyManagementWidget(QWidget):
                     color = self.theme_colors['warning']  # Old usage
                     
                 self.last_used_label.setStyleSheet(f"color: {color};")
-            except:
+            except (ValueError, AttributeError, TypeError, IndexError):
+                # Fallback to simple display if parsing fails
                 self.last_used_label.setText(f"Last used: {last_used_at[:10]}")
                 self.last_used_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
     

@@ -204,7 +204,8 @@ class CostAnalysisWorker(QThread):
                 try:
                     error_body = e.response.json()
                     self.error_occurred.emit(f"API Error: {error_body.get('message', str(error_body))}")
-                except:
+                except (ValueError, KeyError):
+                    # JSON parsing failed or message key missing
                     self.error_occurred.emit(f"API Error (400): {e.response.text[:200]}")
             elif status == 401:
                 self.error_occurred.emit("Authentication failed - check VENICE_ADMIN_KEY")
