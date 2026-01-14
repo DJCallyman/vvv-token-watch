@@ -134,7 +134,8 @@ class ActionButton(QPushButton):
                     
                     return f"#{r:02x}{g:02x}{b:02x}"
             return color
-        except:
+        except (ValueError, AttributeError) as e:
+            # Return original color if parsing fails
             return color
     
     def set_loading_state(self, is_loading: bool, message: str = ""):

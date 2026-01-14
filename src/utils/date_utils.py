@@ -8,6 +8,9 @@ into more readable, human-friendly formats using relative time descriptions.
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Union, Dict
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class DateFormatter:
@@ -125,7 +128,7 @@ class DateFormatter:
             return f"{context} on {timestamp.strftime('%b %d, %Y')}"
             
         except Exception as e:
-            print(f"Error formatting date: {e}")
+            logger.error(f"Error formatting date: {e}")
             return f"{context} at unknown time"
     
     @staticmethod
@@ -202,7 +205,7 @@ class DateFormatter:
             return f"{years} years ago"
             
         except Exception as e:
-            print(f"Error calculating relative time: {e}")
+            logger.error(f"Error calculating relative time: {e}")
             return "unknown time ago"
     
     @staticmethod
@@ -316,7 +319,7 @@ class DateFormatter:
             return f"{context} {result}" if context else result
             
         except Exception as e:
-            print(f"Error formatting timestamp for display: {e}")
+            logger.error(f"Error formatting timestamp for display: {e}")
             return f"{context} Unknown date" if context else "Unknown date"
 
 
