@@ -792,24 +792,24 @@ class CombinedViewerApp(QMainWindow):
             self.price_display_aud.set_validation_state(state.value)
         except Exception as e:
             logging.error(f"Error validating holding amount input: {e}")
-            # Set to invalid state on error
-            self.validation_state = ValidationState.INVALID
-            self.price_display_usd.set_validation_state(ValidationState.INVALID.value)
-            self.price_display_aud.set_validation_state(ValidationState.INVALID.value)
+            # Set to error state on error
+            self.validation_state = ValidationState.ERROR
+            self.price_display_usd.set_validation_state(ValidationState.ERROR.value)
+            self.price_display_aud.set_validation_state(ValidationState.ERROR.value)
     
     def _on_diem_holding_text_changed(self, text: str):
         """Validate DIEM holding amount input as user types."""
         try:
-            amount, state = validate_holding_amount(text)
+            state = validate_holding_amount(text)
             self.diem_validation_state = state
             self.price_display_diem_usd.set_validation_state(state.value)
             self.price_display_diem_aud.set_validation_state(state.value)
         except Exception as e:
             logging.error(f"Error validating DIEM holding amount input: {e}")
-            # Set to invalid state on error
-            self.diem_validation_state = ValidationState.INVALID
-            self.price_display_diem_usd.set_validation_state(ValidationState.INVALID.value)
-            self.price_display_diem_aud.set_validation_state(ValidationState.INVALID.value)
+            # Set to error state on error
+            self.diem_validation_state = ValidationState.ERROR
+            self.price_display_diem_usd.set_validation_state(ValidationState.ERROR.value)
+            self.price_display_diem_aud.set_validation_state(ValidationState.ERROR.value)
     
     def update_holding_amount(self):
         """Validates and processes user input for holding amount."""

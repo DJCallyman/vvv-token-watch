@@ -17,10 +17,14 @@ from PySide6.QtGui import QFont, QColor
 
 # Matplotlib imports for chart rendering
 import matplotlib
+import warnings
 matplotlib.use('QtAgg')
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
+
+# Suppress tight layout warnings
+warnings.filterwarnings('ignore', message='Tight layout not applied')
 
 # HTTP requests for API calls
 from shiboken6 import isValid
@@ -1134,9 +1138,9 @@ class ModelComparisonWidget(QWidget):
         
         # Plot requests with rounded bars effect
         bars = ax.bar(short_models, requests, color=bar_colors, width=0.7, edgecolor='none')
-        ax.set_ylabel('Requests (log scale)' if use_log_scale else 'Requests', 
+        ax.set_ylabel('Requests (log scale)' if use_log_scale else 'Requests',
                       color=text_color, fontsize=12, fontweight='bold')
-        ax.set_title('📊 Requests by Model', 
+        ax.set_title('Requests by Model',
                      color=text_color, fontsize=14, fontweight='bold', pad=20)
         
         if use_log_scale:
@@ -1172,7 +1176,11 @@ class ModelComparisonWidget(QWidget):
                                 edgecolor='none', alpha=0.7))
         
         # Adjust layout with proper spacing
-        self.requests_chart.fig.tight_layout(pad=2.0)
+        try:
+            self.requests_chart.fig.tight_layout(pad=2.0)
+        except:
+            # If tight_layout fails, just draw without it
+            pass
         self.requests_chart.draw()
 
     def render_tokens_chart(self, analytics):
@@ -1229,9 +1237,9 @@ class ModelComparisonWidget(QWidget):
         
         # Plot tokens with rounded bars effect
         bars = ax.bar(short_models, tokens, color=bar_colors, width=0.7, edgecolor='none')
-        ax.set_ylabel('Tokens (log scale)' if use_log_scale else 'Tokens', 
+        ax.set_ylabel('Tokens (log scale)' if use_log_scale else 'Tokens',
                       color=text_color, fontsize=12, fontweight='bold')
-        ax.set_title('🔢 Tokens by Model', 
+        ax.set_title('Tokens by Model',
                      color=text_color, fontsize=14, fontweight='bold', pad=20)
         
         if use_log_scale:
@@ -1269,7 +1277,11 @@ class ModelComparisonWidget(QWidget):
                                 edgecolor='none', alpha=0.7))
         
         # Adjust layout with proper spacing
-        self.tokens_chart.fig.tight_layout(pad=2.0)
+        try:
+            self.tokens_chart.fig.tight_layout(pad=2.0)
+        except:
+            # If tight_layout fails, just draw without it
+            pass
         self.tokens_chart.draw()
 
     def render_cost_chart(self, analytics):
@@ -1369,7 +1381,7 @@ class ModelComparisonWidget(QWidget):
                ha='center', va='center', fontsize=12, fontweight='bold', color=text_color)
         
         # Add title
-        ax.set_title('💰 Cost Distribution by Model', 
+        ax.set_title('Cost Distribution by Model',
                     color=text_color, fontsize=13, fontweight='bold', pad=10)
         
         # Build legend labels with cost and percentage
@@ -1393,8 +1405,7 @@ class ModelComparisonWidget(QWidget):
         ax.axis('equal')
         
         # Adjust layout - give room for legend on right (smaller chart, more legend space)
-        self.cost_chart.fig.tight_layout(pad=1.0)
-        self.cost_chart.fig.subplots_adjust(right=0.45)  # Chart takes 45% width, legend gets 55%
+        self.cost_chart.fig.subplots_adjust(right=0.45, left=0.05, top=0.9, bottom=0.1)
         
         # Refresh the canvas
         self.cost_chart.draw()

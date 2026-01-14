@@ -27,6 +27,7 @@ class Config:
     # Regular API keys will return 401 Unauthorized for /billing/usage endpoint
     
     # CoinGecko Configuration - Venice Token
+    COINGECKO_API_KEY = os.getenv('COINGECKO_API_KEY')  # Optional: Pro API key for higher rate limits
     COINGECKO_TOKEN_ID = os.getenv('COINGECKO_TOKEN_ID', 'venice-token')
     COINGECKO_CURRENCIES = os.getenv('COINGECKO_CURRENCIES', 'usd,aud').split(',')
     COINGECKO_HOLDING_AMOUNT = float(os.getenv('COINGECKO_HOLDING_AMOUNT', '2750'))
@@ -76,6 +77,7 @@ class Config:
         return {
             'VENICE_API_KEY': mask_key(cls.VENICE_API_KEY),
             'VENICE_ADMIN_KEY': mask_key(cls.VENICE_ADMIN_KEY),
+            'COINGECKO_API_KEY': mask_key(cls.COINGECKO_API_KEY),
             'COINGECKO_TOKEN_ID': cls.COINGECKO_TOKEN_ID,
             'COINGECKO_CURRENCIES': cls.COINGECKO_CURRENCIES,
             'COINGECKO_HOLDING_AMOUNT': cls.COINGECKO_HOLDING_AMOUNT,
