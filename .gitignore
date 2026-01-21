@@ -64,3 +64,6 @@ Thumbs.db
 *.spec
 get_usage.py
 get_webapp_usage.py
+
+# Plan Folder
+plans/
