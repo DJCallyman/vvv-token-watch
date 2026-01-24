@@ -1047,9 +1047,31 @@ class ModelComparisonWidget(QWidget):
         
         if column_key == "generation_price":
             per_gen = pricing.get('generation', {}).get('usd', 0)
+            res_pricing = pricing.get('resolutions', {})
+            
             if per_gen > 0:
                 item = QTableWidgetItem(f"${per_gen:.4f}/gen")
                 item.setData(Qt.UserRole, per_gen)
+            elif res_pricing:
+                # Handle resolution-based pricing (e.g., nano-banana-pro)
+                prices = []
+                for res, price_info in res_pricing.items():
+                    if isinstance(price_info, dict) and 'usd' in price_info:
+                        prices.append(price_info['usd'])
+                
+                if prices:
+                    min_price = min(prices)
+                    max_price = max(prices)
+                    if min_price == max_price:
+                        item = QTableWidgetItem(f"${min_price:.2f}/gen")
+                        item.setData(Qt.UserRole, min_price)
+                    else:
+                        item = QTableWidgetItem(f"${min_price:.2f}-${max_price:.2f}/gen")
+                        item.setData(Qt.UserRole, min_price)
+                    item.setToolTip(f"Resolution-based pricing: {', '.join(f'{res}: ${price_info.get('usd', 0):.2f}' for res, price_info in res_pricing.items() if isinstance(price_info, dict))}")
+                else:
+                    item = QTableWidgetItem("See pricing")
+                    item.setToolTip("Check Venice pricing page")
             else:
                 if model_type == 'video':
                     item = QTableWidgetItem("Variable")
@@ -1057,7 +1079,7 @@ class ModelComparisonWidget(QWidget):
                 else:
                     item = QTableWidgetItem("See pricing")
                     item.setToolTip("Check Venice pricing page")
-            return item, per_gen
+            return item, per_gen or (min(prices) if 'prices' in locals() and prices else 0)
         
         # Video specific columns
         if column_key == "video_type":
@@ -1213,8 +1235,9 @@ class ModelComparisonWidget(QWidget):
         
         # Resolution pricing
         if column_key == "resolution_pricing":
-            res_pricing = constraints.get('resPricing', False)
-            item = QTableWidgetItem("Yes" if res_pricing else "No")
+            res_pricing = pricing.get('resolutions', {})
+            has_res_pricing = bool(res_pricing and any(isinstance(price_info, dict) and 'usd' in price_info for price_info in res_pricing.values()))
+            item = QTableWidgetItem("Yes" if has_res_pricing else "No")
             return item, 0.0
         
         return item, 0.0

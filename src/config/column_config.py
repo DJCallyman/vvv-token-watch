@@ -62,6 +62,7 @@ IMAGE_COLUMNS: List[ColumnDefinition] = [
     ColumnDefinition("prompt_limit", "Prompt Limit", WIDTH_RESIZE, 110),
     ColumnDefinition("generation_price", "Price/Image", WIDTH_STRETCH, 110),
     ColumnDefinition("resolution_pricing", "Res Pricing", WIDTH_RESIZE, 110),
+    ColumnDefinition("privacy", "Privacy", WIDTH_RESIZE, 90),
 ]
 
 VIDEO_COLUMNS: List[ColumnDefinition] = [
@@ -75,6 +76,7 @@ VIDEO_COLUMNS: List[ColumnDefinition] = [
     ColumnDefinition("audio_configurable", "Audio Config", WIDTH_RESIZE, 110),
     ColumnDefinition("base_price", "Base Price", WIDTH_RESIZE, 100),
     ColumnDefinition("audio_price", "Audio Price", WIDTH_RESIZE, 100),
+    ColumnDefinition("privacy", "Privacy", WIDTH_RESIZE, 90),
 ]
 
 TTS_COLUMNS: List[ColumnDefinition] = [
