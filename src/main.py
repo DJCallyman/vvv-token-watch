@@ -37,6 +37,7 @@ from src.widgets.cost_optimization_widget import CostOptimizationWidget
 from src.core.price_worker import PriceWorker
 from src.core.cost_analysis_worker import CostAnalysisWorker
 from src.core.model_cache import ModelCacheManager
+from src.core.venice_api_client import VeniceAPIClient
 
 # --- Suppress Warnings (Use with caution) ---
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
@@ -147,6 +148,9 @@ class CombinedViewerApp(QMainWindow):
             logger.info(f"Model cache initialized with {len(self.model_cache.models)} models")
         else:
             logger.warning("Model cache initialization failed, using local cache if available")
+        
+        # Initialize Venice API client for workers
+        self.api_client = VeniceAPIClient(Config.VENICE_API_KEY)
         
         # Populate models_data from cache for Models & Compare tabs
         # This ensures these widgets use the same fresh data as the cache
@@ -2173,6 +2177,12 @@ class CombinedViewerApp(QMainWindow):
             QMessageBox.critical(self, "Usage Tracking Error", error_msg)
             self._last_usage_error = error_msg
     
+    def _handle_video_quote_error(self, error_msg: str):
+        """Handle errors from the video quote worker."""
+        logger.error(f"Video quote error: {error_msg}")
+        # For now, just log the error since video quotes are background operations
+        # Could add a status indicator later if needed
+    
     def display_filtered_models(self):
         """Display models filtered by selected type."""
         selected_type = self.type_combobox.currentText()
@@ -2378,10 +2388,36 @@ class CombinedViewerApp(QMainWindow):
             self.model_comparison_widget.models_data = self.models_data.copy() if self.models_data else {}
             # Refresh the displays
             self.model_comparison_widget.populate_comparison_table()
+            
+            # Start video quote worker to get base prices
+            self._start_video_quote_worker()
         
         # Also update cost optimizer widget with dynamic model data
         if hasattr(self, 'cost_optimizer_widget') and self.cost_optimizer_widget:
             self.cost_optimizer_widget.update_models_data(self.models_data)
+
+    def _start_video_quote_worker(self):
+        """Start worker to fetch video base prices"""
+        if not self.models_data or not hasattr(self, 'model_comparison_widget'):
+            return
+        
+        # Get video models from the data
+        video_models = [model for model in self.models_data.get('data', []) if model.get('type') == 'video']
+        
+        if not video_models:
+            return
+        
+        # Clean up any existing worker
+        if hasattr(self, 'video_quote_worker') and self.video_quote_worker and self.video_quote_worker.isRunning():
+            self.video_quote_worker.stop()
+            self.video_quote_worker.wait()
+        
+        # Create and start new worker
+        from src.core.video_quote_worker import VideoQuoteWorker
+        self.video_quote_worker = VideoQuoteWorker(self.api_client, video_models)
+        self.video_quote_worker.video_base_prices_updated.connect(self.model_comparison_widget.update_video_base_prices)
+        self.video_quote_worker.error_occurred.connect(self._handle_video_quote_error)
+        self.video_quote_worker.start()
 
     def _copy_models_data(self):
         """Create a deep copy of models data to prevent filtering from modifying the original data"""
@@ -2397,7 +2433,7 @@ class CombinedViewerApp(QMainWindow):
 
     def closeEvent(self, event):
         """Override close event to properly clean up resources"""
-        logger.debug("Close event triggered, cleaning up...")
+        logger.info("Close event triggered, cleaning up...")
 
         try:
             # Phase 2: Stop exchange rate service
@@ -2410,20 +2446,22 @@ class CombinedViewerApp(QMainWindow):
                 if timer.isActive():
                     timer.stop()
 
-            # Clean up threads
+            # Clean up threads - this may take some time
             self._cleanup_threads()
 
             # Clean up model comparison widget if it exists
             if hasattr(self, 'model_comparison_widget') and self.model_comparison_widget:
                 if hasattr(self.model_comparison_widget, 'analytics_worker'):
                     if self.model_comparison_widget.analytics_worker and self.model_comparison_widget.analytics_worker.isRunning():
-                        self.model_comparison_widget.analytics_worker.wait()
+                        self.model_comparison_widget.analytics_worker.quit()
+                        self.model_comparison_widget.analytics_worker.wait(5000)
 
-            logger.debug("Cleanup completed successfully")
+            logger.info("Cleanup completed successfully")
 
         except Exception as e:
-            logger.debug(f"Error during cleanup: {e}")
+            logger.error(f"Error during cleanup: {e}")
 
+        # Now allow the window to close
         event.accept()
 
     def _cleanup_threads(self):
@@ -2433,22 +2471,53 @@ class CombinedViewerApp(QMainWindow):
         # Clean up API worker
         if hasattr(self, 'api_worker') and self.api_worker and self.api_worker.isRunning():
             logger.debug("Waiting for API worker to finish...")
-            self.api_worker.wait()
+            self.api_worker.wait(5000)
 
         # Clean up style worker
         if hasattr(self, 'style_worker') and self.style_worker and self.style_worker.isRunning():
             logger.debug("Waiting for style worker to finish...")
-            self.style_worker.wait()
+            self.style_worker.wait(5000)
 
         # Clean up traits worker
         if hasattr(self, 'traits_worker') and self.traits_worker and self.traits_worker.isRunning():
             logger.debug("Waiting for traits worker to finish...")
-            self.traits_worker.wait()
+            self.traits_worker.wait(5000)
 
         # Clean up usage worker
         if self.usage_worker and self.usage_worker.isRunning():
-            logger.debug("Waiting for usage worker to finish...")
-            self.usage_worker.wait()
+            logger.debug("Stopping usage worker...")
+            self.usage_worker.stop()
+            self.usage_worker.wait(5000)
+
+        # Clean up web usage worker
+        if self.web_usage_worker and self.web_usage_worker.isRunning():
+            logger.debug("Stopping web usage worker...")
+            self.web_usage_worker.stop()
+            self.web_usage_worker.wait(5000)
+
+        # Clean up price worker
+        if hasattr(self, 'price_worker') and self.price_worker and self.price_worker.isRunning():
+            logger.debug("Stopping price worker...")
+            self.price_worker.stop()
+            self.price_worker.wait(5000)
+
+        # Clean up DIEM price worker
+        if hasattr(self, 'diem_price_worker') and self.diem_price_worker and self.diem_price_worker.isRunning():
+            logger.debug("Stopping DIEM price worker...")
+            self.diem_price_worker.stop()
+            self.diem_price_worker.wait(5000)
+
+        # Clean up cost analysis worker
+        if hasattr(self, 'cost_analysis_worker') and self.cost_analysis_worker and self.cost_analysis_worker.isRunning():
+            logger.debug("Stopping cost analysis worker...")
+            self.cost_analysis_worker.stop()
+            self.cost_analysis_worker.wait(5000)
+
+        # Clean up video quote worker
+        if hasattr(self, 'video_quote_worker') and self.video_quote_worker and self.video_quote_worker.isRunning():
+            logger.debug("Stopping video quote worker...")
+            self.video_quote_worker.stop()
+            self.video_quote_worker.wait(5000)
 
         logger.debug("Thread cleanup complete")
 
