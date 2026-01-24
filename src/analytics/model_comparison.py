@@ -10,10 +10,11 @@ from typing import List, Dict, Any, Optional, Set, Tuple
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QTableWidget, QTableWidgetItem, QComboBox,
+    QPushButton, QTableView, QTableWidgetItem, QComboBox,
     QCheckBox, QGroupBox, QScrollArea, QTextEdit,
     QLineEdit, QHeaderView, QTabWidget, QApplication, QDialog
 )
+from PySide6.QtGui import QStandardItemModel, QStandardItem
 from PySide6.QtCore import Qt, Signal, QObject, QTimer, QThread
 from PySide6.QtGui import QFont, QColor
 
@@ -297,8 +298,9 @@ class ModelAnalyticsWorker(QThread):
 class ColumnManager:
     """Manage dynamic columns and visibility for the comparison table."""
 
-    def __init__(self, table: QTableWidget):
+    def __init__(self, table: QTableView, model: QStandardItemModel):
         self.table = table
+        self.model = model
         self.current_type_key = "all"
         self.all_columns: List[ColumnDefinition] = []
         self.columns: List[ColumnDefinition] = []
@@ -337,10 +339,13 @@ class ColumnManager:
 
     def _apply_columns(self) -> None:
         headers = [col.header for col in self.columns]
-        self.table.setColumnCount(len(headers))
-        self.table.setHorizontalHeaderLabels(headers)
+        self.model.setColumnCount(len(headers))
+        self.model.setHorizontalHeaderLabels(headers)
 
         header = self.table.horizontalHeader()
+        # Set sort role to UserRole for numeric sorting
+        if hasattr(self.model, 'setSortRole'):
+            self.model.setSortRole(Qt.UserRole)
         header.setStretchLastSection(False)
         for idx, col in enumerate(self.columns):
             if col.width_mode == "stretch":
@@ -626,8 +631,10 @@ class ModelComparisonWidget(QWidget):
         layout.addWidget(controls_group)
 
         # Model comparison table
-        self.comparison_table = QTableWidget()
-        self.column_manager = ColumnManager(self.comparison_table)
+        self.comparison_table = QTableView()
+        self.model = QStandardItemModel()
+        self.comparison_table.setModel(self.model)
+        self.column_manager = ColumnManager(self.comparison_table, self.model)
         self.setup_comparison_table()
         layout.addWidget(self.comparison_table)
 
@@ -836,19 +843,20 @@ class ModelComparisonWidget(QWidget):
 
     def setup_comparison_table(self):
         """Setup the comparative table with proper styling"""
+        self.comparison_table.setSortingEnabled(True)
         self.comparison_table.setStyleSheet(f"""
-            QTableWidget {{
+            QTableView {{
                 background-color: {self.theme.background};
                 color: {self.theme.text};
                 border: 1px solid {self.theme.accent};
                 border-radius: 4px;
                 gridline-color: {self.theme.accent};
             }}
-            QTableWidget::item {{
+            QTableView::item {{
                 color: {self.theme.text};
                 padding: 5px;
             }}
-            QTableWidget::item:selected {{
+            QTableView::item:selected {{
                 background-color: {self.theme.accent};
                 color: {self.theme.text};
             }}
@@ -865,7 +873,7 @@ class ModelComparisonWidget(QWidget):
         self.populate_comparison_table()
 
     def _get_cell_value(self, column_key: str, model: Dict, model_spec: Dict,
-                        capabilities: Dict, pricing: Dict, constraints: Dict) -> Tuple[QTableWidgetItem, float]:
+                        capabilities: Dict, pricing: Dict, constraints: Dict) -> Tuple[QTableWidgetItem, Any]:
         """Get formatted cell value and sort key for a column."""
         model_type = model.get('type', 'unknown')
         
@@ -878,7 +886,7 @@ class ModelComparisonWidget(QWidget):
             model_id = model.get('id', 'Unknown')
             item = QTableWidgetItem(model_id)
             item.setToolTip(f"Model: {model_id}")
-            return item, 0.0
+            return item, model_id
         
         # Type column
         if column_key == "type":
@@ -886,7 +894,7 @@ class ModelComparisonWidget(QWidget):
                          'asr': '🎙️', 'embedding': '🔢', 'upscale': '📈', 'inpaint': '🎨'}
             type_icon = type_icons.get(model_type, '❓')
             item = QTableWidgetItem(f"{type_icon} {model_type}")
-            return item, 0.0
+            return item, model_type
         
         # Context/Specs column - different content based on model type
         if column_key in ("context", "specs"):
@@ -895,6 +903,7 @@ class ModelComparisonWidget(QWidget):
                 context_text = f"{context:,}" if isinstance(context, int) else str(context) if context else 'N/A'
                 item = QTableWidgetItem(context_text)
                 item.setToolTip(f"Context window: {context_text} tokens")
+                sort_key = context if isinstance(context, int) else 0
             elif model_type in ('image', 'upscale', 'inpaint'):
                 specs_parts = []
                 if constraints:
@@ -926,7 +935,7 @@ class ModelComparisonWidget(QWidget):
                     item = QTableWidgetItem("Standard")
             else:
                 item = QTableWidgetItem('—')
-            return item, 0.0
+            return item, sort_key
         
         # Capability columns (text models only) - map to correct API field names
         if column_key in ("vision", "functions", "web_search", "reasoning", "logprobs"):
@@ -953,7 +962,7 @@ class ModelComparisonWidget(QWidget):
             else:
                 item = QTableWidgetItem("—")
                 item.setForeground(QColor(self.theme.text_secondary))
-            return item, 0.0
+            return item, 1.0 if (is_text_model and cap_enabled) else 0.0
         
         # Price columns
         if column_key == "input_price":
@@ -988,8 +997,8 @@ class ModelComparisonWidget(QWidget):
                     else:
                         item = QTableWidgetItem("See pricing")
                         item.setToolTip("Check Venice pricing page")
-                item.setData(Qt.UserRole, per_gen)
-                return item, per_gen
+                item.setData(Qt.UserRole, per_gen if per_gen > 0 else 999999)
+                return item, per_gen if per_gen > 0 else 999999
             elif model_type == 'asr':
                 per_min = pricing.get('input', {}).get('usd', 0)
                 item = QTableWidgetItem(f"${per_min:.3f}/min")
@@ -1020,7 +1029,7 @@ class ModelComparisonWidget(QWidget):
             privacy = model_spec.get('privacy', '')
             if privacy:
                 item = QTableWidgetItem(privacy)
-            return item, 0.0
+            return item, privacy if privacy else ""
         
         # Image/video specific columns
         if column_key == "resolutions":
@@ -1030,20 +1039,24 @@ class ModelComparisonWidget(QWidget):
                 if len(resolutions) > 5:
                     res_str += "..."
                 item = QTableWidgetItem(res_str)
+                sort_key = len(resolutions)  # Sort by number of resolutions
             else:
                 item = QTableWidgetItem("Standard")
-            return item, 0.0
+                sort_key = 0  # Sort "Standard" at the beginning
+            return item, sort_key
         
         if column_key == "steps":
             steps = constraints.get('steps', {})
             max_steps = steps.get('max', steps.get('default', 'N/A'))
             item = QTableWidgetItem(str(max_steps))
-            return item, 0.0
+            sort_key = max_steps if isinstance(max_steps, int) else 0
+            return item, sort_key
         
         if column_key == "prompt_limit":
             limit = constraints.get('promptCharacterLimit', 'N/A')
             item = QTableWidgetItem(str(limit))
-            return item, 0.0
+            sort_key = limit if isinstance(limit, int) else 0
+            return item, sort_key
         
         if column_key == "generation_price":
             per_gen = pricing.get('generation', {}).get('usd', 0)
@@ -1079,7 +1092,7 @@ class ModelComparisonWidget(QWidget):
                 else:
                     item = QTableWidgetItem("See pricing")
                     item.setToolTip("Check Venice pricing page")
-            return item, per_gen or (min(prices) if 'prices' in locals() and prices else 0)
+            return item, per_gen or (min(prices) if 'prices' in locals() and prices else 999999)
         
         # Video specific columns
         if column_key == "video_type":
@@ -1087,16 +1100,20 @@ class ModelComparisonWidget(QWidget):
             video_model_type = constraints.get('model_type', '')
             if video_model_type == 'image-to-video':
                 item = QTableWidgetItem("img→vid")
+                sort_key = "image-to-video"
             elif video_model_type == 'text-to-video':
                 item = QTableWidgetItem("text→vid")
+                sort_key = "text-to-video"
             else:
                 # Default based on model ID if not specified
                 model_id = model.get('id', '').lower()
                 if 'image' in model_id or 'img' in model_id or 'i2v' in model_id:
                     item = QTableWidgetItem("img→vid")
+                    sort_key = "image-to-video"
                 else:
                     item = QTableWidgetItem("text→vid")
-            return item, 0.0
+                    sort_key = "text-to-video"
+            return item, sort_key
         
         if column_key == "durations":
             durations = constraints.get('durations', [])
@@ -1109,19 +1126,21 @@ class ModelComparisonWidget(QWidget):
                         d_str += 's'
                     dur_strs.append(d_str)
                 item = QTableWidgetItem(", ".join(dur_strs))
+                sort_key = len(durations)  # Sort by number of durations available
             else:
                 item = QTableWidgetItem("Standard")
-            return item, 0.0
+                sort_key = 0
+            return item, sort_key
         
         if column_key == "audio":
             has_audio = constraints.get('audio', False)
             item = QTableWidgetItem("✓" if has_audio else "✗")
-            return item, 0.0
+            return item, 1.0 if has_audio else 0.0
         
         if column_key == "audio_configurable":
             config = constraints.get('audio_configurable', False)
             item = QTableWidgetItem("✓" if config else "✗")
-            return item, 0.0
+            return item, 1.0 if config else 0.0
         
         if column_key == "aspect_ratios":
             # Field is 'aspect_ratios' with underscore in API
@@ -1130,9 +1149,11 @@ class ModelComparisonWidget(QWidget):
                 item = QTableWidgetItem(", ".join(str(r) for r in ratios[:4]))
                 if len(ratios) > 4:
                     item.setToolTip(", ".join(str(r) for r in ratios))
+                sort_key = len(ratios)  # Sort by number of aspect ratios
             else:
                 item = QTableWidgetItem("—")
-            return item, 0.0
+                sort_key = 0
+            return item, sort_key
         
         if column_key == "base_price":
             model_id = model.get('id')
@@ -1172,9 +1193,18 @@ class ModelComparisonWidget(QWidget):
                     item = QTableWidgetItem(f"${per_gen:.4f}/img")
                     return item, per_gen
             elif model_type == 'video':
-                # Video models often don't have pricing in API
-                item = QTableWidgetItem("See pricing")
-                return item, 0.0
+                # Check if we have base price data for this video model
+                model_id = model.get('id')
+                base_price = self.video_base_prices.get(model_id)
+                if base_price:
+                    item = QTableWidgetItem(f"${base_price.base_usd:.3f}")
+                    item.setToolTip(f"Base price: {base_price.min_duration}s at {base_price.min_resolution}, no audio (Use Video Quote API for custom pricing)")
+                    item.setData(Qt.UserRole, base_price.base_usd)
+                    return item, base_price.base_usd
+                else:
+                    item = QTableWidgetItem("See pricing")
+                    item.setToolTip("Check Venice pricing page")
+                    return item, 0.0
             elif model_type == 'tts':
                 per_char = pricing.get('input', {}).get('usd', 0)
                 if per_char > 0:
@@ -1209,7 +1239,7 @@ class ModelComparisonWidget(QWidget):
                 item.setData(Qt.UserRole, min_price)
             else:
                 item = QTableWidgetItem("See pricing")
-            return item, 0.0
+            return item, min_price if prices else 999999
         
         if column_key == "inpaint_price":
             inpaint_pricing = pricing.get('inpaint', {})
@@ -1219,26 +1249,28 @@ class ModelComparisonWidget(QWidget):
                 item.setData(Qt.UserRole, price)
             else:
                 item = QTableWidgetItem("See pricing")
-            return item, 0.0
+            return item, price if inpaint_pricing else 999999
         
         # TTS voices
         if column_key == "voices":
             voices = model_spec.get('voices', model_spec.get('supportedVoices', []))
             item = QTableWidgetItem(f"{len(voices)} voices" if voices else "Multiple")
-            return item, 0.0
+            sort_key = len(voices) if voices else 0
+            return item, sort_key
         
         # Embedding dimensions
         if column_key == "dimensions":
             dims = model_spec.get('dimensions', model_spec.get('embeddingDimensions', 'N/A'))
             item = QTableWidgetItem(str(dims))
-            return item, 0.0
+            sort_key = dims if isinstance(dims, int) else 0
+            return item, sort_key
         
         # Resolution pricing
         if column_key == "resolution_pricing":
             res_pricing = pricing.get('resolutions', {})
             has_res_pricing = bool(res_pricing and any(isinstance(price_info, dict) and 'usd' in price_info for price_info in res_pricing.values()))
             item = QTableWidgetItem("Yes" if has_res_pricing else "No")
-            return item, 0.0
+            return item, 1.0 if has_res_pricing else 0.0
         
         return item, 0.0
 
@@ -1250,7 +1282,11 @@ class ModelComparisonWidget(QWidget):
         if not hasattr(self, 'column_manager'):
             return
 
-        self.comparison_table.setRowCount(0)
+        # Temporarily disable sorting to prevent data loss during population
+        was_sorting_enabled = self.comparison_table.isSortingEnabled()
+        self.comparison_table.setSortingEnabled(False)
+        
+        self.model.setRowCount(0)
         columns = self.column_manager.get_columns()
         
         for i, model in enumerate(self.models_data['data']):
@@ -1261,19 +1297,52 @@ class ModelComparisonWidget(QWidget):
             pricing = model_spec.get('pricing', {})
             constraints = model_spec.get('constraints', {})
 
-            self.comparison_table.insertRow(i)
+            self.model.insertRow(i)
 
             for col_idx, col_def in enumerate(columns):
-                item, sort_key = self._get_cell_value(
+                result = self._get_cell_value(
                     col_def.key, model, model_spec, capabilities, pricing, constraints
                 )
-                if sort_key != 0.0:
-                    item.setData(Qt.UserRole, sort_key)
-                self.comparison_table.setItem(i, col_idx, item)
+                if isinstance(result, tuple) and len(result) == 2:
+                    item, sort_key = result
+                else:
+                    # Fallback if something went wrong
+                    item = QTableWidgetItem("—")
+                    sort_key = 0.0
+                
+                # Ensure item is a QTableWidgetItem
+                if not hasattr(item, 'text'):
+                    item = QTableWidgetItem(str(item))
+                
+                # Create QStandardItem with display text
+                standard_item = QStandardItem(item.text())
+                # Set tooltip if it was set on the QTableWidgetItem
+                if hasattr(item, 'toolTip') and item.toolTip():
+                    standard_item.setToolTip(item.toolTip())
+                # Set colors for capability columns
+                if col_def.key in ("vision", "functions", "web_search", "reasoning", "logprobs"):
+                    if item.text() == "✓":
+                        standard_item.setBackground(QColor("#4CAF50"))
+                        standard_item.setForeground(QColor("#ffffff"))
+                    elif item.text() == "✗":
+                        standard_item.setBackground(QColor("#ef5350"))
+                        standard_item.setForeground(QColor("#ffffff"))
+                    elif item.text() == "—":
+                        standard_item.setForeground(QColor(self.theme.text_secondary))
+                # Set sort data based on the type of sort_key
+                if isinstance(sort_key, (int, float)):
+                    standard_item.setData(sort_key, Qt.UserRole)
+                elif isinstance(sort_key, str):
+                    standard_item.setData(sort_key, Qt.UserRole)
+                # For other types, let it sort by display text
+                self.model.setItem(i, col_idx, standard_item)
 
         # Resize columns to content
         for col_idx in range(len(columns) - 1):
             self.comparison_table.resizeColumnToContents(col_idx)
+            
+        # Re-enable sorting if it was enabled before
+        self.comparison_table.setSortingEnabled(was_sorting_enabled)
 
     def setup_performance_table(self):
         """Setup performance metrics table"""
