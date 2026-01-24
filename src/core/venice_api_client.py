@@ -10,6 +10,8 @@ import requests
 import logging
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
+from src.config.config import Config
+
 logger = logging.getLogger(__name__)
 
 

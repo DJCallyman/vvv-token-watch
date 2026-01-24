@@ -1650,7 +1650,7 @@ class ModelComparisonWidget(QWidget):
         # Adjust layout with proper spacing
         try:
             self.requests_chart.fig.tight_layout(pad=2.0)
-        except:
+        except Exception:
             # If tight_layout fails, just draw without it
             pass
         self.requests_chart.draw()
@@ -1751,7 +1751,7 @@ class ModelComparisonWidget(QWidget):
         # Adjust layout with proper spacing
         try:
             self.tokens_chart.fig.tight_layout(pad=2.0)
-        except:
+        except Exception:
             # If tight_layout fails, just draw without it
             pass
         self.tokens_chart.draw()

@@ -51,7 +51,7 @@ def setup_logging():
     Replaces scattered print() statements with proper logging.
     """
     # Determine log level from config
-    log_level = logging.DEBUG if getattr(Config, 'DEBUG_MODE', False) else logging.INFO
+    log_level = logging.DEBUG if Config.DEBUG_MODE else logging.INFO
     
     # Create formatters
     detailed_formatter = logging.Formatter(

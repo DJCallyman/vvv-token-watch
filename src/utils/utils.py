@@ -7,6 +7,8 @@ input validation, and other common utilities.
 
 from enum import Enum
 
+from src.config.config import Config
+
 
 # Currency formatting utilities
 def format_currency(value, currency):
@@ -46,7 +48,7 @@ def validate_holding_amount(value: str) -> ValidationState:
         amount = float(value)
         if amount <= 0:
             return ValidationState.ERROR
-        elif amount < 0.01:
+        elif amount < Config.MIN_HOLDING_THRESHOLD:
             return ValidationState.WARNING
         return ValidationState.VALID
     except ValueError:
