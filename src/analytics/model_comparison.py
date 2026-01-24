@@ -3,14 +3,16 @@ Model Comparison and Analytics Widget for Venice AI Model Viewer
 Provides comprehensive comparison tools, usage analytics, and enhanced discovery features.
 """
 
+import json
 import logging
-from typing import List, Dict, Any
+import os
+from typing import List, Dict, Any, Optional, Set, Tuple
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem, QComboBox,
     QCheckBox, QGroupBox, QScrollArea, QTextEdit,
-    QLineEdit, QHeaderView, QTabWidget, QApplication
+    QLineEdit, QHeaderView, QTabWidget, QApplication, QDialog
 )
 from PySide6.QtCore import Qt, Signal, QObject, QTimer, QThread
 from PySide6.QtGui import QFont, QColor
@@ -33,7 +35,9 @@ logger = logging.getLogger(__name__)
 
 from src.config.config import Config
 from src.config.theme import Theme
+from src.config.column_config import ColumnDefinition, get_columns_for_type
 from src.core.venice_api_client import VeniceAPIClient
+from src.core.video_quote_worker import VideoBasePrice
 from src.utils.date_utils import DateFormatter
 from src.utils.model_utils import ModelNameParser
 
@@ -290,6 +294,104 @@ class ModelAnalyticsWorker(QThread):
         return recommendations
 
 
+class ColumnManager:
+    """Manage dynamic columns and visibility for the comparison table."""
+
+    def __init__(self, table: QTableWidget):
+        self.table = table
+        self.current_type_key = "all"
+        self.all_columns: List[ColumnDefinition] = []
+        self.columns: List[ColumnDefinition] = []
+        self.hidden_by_type: Dict[str, Set[str]] = {}
+        self.key_to_index: Dict[str, int] = {}
+        self._load_preferences()
+
+    def set_model_type(self, model_type: Optional[str]) -> None:
+        self.current_type_key = model_type.lower() if model_type else "all"
+        self.all_columns = get_columns_for_type(model_type)
+        hidden = self.hidden_by_type.get(self.current_type_key, set())
+        self.columns = [col for col in self.all_columns if col.key not in hidden]
+        if not self.columns and self.all_columns:
+            self.columns = self.all_columns[:1]
+        self._apply_columns()
+
+    def set_column_visibility(self, column_key: str, visible: bool) -> None:
+        # Never allow hiding the "model" column as it's essential for identification
+        if column_key == "model":
+            return
+            
+        hidden = self.hidden_by_type.setdefault(self.current_type_key, set())
+        if visible:
+            hidden.discard(column_key)
+        else:
+            hidden.add(column_key)
+        self.hidden_by_type[self.current_type_key] = hidden
+        self.columns = [col for col in self.all_columns if col.key not in hidden]
+        if not self.columns and self.all_columns:
+            hidden.discard("model")
+            self.columns = [col for col in self.all_columns if col.key not in hidden]
+            self.hidden_by_type[self.current_type_key] = hidden
+        self._apply_columns()
+        self._save_preferences()
+        self._save_preferences()
+
+    def _apply_columns(self) -> None:
+        headers = [col.header for col in self.columns]
+        self.table.setColumnCount(len(headers))
+        self.table.setHorizontalHeaderLabels(headers)
+
+        header = self.table.horizontalHeader()
+        header.setStretchLastSection(False)
+        for idx, col in enumerate(self.columns):
+            if col.width_mode == "stretch":
+                header.setSectionResizeMode(idx, QHeaderView.Stretch)
+            else:
+                header.setSectionResizeMode(idx, QHeaderView.ResizeToContents)
+            header.setMinimumSectionSize(col.min_width)
+
+        self.key_to_index = {col.key: idx for idx, col in enumerate(self.columns)}
+
+    def get_columns(self) -> List[ColumnDefinition]:
+        return self.columns
+
+    def get_all_columns(self) -> List[ColumnDefinition]:
+        return self.all_columns
+
+    def get_column_index(self, key: str) -> int:
+        return self.key_to_index.get(key, -1)
+
+    def _load_preferences(self) -> None:
+        """Load user column preferences from storage."""
+        prefs_file = os.path.join("data", "column_preferences.json")
+        if os.path.exists(prefs_file):
+            try:
+                with open(prefs_file, 'r') as f:
+                    data = json.load(f)
+                    # Convert sets back from lists and filter out "model" column
+                    self.hidden_by_type = {}
+                    for k, v in data.get("hidden_by_type", {}).items():
+                        hidden_set = set(v)
+                        hidden_set.discard("model")  # Never hide the model column
+                        if hidden_set:  # Only keep non-empty sets
+                            self.hidden_by_type[k] = hidden_set
+            except (json.JSONDecodeError, IOError) as e:
+                logging.warning(f"Failed to load column preferences: {e}")
+
+    def _save_preferences(self) -> None:
+        """Save user column preferences to storage."""
+        prefs_file = os.path.join("data", "column_preferences.json")
+        os.makedirs(os.path.dirname(prefs_file), exist_ok=True)
+        try:
+            # Convert sets to lists for JSON serialization
+            data = {
+                "hidden_by_type": {k: list(v) for k, v in self.hidden_by_type.items()}
+            }
+            with open(prefs_file, 'w') as f:
+                json.dump(data, f, indent=2)
+        except IOError as e:
+            logging.error(f"Failed to save column preferences: {e}")
+
+
 class ModelComparisonWidget(QWidget):
     """
     Comprehensive model comparison widget with analytics and enhanced discovery.
@@ -303,6 +405,7 @@ class ModelComparisonWidget(QWidget):
         self.models_data = models_data or {}
         self.analytics_worker = None
         self.current_analytics = {}
+        self.video_base_prices: Dict[str, VideoBasePrice] = {}  # model_id -> base price
 
         # Initialize signals for communication with main app
         self.signals = ComparisonSignals()
@@ -448,7 +551,7 @@ class ModelComparisonWidget(QWidget):
         type_label = QLabel("Type:")
         type_label.setStyleSheet(f"color: {self.theme.text};")
         self.type_filter = QComboBox()
-        self.type_filter.addItems(["All", "text", "image", "tts", "embedding", "upscale", "inpaint"])
+        self.type_filter.addItems(["All", "text", "image", "video", "tts", "asr", "embedding", "upscale", "inpaint"])
         self.type_filter.currentTextChanged.connect(self.apply_filters)
         self.type_filter.setStyleSheet(self._get_combobox_style())
         type_layout.addWidget(type_label)
@@ -494,6 +597,24 @@ class ModelComparisonWidget(QWidget):
         price_layout.addWidget(price_label)
         price_layout.addWidget(self.price_filter)
         filters_layout.addLayout(price_layout)
+
+        # Column visibility button
+        self.columns_btn = QPushButton("📊 Columns")
+        self.columns_btn.clicked.connect(self._show_column_selector)
+        self.columns_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {self.theme.card_background};
+                color: {self.theme.text};
+                border: 1px solid {self.theme.accent};
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-size: 12px;
+            }}
+            QPushButton:hover {{
+                background-color: {self.theme.accent};
+            }}
+        """)
+        filters_layout.addWidget(self.columns_btn)
         
         # Results count
         self.results_count_label = QLabel("0 models")
@@ -506,6 +627,7 @@ class ModelComparisonWidget(QWidget):
 
         # Model comparison table
         self.comparison_table = QTableWidget()
+        self.column_manager = ColumnManager(self.comparison_table)
         self.setup_comparison_table()
         layout.addWidget(self.comparison_table)
 
@@ -641,21 +763,79 @@ class ModelComparisonWidget(QWidget):
         if hasattr(self, 'results_count_label'):
             self.results_count_label.setText(f"{count} models")
 
+    def _show_column_selector(self) -> None:
+        """Show a dialog to toggle column visibility for the current type."""
+        if not hasattr(self, 'column_manager'):
+            return
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Select Columns")
+        dialog.setStyleSheet(f"""
+            QDialog {{
+                background-color: {self.theme.card_background};
+            }}
+            QLabel {{
+                color: {self.theme.text};
+            }}
+            QCheckBox {{
+                color: {self.theme.text};
+            }}
+        """)
+
+        layout = QVBoxLayout(dialog)
+        
+        # Add checkboxes for each column
+        self._column_checkboxes = []
+        for col in self.column_manager.get_all_columns():
+            # Skip the model column as it should always be visible
+            if col.key == "model":
+                continue
+                
+            checkbox = QCheckBox(col.header)
+            hidden = col.key in self.column_manager.hidden_by_type.get(self.column_manager.current_type_key, set())
+            checkbox.setChecked(not hidden)
+            checkbox.stateChanged.connect(
+                lambda state, key=col.key: self.column_manager.set_column_visibility(
+                    key, state == Qt.Checked
+                )
+            )
+            self._column_checkboxes.append((checkbox, col.key))
+            layout.addWidget(checkbox)
+
+        # Button layout
+        button_layout = QHBoxLayout()
+        
+        reset_btn = QPushButton("Reset to Defaults")
+        reset_btn.clicked.connect(self._reset_columns_to_defaults)
+        
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        
+        button_layout.addWidget(reset_btn)
+        button_layout.addStretch()
+        button_layout.addWidget(close_btn)
+        
+        layout.addLayout(button_layout)
+
+        dialog.exec()
+
+    def _reset_columns_to_defaults(self) -> None:
+        """Reset column visibility to defaults for the current model type."""
+        if hasattr(self, 'column_manager'):
+            # Clear hidden columns for current type
+            self.column_manager.hidden_by_type.pop(self.column_manager.current_type_key, None)
+            self.column_manager.set_model_type(self.column_manager.current_type_key)
+            self.column_manager._save_preferences()
+            
+            # Update checkboxes in the dialog
+            if hasattr(self, '_column_checkboxes'):
+                for checkbox, key in self._column_checkboxes:
+                    # All columns should be visible after reset (assuming defaults show all)
+                    # Note: model column is not in _column_checkboxes so no need to handle it
+                    checkbox.setChecked(True)
+
     def setup_comparison_table(self):
         """Setup the comparative table with proper styling"""
-        headers = ["Model", "Type", "Context", "Vision", "Functions", "Web Search", "Reasoning", "LogProbs", "Input $/1K", "Output $/1K"]
-
-        self.comparison_table.setColumnCount(len(headers))
-        self.comparison_table.setHorizontalHeaderLabels(headers)
-
-        # Set column resize modes - all columns resize to content, last stretches to fill
-        header = self.comparison_table.horizontalHeader()
-        header.setStretchLastSection(True)  # Last column stretches to fill remaining space
-        for col in range(len(headers) - 1):
-            header.setSectionResizeMode(col, QHeaderView.ResizeToContents)
-        header.setSectionResizeMode(len(headers) - 1, QHeaderView.Stretch)  # Output stretches
-        header.setMinimumSectionSize(60)  # Minimum width for any column
-        
         self.comparison_table.setStyleSheet(f"""
             QTableWidget {{
                 background-color: {self.theme.background};
@@ -681,45 +861,41 @@ class ModelComparisonWidget(QWidget):
             }}
         """)
 
-        # Populate with model data
+        self.column_manager.set_model_type(self.type_filter.currentText())
         self.populate_comparison_table()
 
-    def populate_comparison_table(self):
-        """Populate the comparison table with model data"""
-        if not self.models_data or 'data' not in self.models_data:
-            return
-
-        self.comparison_table.setRowCount(0)
-
-        for i, model in enumerate(self.models_data['data']):
+    def _get_cell_value(self, column_key: str, model: Dict, model_spec: Dict,
+                        capabilities: Dict, pricing: Dict, constraints: Dict) -> Tuple[QTableWidgetItem, float]:
+        """Get formatted cell value and sort key for a column."""
+        model_type = model.get('type', 'unknown')
+        
+        # Default values
+        sort_key = 0.0
+        item = QTableWidgetItem("—")
+        
+        # Model name column
+        if column_key == "model":
             model_id = model.get('id', 'Unknown')
-            model_spec = model.get('model_spec', {})
-            model_type = model.get('type', 'unknown')
-            capabilities = model_spec.get('capabilities', {})
-            pricing = model_spec.get('pricing', {})
-            constraints = model_spec.get('constraints', {})
-
-            self.comparison_table.insertRow(i)
-
-            # Model name
-            model_item = QTableWidgetItem(model_id)
-            model_item.setToolTip(f"Model: {model_id}")
-            self.comparison_table.setItem(i, 0, model_item)
-
-            # Type with icon
-            type_icons = {'text': '💬', 'image': '🖼️', 'tts': '🔊', 'embedding': '🔢', 'upscale': '📈', 'inpaint': '🎨'}
+            item = QTableWidgetItem(model_id)
+            item.setToolTip(f"Model: {model_id}")
+            return item, 0.0
+        
+        # Type column
+        if column_key == "type":
+            type_icons = {'text': '💬', 'image': '🖼️', 'video': '🎬', 'tts': '🔊',
+                         'asr': '🎙️', 'embedding': '🔢', 'upscale': '📈', 'inpaint': '🎨'}
             type_icon = type_icons.get(model_type, '❓')
-            type_item = QTableWidgetItem(f"{type_icon} {model_type}")
-            self.comparison_table.setItem(i, 1, type_item)
-
-            # Context/Specs column - different content based on model type
+            item = QTableWidgetItem(f"{type_icon} {model_type}")
+            return item, 0.0
+        
+        # Context/Specs column - different content based on model type
+        if column_key in ("context", "specs"):
             if model_type == 'text':
                 context = model_spec.get('availableContextTokens', 'N/A')
                 context_text = f"{context:,}" if isinstance(context, int) else str(context) if context else 'N/A'
-                context_item = QTableWidgetItem(context_text)
-                context_item.setToolTip(f"Context window: {context_text} tokens")
+                item = QTableWidgetItem(context_text)
+                item.setToolTip(f"Context window: {context_text} tokens")
             elif model_type in ('image', 'upscale', 'inpaint'):
-                # Show image-specific specs from constraints
                 specs_parts = []
                 if constraints:
                     steps = constraints.get('steps', {})
@@ -730,158 +906,351 @@ class ModelComparisonWidget(QWidget):
                     prompt_limit = constraints.get('promptCharacterLimit')
                     if prompt_limit:
                         specs_parts.append(f"Prompt: {prompt_limit}")
-                if specs_parts:
-                    context_text = ", ".join(specs_parts)
-                else:
-                    context_text = "Standard"
-                context_item = QTableWidgetItem(context_text)
-                context_item.setToolTip(f"Image specs: {context_text}")
-            elif model_type == 'tts':
-                # Show TTS-specific info
+                context_text = ", ".join(specs_parts) if specs_parts else "Standard"
+                item = QTableWidgetItem(context_text)
+                item.setToolTip(f"Image specs: {context_text}")
+            elif model_type in ('tts', 'asr'):
                 voices = model_spec.get('voices', model_spec.get('supportedVoices', []))
-                if voices:
-                    context_text = f"{len(voices)} voices"
-                else:
-                    context_text = "Multiple voices"
-                context_item = QTableWidgetItem(context_text)
-                context_item.setToolTip(f"Supported voices: {', '.join(voices[:5]) if voices else 'Various'}")
+                context_text = f"{len(voices)} voices" if voices else "Multiple voices"
+                item = QTableWidgetItem(context_text)
+                item.setToolTip(f"Supported voices: {', '.join(voices[:5]) if voices else 'Various'}")
             elif model_type == 'embedding':
                 dimensions = model_spec.get('dimensions', model_spec.get('embeddingDimensions', 'N/A'))
-                context_item = QTableWidgetItem(f"Dim: {dimensions}")
-                context_item.setToolTip(f"Embedding dimensions: {dimensions}")
+                item = QTableWidgetItem(f"Dim: {dimensions}")
+                item.setToolTip(f"Embedding dimensions: {dimensions}")
+            elif model_type == 'video':
+                durations = constraints.get('durations', [])
+                if durations:
+                    item = QTableWidgetItem(", ".join(str(d) for d in durations))
+                else:
+                    item = QTableWidgetItem("Standard")
             else:
-                context_item = QTableWidgetItem('—')
-            self.comparison_table.setItem(i, 2, context_item)
-
-            # Capabilities with icons - use vibrant theme colors
-            # For non-text models, show as N/A with neutral styling
+                item = QTableWidgetItem('—')
+            return item, 0.0
+        
+        # Capability columns (text models only) - map to correct API field names
+        if column_key in ("vision", "functions", "web_search", "reasoning", "logprobs"):
             is_text_model = model_type == 'text'
-            
-            # Vision capability
-            vision = "✓" if capabilities.get('supportsVision') else "✗"
-            vision_item = QTableWidgetItem(vision if is_text_model else "—")
             if is_text_model:
-                if capabilities.get('supportsVision'):
-                    vision_item.setBackground(QColor("#4CAF50"))  # Vibrant green
-                    vision_item.setForeground(QColor("#ffffff"))  # White text
+                # Map column keys to actual API capability field names
+                cap_key_map = {
+                    'vision': 'supportsVision',
+                    'functions': 'supportsFunctionCalling',
+                    'web_search': 'supportsWebSearch',
+                    'reasoning': 'supportsReasoning',
+                    'logprobs': 'supportsLogProbs',
+                }
+                cap_key = cap_key_map.get(column_key, '')
+                cap_enabled = capabilities.get(cap_key, False)
+                value = "✓" if cap_enabled else "✗"
+                item = QTableWidgetItem(value)
+                if cap_enabled:
+                    item.setBackground(QColor("#4CAF50"))
+                    item.setForeground(QColor("#ffffff"))
                 else:
-                    vision_item.setBackground(QColor("#ef5350"))  # Vibrant red
-                    vision_item.setForeground(QColor("#ffffff"))  # White text
+                    item.setBackground(QColor("#ef5350"))
+                    item.setForeground(QColor("#ffffff"))
             else:
-                vision_item.setForeground(QColor(self.theme.text_secondary))
-            self.comparison_table.setItem(i, 3, vision_item)
-
-            # Function calling capability
-            functions = "✓" if capabilities.get('supportsFunctionCalling') else "✗"
-            functions_item = QTableWidgetItem(functions if is_text_model else "—")
-            if is_text_model:
-                if capabilities.get('supportsFunctionCalling'):
-                    functions_item.setBackground(QColor("#4CAF50"))  # Vibrant green
-                    functions_item.setForeground(QColor("#ffffff"))  # White text
+                item = QTableWidgetItem("—")
+                item.setForeground(QColor(self.theme.text_secondary))
+            return item, 0.0
+        
+        # Price columns
+        if column_key == "input_price":
+            if model_type == 'text':
+                input_cost = pricing.get('input', {}).get('usd', 0) * 1000
+                item = QTableWidgetItem(f"${input_cost:.3f}")
+                item.setData(Qt.UserRole, input_cost)
+                return item, input_cost
+            elif model_type == 'tts':
+                per_char = pricing.get('input', {}).get('usd', 0)
+                item = QTableWidgetItem(f"${per_char:.2f}/1M")
+                item.setToolTip(f"Cost per 1M characters: ${per_char:.2f}")
+                item.setData(Qt.UserRole, per_char)
+                return item, per_char
+            elif model_type == 'embedding':
+                input_cost = pricing.get('input', {}).get('usd', 0) * 1000
+                item = QTableWidgetItem(f"${input_cost:.3f}")
+                item.setData(Qt.UserRole, input_cost)
+                return item, input_cost
+            elif model_type in ('image', 'upscale', 'inpaint', 'video'):
+                per_gen = pricing.get('generation', {}).get('usd', 0)
+                if per_gen == 0:
+                    per_gen = pricing.get('perImage', {}).get('usd', 0)
+                if per_gen > 0:
+                    suffix = "/img" if model_type in ('image', 'upscale', 'inpaint') else "/video"
+                    item = QTableWidgetItem(f"${per_gen:.4f}{suffix}")
+                    item.setToolTip(f"Cost per generation: ${per_gen:.4f}")
                 else:
-                    functions_item.setBackground(QColor("#ef5350"))  # Vibrant red
-                    functions_item.setForeground(QColor("#ffffff"))  # White text
+                    if model_type == 'video':
+                        item = QTableWidgetItem("Variable")
+                        item.setToolTip("Use Video Quote API")
+                    else:
+                        item = QTableWidgetItem("See pricing")
+                        item.setToolTip("Check Venice pricing page")
+                item.setData(Qt.UserRole, per_gen)
+                return item, per_gen
+            elif model_type == 'asr':
+                per_min = pricing.get('input', {}).get('usd', 0)
+                item = QTableWidgetItem(f"${per_min:.3f}/min")
+                item.setData(Qt.UserRole, per_min)
+                return item, per_min
+        
+        if column_key == "output_price":
+            if model_type == 'text':
+                output_cost = pricing.get('output', {}).get('usd', 0) * 1000
+                item = QTableWidgetItem(f"${output_cost:.3f}")
+                item.setData(Qt.UserRole, output_cost)
+                return item, output_cost
+            return QTableWidgetItem("—"), 0.0
+        
+        # Cache columns - prompt caching pricing
+        if column_key in ("cache_input", "cache_write"):
+            cache_key = "cache_input" if column_key == "cache_input" else "cache_write"
+            cache_pricing = pricing.get(cache_key, {})
+            if cache_pricing:
+                cache_cost = cache_pricing.get('usd', 0) * 1000  # Convert to $/1K tokens
+                item = QTableWidgetItem(f"${cache_cost:.3f}")
+                item.setData(Qt.UserRole, cache_cost)
+                return item, cache_cost
+            return QTableWidgetItem("—"), 0.0
+        
+        # Privacy - this is a string field like "private" or "anonymized"
+        if column_key == "privacy":
+            privacy = model_spec.get('privacy', '')
+            if privacy:
+                item = QTableWidgetItem(privacy)
+            return item, 0.0
+        
+        # Image/video specific columns
+        if column_key == "resolutions":
+            resolutions = constraints.get('resolutions', [])
+            if resolutions:
+                res_str = ", ".join(str(r) for r in resolutions[:5])
+                if len(resolutions) > 5:
+                    res_str += "..."
+                item = QTableWidgetItem(res_str)
             else:
-                functions_item.setForeground(QColor(self.theme.text_secondary))
-            self.comparison_table.setItem(i, 4, functions_item)
-
-            # Web search capability
-            web_search = "✓" if capabilities.get('supportsWebSearch') else "✗"
-            web_search_item = QTableWidgetItem(web_search if is_text_model else "—")
-            if is_text_model:
-                if capabilities.get('supportsWebSearch'):
-                    web_search_item.setBackground(QColor("#4CAF50"))  # Vibrant green
-                    web_search_item.setForeground(QColor("#ffffff"))  # White text
+                item = QTableWidgetItem("Standard")
+            return item, 0.0
+        
+        if column_key == "steps":
+            steps = constraints.get('steps', {})
+            max_steps = steps.get('max', steps.get('default', 'N/A'))
+            item = QTableWidgetItem(str(max_steps))
+            return item, 0.0
+        
+        if column_key == "prompt_limit":
+            limit = constraints.get('promptCharacterLimit', 'N/A')
+            item = QTableWidgetItem(str(limit))
+            return item, 0.0
+        
+        if column_key == "generation_price":
+            per_gen = pricing.get('generation', {}).get('usd', 0)
+            if per_gen > 0:
+                item = QTableWidgetItem(f"${per_gen:.4f}/gen")
+                item.setData(Qt.UserRole, per_gen)
+            else:
+                if model_type == 'video':
+                    item = QTableWidgetItem("Variable")
+                    item.setToolTip("Use Video Quote API")
                 else:
-                    web_search_item.setBackground(QColor("#ef5350"))  # Vibrant red
-                    web_search_item.setForeground(QColor("#ffffff"))  # White text
+                    item = QTableWidgetItem("See pricing")
+                    item.setToolTip("Check Venice pricing page")
+            return item, per_gen
+        
+        # Video specific columns
+        if column_key == "video_type":
+            # Check constraints['model_type'] for "image-to-video" vs "text-to-video"
+            video_model_type = constraints.get('model_type', '')
+            if video_model_type == 'image-to-video':
+                item = QTableWidgetItem("img→vid")
+            elif video_model_type == 'text-to-video':
+                item = QTableWidgetItem("text→vid")
             else:
-                web_search_item.setForeground(QColor(self.theme.text_secondary))
-            self.comparison_table.setItem(i, 5, web_search_item)
-
-            # Reasoning capability
-            reasoning = "✓" if capabilities.get('supportsReasoning') else "✗"
-            reasoning_item = QTableWidgetItem(reasoning if is_text_model else "—")
-            if is_text_model:
-                if capabilities.get('supportsReasoning'):
-                    reasoning_item.setBackground(QColor("#4CAF50"))  # Vibrant green
-                    reasoning_item.setForeground(QColor("#ffffff"))  # White text
+                # Default based on model ID if not specified
+                model_id = model.get('id', '').lower()
+                if 'image' in model_id or 'img' in model_id or 'i2v' in model_id:
+                    item = QTableWidgetItem("img→vid")
                 else:
-                    reasoning_item.setBackground(QColor("#ef5350"))  # Vibrant red
-                    reasoning_item.setForeground(QColor("#ffffff"))  # White text
+                    item = QTableWidgetItem("text→vid")
+            return item, 0.0
+        
+        if column_key == "durations":
+            durations = constraints.get('durations', [])
+            if durations:
+                # Durations may already include 's' suffix or just be numbers
+                dur_strs = []
+                for d in durations:
+                    d_str = str(d)
+                    if not d_str.endswith('s'):
+                        d_str += 's'
+                    dur_strs.append(d_str)
+                item = QTableWidgetItem(", ".join(dur_strs))
             else:
-                reasoning_item.setForeground(QColor(self.theme.text_secondary))
-            self.comparison_table.setItem(i, 6, reasoning_item)
-
-            # LogProbs capability
-            logprobs = "✓" if capabilities.get('supportsLogProbs') else "✗"
-            logprobs_item = QTableWidgetItem(logprobs if is_text_model else "—")
-            if is_text_model:
-                if capabilities.get('supportsLogProbs'):
-                    logprobs_item.setBackground(QColor("#4CAF50"))  # Vibrant green
-                    logprobs_item.setForeground(QColor("#ffffff"))  # White text
-                else:
-                    logprobs_item.setBackground(QColor("#ef5350"))  # Vibrant red
-                    logprobs_item.setForeground(QColor("#ffffff"))  # White text
+                item = QTableWidgetItem("Standard")
+            return item, 0.0
+        
+        if column_key == "audio":
+            has_audio = constraints.get('audio', False)
+            item = QTableWidgetItem("✓" if has_audio else "✗")
+            return item, 0.0
+        
+        if column_key == "audio_configurable":
+            config = constraints.get('audio_configurable', False)
+            item = QTableWidgetItem("✓" if config else "✗")
+            return item, 0.0
+        
+        if column_key == "aspect_ratios":
+            # Field is 'aspect_ratios' with underscore in API
+            ratios = constraints.get('aspect_ratios', [])
+            if ratios:
+                item = QTableWidgetItem(", ".join(str(r) for r in ratios[:4]))
+                if len(ratios) > 4:
+                    item.setToolTip(", ".join(str(r) for r in ratios))
             else:
-                logprobs_item.setForeground(QColor(self.theme.text_secondary))
-            self.comparison_table.setItem(i, 7, logprobs_item)
-
-            # Pricing - handle different model types
+                item = QTableWidgetItem("—")
+            return item, 0.0
+        
+        if column_key == "base_price":
+            model_id = model.get('id')
+            base_price = self.video_base_prices.get(model_id)
+            if base_price:
+                item = QTableWidgetItem(f"${base_price.base_usd:.3f}")
+                item.setToolTip(f"Base price: {base_price.min_duration}s at {base_price.min_resolution}, no audio")
+                item.setData(Qt.UserRole, base_price.base_usd)
+                return item, base_price.base_usd
+            else:
+                item = QTableWidgetItem("—")
+                item.setToolTip("Base price not available")
+                return item, 0.0
+        
+        if column_key == "audio_price":
+            # Check if model has audio capability
+            has_audio = constraints.get('audio', False)
+            if has_audio:
+                item = QTableWidgetItem("Included")
+                item.setToolTip("Audio included in generation price")
+            else:
+                item = QTableWidgetItem("—")
+            return item, 0.0
+        
+        # Generic "price" column for DEFAULT view (all model types)
+        if column_key == "price":
             if model_type == 'text':
                 input_cost = pricing.get('input', {}).get('usd', 0) * 1000
                 output_cost = pricing.get('output', {}).get('usd', 0) * 1000
-                input_item = QTableWidgetItem(f"${input_cost:.3f}")
-                input_item.setData(Qt.UserRole, input_cost)  # Store for sorting
-                output_item = QTableWidgetItem(f"${output_cost:.3f}")
-                output_item.setData(Qt.UserRole, output_cost)  # Store for sorting
+                if input_cost > 0 or output_cost > 0:
+                    item = QTableWidgetItem(f"${input_cost:.2f}/${output_cost:.2f}")
+                    item.setToolTip(f"Input: ${input_cost:.3f}/1K, Output: ${output_cost:.3f}/1K")
+                    return item, input_cost
             elif model_type in ('image', 'upscale', 'inpaint'):
-                # Image/upscale/inpaint models use generation pricing
-                per_image = pricing.get('generation', {}).get('usd', 0)
-                if per_image == 0:
-                    per_image = pricing.get('perImage', {}).get('usd', 0)
-                # Check for upscale-specific pricing
-                if model_type == 'upscale' and per_image == 0:
-                    upscale_pricing = pricing.get('upscale', {})
-                    per_image = upscale_pricing.get('2x', {}).get('usd', 0)
-                if per_image > 0:
-                    input_item = QTableWidgetItem(f"${per_image:.4f}/img")
-                    input_item.setToolTip(f"Cost per image: ${per_image:.4f}")
-                else:
-                    input_item = QTableWidgetItem("See pricing")
-                    input_item.setToolTip("Check Venice pricing page for details")
-                input_item.setData(Qt.UserRole, per_image)
-                output_item = QTableWidgetItem("—")
-                output_item.setData(Qt.UserRole, 0)
+                per_gen = pricing.get('generation', {}).get('usd', 0)
+                if per_gen > 0:
+                    item = QTableWidgetItem(f"${per_gen:.4f}/img")
+                    return item, per_gen
+            elif model_type == 'video':
+                # Video models often don't have pricing in API
+                item = QTableWidgetItem("See pricing")
+                return item, 0.0
             elif model_type == 'tts':
-                # TTS uses per character pricing
                 per_char = pricing.get('input', {}).get('usd', 0)
                 if per_char > 0:
-                    input_item = QTableWidgetItem(f"${per_char:.2f}/1M")
-                    input_item.setToolTip(f"Cost per 1M characters: ${per_char:.2f}")
-                else:
-                    input_item = QTableWidgetItem("See pricing")
-                input_item.setData(Qt.UserRole, per_char)
-                output_item = QTableWidgetItem("—")
-                output_item.setData(Qt.UserRole, 0)
+                    item = QTableWidgetItem(f"${per_char:.2f}/1M chars")
+                    return item, per_char
+            elif model_type == 'asr':
+                per_min = pricing.get('input', {}).get('usd', 0)
+                if per_min > 0:
+                    item = QTableWidgetItem(f"${per_min:.3f}/min")
+                    return item, per_min
             elif model_type == 'embedding':
                 input_cost = pricing.get('input', {}).get('usd', 0) * 1000
-                input_item = QTableWidgetItem(f"${input_cost:.3f}")
-                input_item.setData(Qt.UserRole, input_cost)
-                output_item = QTableWidgetItem("—")
-                output_item.setData(Qt.UserRole, 0)
+                if input_cost > 0:
+                    item = QTableWidgetItem(f"${input_cost:.3f}/1K")
+                    return item, input_cost
+            return QTableWidgetItem("—"), 0.0
+        
+        # Upscale specific
+        if column_key == "upscale_factors":
+            factors = list(pricing.get('upscale', {}).keys())
+            if factors:
+                item = QTableWidgetItem(", ".join(factors))
             else:
-                input_item = QTableWidgetItem("—")
-                input_item.setData(Qt.UserRole, 0)
-                output_item = QTableWidgetItem("—")
-                output_item.setData(Qt.UserRole, 0)
-            
-            self.comparison_table.setItem(i, 8, input_item)
-            self.comparison_table.setItem(i, 9, output_item)
+                item = QTableWidgetItem("2x, 4x")
+            return item, 0.0
+        
+        if column_key == "upscale_price":
+            prices = pricing.get('upscale', {})
+            if prices:
+                min_price = min(p.get('usd', 0) for p in prices.values())
+                item = QTableWidgetItem(f"${min_price:.4f}")
+                item.setData(Qt.UserRole, min_price)
+            else:
+                item = QTableWidgetItem("See pricing")
+            return item, 0.0
+        
+        if column_key == "inpaint_price":
+            inpaint_pricing = pricing.get('inpaint', {})
+            if inpaint_pricing:
+                price = inpaint_pricing.get('usd', 0)
+                item = QTableWidgetItem(f"${price:.4f}")
+                item.setData(Qt.UserRole, price)
+            else:
+                item = QTableWidgetItem("See pricing")
+            return item, 0.0
+        
+        # TTS voices
+        if column_key == "voices":
+            voices = model_spec.get('voices', model_spec.get('supportedVoices', []))
+            item = QTableWidgetItem(f"{len(voices)} voices" if voices else "Multiple")
+            return item, 0.0
+        
+        # Embedding dimensions
+        if column_key == "dimensions":
+            dims = model_spec.get('dimensions', model_spec.get('embeddingDimensions', 'N/A'))
+            item = QTableWidgetItem(str(dims))
+            return item, 0.0
+        
+        # Resolution pricing
+        if column_key == "resolution_pricing":
+            res_pricing = constraints.get('resPricing', False)
+            item = QTableWidgetItem("Yes" if res_pricing else "No")
+            return item, 0.0
+        
+        return item, 0.0
 
-        # Resize content columns only, let Output column stretch
-        for col in range(9):
-            self.comparison_table.resizeColumnToContents(col)
+    def populate_comparison_table(self):
+        """Populate the comparison table with model data using dynamic columns."""
+        if not self.models_data or 'data' not in self.models_data:
+            return
+
+        if not hasattr(self, 'column_manager'):
+            return
+
+        self.comparison_table.setRowCount(0)
+        columns = self.column_manager.get_columns()
+        
+        for i, model in enumerate(self.models_data['data']):
+            model_id = model.get('id', 'Unknown')
+            model_spec = model.get('model_spec', {})
+            model_type = model.get('type', 'unknown')
+            capabilities = model_spec.get('capabilities', {})
+            pricing = model_spec.get('pricing', {})
+            constraints = model_spec.get('constraints', {})
+
+            self.comparison_table.insertRow(i)
+
+            for col_idx, col_def in enumerate(columns):
+                item, sort_key = self._get_cell_value(
+                    col_def.key, model, model_spec, capabilities, pricing, constraints
+                )
+                if sort_key != 0.0:
+                    item.setData(Qt.UserRole, sort_key)
+                self.comparison_table.setItem(i, col_idx, item)
+
+        # Resize columns to content
+        for col_idx in range(len(columns) - 1):
+            self.comparison_table.resizeColumnToContents(col_idx)
 
     def setup_performance_table(self):
         """Setup performance metrics table"""
@@ -964,6 +1333,10 @@ class ModelComparisonWidget(QWidget):
     def apply_filters(self):
         """Apply current filters including search to both table and tree views"""
         model_type = self.type_filter.currentText().lower()
+        
+        # Update columns based on the selected model type
+        if hasattr(self, 'column_manager'):
+            self.column_manager.set_model_type(self.type_filter.currentText())
         
         # Get search text
         search_text = ""
@@ -1083,6 +1456,13 @@ class ModelComparisonWidget(QWidget):
         self.render_requests_chart(analytics)
         self.render_tokens_chart(analytics)
         self.render_cost_chart(analytics)
+
+    def update_video_base_prices(self, base_prices: List[VideoBasePrice]):
+        """Update video base prices and refresh table if needed"""
+        self.video_base_prices = {price.model_id: price for price in base_prices}
+        # Refresh the table to show updated prices
+        if hasattr(self, 'comparison_table') and self.models_data:
+            self.populate_comparison_table()
 
     def render_requests_chart(self, analytics):
         """Render the requests chart with logarithmic scale for outliers"""
