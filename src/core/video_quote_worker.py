@@ -64,7 +64,24 @@ class VideoQuoteWorker(BaseAPIWorker):
                 
                 # Get minimum duration
                 durations = constraints.get('durations', [])
-                min_duration = min(durations) if durations else 1.0  # Default to 1 second
+                if durations:
+                    # Parse duration strings like "5s", "8s" to find the minimum numeric value
+                    def parse_duration(dur_str):
+                        try:
+                            # Remove 's' suffix and convert to float
+                            return float(dur_str.rstrip('s'))
+                        except (ValueError, AttributeError):
+                            return 999  # Invalid durations at end
+                    
+                    min_duration = min(durations, key=parse_duration)
+                    min_duration_value = parse_duration(min_duration)
+                else:
+                    min_duration = "5s"  # Default
+                    min_duration_value = 5.0
+                
+                # Get aspect ratio (use first available)
+                aspect_ratios = constraints.get('aspect_ratios', [])
+                aspect_ratio = aspect_ratios[0] if aspect_ratios else "16:9"  # Default
                 
                 # Get lowest resolution (sort by numeric value)
                 resolutions = constraints.get('resolutions', [])
@@ -83,28 +100,33 @@ class VideoQuoteWorker(BaseAPIWorker):
                 # Prepare quote request
                 quote_params = {
                     "model": model_id,
-                    "duration": min_duration,
+                    "duration": min_duration,  # String format like "5s"
                     "resolution": min_resolution,
+                    "aspect_ratio": aspect_ratio,
                     "audio": False
                 }
                 
                 self.emit_progress(f"Getting quote for {model_id}")
                 
                 # Call quote API
+                logger.info(f"Sending quote request for {model_id}: {quote_params}")
                 response = self.api_client.post("/video/quote", data=quote_params, timeout=30)
                 
                 if response.status_code == 200:
                     quote_data = response.json()
+                    logger.info(f"Quote response for {model_id}: {quote_data}")
                     base_price = VideoBasePrice(
                         model_id=model_id,
                         base_usd=quote_data.get('quote', 0.0),  # The key is 'quote', not 'usd'
                         base_diem=quote_data.get('diem', 0.0),
-                        min_duration=min_duration,
+                        min_duration=min_duration_value,
                         min_resolution=min_resolution
                     )
                     base_prices.append(base_price)
                 else:
                     logger.warning(f"Quote API failed for {model_id}: {response.status_code}")
+                    logger.warning(f"Response content: {response.text}")
+                    logger.warning(f"Request params: {quote_params}")
                     
             except Exception as e:
                 logger.warning(f"Failed to get quote for {model_id}: {e}")
