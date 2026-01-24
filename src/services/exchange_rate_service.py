@@ -213,8 +213,8 @@ class ExchangeRateWorker(QThread):
         super().__init__(parent)
         
         # Data source URLs and configurations
-        self.venice_api_url = "https://api.venice.ai/api/v1/exchange/rate"
-        self.coingecko_url = "https://api.coingecko.com/api/v3/simple/price"
+        self.venice_api_url = Config.VENICE_EXCHANGE_RATE_URL
+        self.coingecko_url = Config.COINGECKO_PRICE_URL
         
         self.timeout = 10  # Request timeout in seconds
     

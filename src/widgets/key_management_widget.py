@@ -3,6 +3,8 @@ API Key Management Widget for Phase 3 enhancements.
 Provides interactive management with dropdown menus and actions.
 """
 
+from functools import partial
+
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
                               QMenu, QDialog, QLineEdit, QTextEdit, QDialogButtonBox,
                               QMessageBox, QFrame)
@@ -31,7 +33,7 @@ class KeyActionMenu(QMenu):
         # Usage Report action
         usage_action = QAction("📊 Usage Report", self)
         usage_action.setStatusTip("View detailed usage analytics for this key")
-        usage_action.triggered.connect(lambda: self.usage_report_requested.emit(self.key_id))
+        usage_action.triggered.connect(partial(self.emit_usage_report))
         self.addAction(usage_action)
         
         self.addSeparator()
@@ -39,8 +41,16 @@ class KeyActionMenu(QMenu):
         # Revoke Key action (dangerous)
         revoke_action = QAction("🗑️ Revoke Key", self)
         revoke_action.setStatusTip("Permanently disable this API key (irreversible)")
-        revoke_action.triggered.connect(lambda: self.revoke_requested.emit(self.key_id))
+        revoke_action.triggered.connect(partial(self.emit_revoke_request))
         self.addAction(revoke_action)
+    
+    def emit_usage_report(self):
+        """Emit usage report request signal for this key"""
+        self.usage_report_requested.emit(self.key_id)
+    
+    def emit_revoke_request(self):
+        """Emit revoke request signal for this key"""
+        self.revoke_requested.emit(self.key_id)
 
 
 class RenameKeyDialog(QDialog):
@@ -123,7 +133,7 @@ class UsageReportDialog(QDialog):
         # Created date
         try:
             formatted_date = DateFormatter.human_friendly(self.api_key_usage.created_at)
-        except:
+        except (ValueError, TypeError, AttributeError, KeyError):
             formatted_date = self.api_key_usage.created_at
         
         created_label = QLabel(f"Created: {formatted_date}")
@@ -191,7 +201,7 @@ RECOMMENDATIONS
                 now = datetime.now(timezone.utc)
                 hours_since_used = (now - last_used).total_seconds() / 3600
                 recently_used = hours_since_used < 24
-            except:
+            except (ValueError, TypeError, AttributeError):
                 recently_used = False
         
         if recently_used:
@@ -298,7 +308,7 @@ class APIKeyManagementWidget(QWidget):
         # Created date
         try:
             formatted_date = DateFormatter.relative_time(self.api_key_usage.created_at)
-        except:
+        except (ValueError, TypeError, AttributeError, KeyError):
             formatted_date = self.api_key_usage.created_at[:10]
         
         self.created_label = QLabel(f"Created {formatted_date}")
@@ -467,7 +477,7 @@ class APIKeyManagementWidget(QWidget):
                     color = self.theme_colors['warning']  # Old usage
                     
                 self.last_used_label.setStyleSheet(f"color: {color};")
-            except:
+            except (ValueError, TypeError, AttributeError):
                 self.last_used_label.setText(f"Last used: {last_used_at[:10]}")
                 self.last_used_label.setStyleSheet(f"color: {self.theme_colors['text_secondary']};")
     

@@ -1,3 +1,5 @@
+import os
+import sys
 import requests
 import warnings
 import urllib3
@@ -21,8 +23,14 @@ warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWar
 # Use print instead of logging inside display_models for direct color output
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 
-# Your actual API key - Replace with a secure method like environment variables
-API_KEY = 'gqhvkz3l58GIcuJV88G2MiiWayN3BCpRanuO00oWMa' # Replace with your real key or load securely
+# Load API key from environment variable
+API_KEY = os.getenv('VENICE_API_KEY')
+if not API_KEY:
+    logging.error("VENICE_API_KEY environment variable not set")
+    sys.exit(1)
+
+# Request timeout in seconds (configurable via environment)
+REQUEST_TIMEOUT = int(os.getenv('REQUEST_TIMEOUT_SECONDS', '15'))
 
 def list_models():
     """Fetches the list of all models from the Venice AI API."""
@@ -35,7 +43,7 @@ def list_models():
         'type': 'all'  # Fetch all model types
     }
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=15) # Added timeout
+        response = requests.get(url, headers=headers, params=params, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()  # Raises an HTTPError for bad responses (4xx or 5xx)
         return response.json()
     except requests.exceptions.HTTPError as http_err:
