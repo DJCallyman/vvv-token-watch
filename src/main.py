@@ -31,12 +31,14 @@ from src.widgets.vvv_display import BalanceDisplayWidget, APIKeyUsageWidget
 from src.widgets.enhanced_balance_widget import HeroBalanceWidget
 from src.widgets.action_buttons import ActionButtonWidget
 from src.widgets.usage_leaderboard import UsageLeaderboardWidget
+from src.widgets.backend_status_bar import BackendStatusBar
 from src.core.web_usage import WebUsageWorker, WebUsageMetrics
 from src.core.unified_usage import UnifiedUsageIntegrator
 from src.widgets.cost_optimization_widget import CostOptimizationWidget
 from src.core.price_worker import PriceWorker
 from src.core.cost_analysis_worker import CostAnalysisWorker
 from src.core.model_cache import ModelCacheManager
+from src.core.venice_api_client import VeniceAPIClient
 
 # --- Suppress Warnings (Use with caution) ---
 warnings.filterwarnings("ignore", category=urllib3.exceptions.InsecureRequestWarning)
@@ -49,7 +51,7 @@ def setup_logging():
     Replaces scattered print() statements with proper logging.
     """
     # Determine log level from config
-    log_level = logging.DEBUG if getattr(Config, 'DEBUG_MODE', False) else logging.INFO
+    log_level = logging.DEBUG if Config.DEBUG_MODE else logging.INFO
     
     # Create formatters
     detailed_formatter = logging.Formatter(
@@ -148,6 +150,9 @@ class CombinedViewerApp(QMainWindow):
         else:
             logger.warning("Model cache initialization failed, using local cache if available")
         
+        # Initialize Venice API client for workers
+        self.api_client = VeniceAPIClient(Config.VENICE_API_KEY)
+        
         # Populate models_data from cache for Models & Compare tabs
         # This ensures these widgets use the same fresh data as the cache
         if self.model_cache.raw_api_data:
@@ -195,6 +200,10 @@ class CombinedViewerApp(QMainWindow):
         self.current_usage_data = []
         self.current_balance_data = None
         self.current_daily_usage = {}  # Store daily usage totals
+        
+        # Price worker scheduling guard
+        self._price_update_scheduled = False
+        self._diem_price_update_scheduled = False
         
         # Phase 2: Initialize analytics and services
         if PHASE2_AVAILABLE:
@@ -341,10 +350,18 @@ class CombinedViewerApp(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(5, 5, 5, 5)
         
-        # Create status bar
-        self.status_bar = QStatusBar()
+        # Create comprehensive backend status bar
+        self.status_bar = BackendStatusBar(self.theme)
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Ready. Click 'Connect' for models. Price updates automatically.")
+        self.status_bar.set_process_running(self.status_bar.PROCESS_MODELS, "Initializing...")
+        
+        # Connect status bar signals
+        self.status_bar.refresh_all_requested.connect(self.refresh_all_action)
+        self.status_bar.clear_errors_requested.connect(self._on_clear_status_errors)
+        
+        # Update initial status
+        self.status_bar.set_process_success(self.status_bar.PROCESS_MODELS, "Ready")
+        self.status_bar.set_process_success(self.status_bar.PROCESS_PRICES, "Ready")
         
         # Create tab widget for different sections
         self.main_tabs = QTabWidget()
@@ -1345,6 +1362,22 @@ class CombinedViewerApp(QMainWindow):
     
     def _start_price_worker(self):
         """Start the price worker thread to fetch CoinGecko prices."""
+        # Prevent duplicate scheduling and check if already running
+        if self._price_update_scheduled:
+            logger.debug("Price update already scheduled, skipping duplicate")
+            return
+        
+        # Check if worker is already running
+        if hasattr(self, 'price_worker') and self.price_worker and self.price_worker.isRunning():
+            logger.debug("Price worker already running, skipping duplicate start")
+            return
+        
+        # Update status bar
+        self.status_bar.set_process_running(
+            self.status_bar.PROCESS_PRICES,
+            "Fetching Venice prices..."
+        )
+        
         # Clean up any existing worker before creating a new one
         if hasattr(self, 'price_worker') and self.price_worker is not None:
             # Check if C++ object still exists
@@ -1374,10 +1407,14 @@ class CombinedViewerApp(QMainWindow):
         self.price_worker.price_updated.connect(self._handle_price_update)
         self.price_worker.error_occurred.connect(self._handle_price_error)
         self.price_worker.finished.connect(self.price_worker.deleteLater)
+        self._price_update_scheduled = True
         self.price_worker.start()
     
     def _handle_price_update(self, price_data: dict):
         """Handle price data received from worker thread."""
+        # Clear the scheduling guard
+        self._price_update_scheduled = False
+        
         status_messages = []
         failed_currencies = []
         
@@ -1402,20 +1439,40 @@ class CombinedViewerApp(QMainWindow):
         self.price_status_label.setText(status_str)
         self.price_status_label.setStyleSheet(f"color: {status_color};")
         
+        # Update status bar
+        if failed_currencies:
+            self.status_bar.set_process_warning(
+                self.status_bar.PROCESS_PRICES,
+                f"Partial: {', '.join(status_messages)}"
+            )
+        else:
+            self.status_bar.set_process_success(
+                self.status_bar.PROCESS_PRICES,
+                f"Updated: {', '.join(status_messages)}"
+            )
+        
         # Update price displays
         self._update_price_display()
         
-        # Schedule next update
-        QTimer.singleShot(Config.COINGECKO_REFRESH_INTERVAL_MS, self._start_price_worker)
+        # Schedule next update only if not already scheduled
+        if not self._price_update_scheduled:
+            QTimer.singleShot(Config.COINGECKO_REFRESH_INTERVAL_MS, self._start_price_worker)
     
     def _handle_price_error(self, error_msg: str):
         """Handle price fetch error from worker thread."""
+        # Clear the scheduling guard
+        self._price_update_scheduled = False
+        
         logger.error(f"Price fetch error: {error_msg}")
         self.price_status_label.setText(f"Price update failed | {time.strftime('%H:%M:%S')}")
         self.price_status_label.setStyleSheet(f"color: {self.theme.error};")
         
-        # Schedule retry
-        QTimer.singleShot(Config.COINGECKO_REFRESH_INTERVAL_MS, self._start_price_worker)
+        # Update status bar
+        self.status_bar.set_process_error(self.status_bar.PROCESS_PRICES, "Price fetch failed")
+        
+        # Schedule retry only if not already scheduled
+        if not self._price_update_scheduled:
+            QTimer.singleShot(Config.COINGECKO_REFRESH_INTERVAL_MS, self._start_price_worker)
     
     def update_price_label(self):
         """Start price update via worker thread (non-blocking)."""
@@ -1668,6 +1725,8 @@ class CombinedViewerApp(QMainWindow):
             # Update the comparison widget with new model data
             self.update_model_comparison_data()
 
+            # Update status bar
+            self.status_bar.set_process_success(self.status_bar.PROCESS_MODELS, "Connected")
             self.status_bar.showMessage("Model API Connected. Select type and 'Display Models'.")
 
             # Start fetching traits
@@ -1685,6 +1744,8 @@ class CombinedViewerApp(QMainWindow):
             self.type_combobox.setEnabled(False)
             self.display_button.setEnabled(False)
             self.view_styles_button.setEnabled(False)
+            # Update status bar with error
+            self.status_bar.set_process_error(self.status_bar.PROCESS_MODELS, "Connection failed")
             self.status_bar.showMessage("Model connection failed. Check logs or API key.")
             
             # Update action buttons to error state
@@ -2163,15 +2224,34 @@ class CombinedViewerApp(QMainWindow):
             logger.info(f"Error estimating days remaining: {e}")
             return None
     
+    def _on_clear_status_errors(self):
+        """Handle clear errors request from status bar."""
+        # Clear all error statuses in the status bar
+        self.status_bar.clear_all_errors()
+        
+        # Reset models process to idle if it was in error
+        current_status = self.status_bar.get_process_status(self.status_bar.PROCESS_MODELS)
+        if current_status and current_status.status.value == "error":
+            self.status_bar.set_process_idle(self.status_bar.PROCESS_MODELS)
+    
     def _handle_usage_error(self, error_msg: str):
         """Handle errors from the usage worker."""
         logger.info(f"Usage tracking error: {error_msg}")
+        
+        # Update status bar
+        self.status_bar.set_process_error(self.status_bar.PROCESS_USAGE, error_msg)
         self.status_bar.showMessage(f"Usage tracking error: {error_msg}")
         
         # Show error message if this is the first error or if it's different from the last one
         if not hasattr(self, '_last_usage_error') or self._last_usage_error != error_msg:
             QMessageBox.critical(self, "Usage Tracking Error", error_msg)
             self._last_usage_error = error_msg
+    
+    def _handle_video_quote_error(self, error_msg: str):
+        """Handle errors from the video quote worker."""
+        logger.error(f"Video quote error: {error_msg}")
+        # For now, just log the error since video quotes are background operations
+        # Could add a status indicator later if needed
     
     def display_filtered_models(self):
         """Display models filtered by selected type."""
@@ -2378,10 +2458,61 @@ class CombinedViewerApp(QMainWindow):
             self.model_comparison_widget.models_data = self.models_data.copy() if self.models_data else {}
             # Refresh the displays
             self.model_comparison_widget.populate_comparison_table()
+            
+            # Start video quote worker to get base prices
+            self._start_video_quote_worker()
         
         # Also update cost optimizer widget with dynamic model data
         if hasattr(self, 'cost_optimizer_widget') and self.cost_optimizer_widget:
             self.cost_optimizer_widget.update_models_data(self.models_data)
+
+    def _start_video_quote_worker(self):
+        """Start worker to fetch video base prices"""
+        if not self.models_data or not hasattr(self, 'model_comparison_widget'):
+            return
+        
+        # Get video models from the data
+        video_models = [model for model in self.models_data.get('data', []) if model.get('type') == 'video']
+        
+        if not video_models:
+            return
+        
+        # Update status bar - set to running
+        self.status_bar.set_process_running(
+            self.status_bar.PROCESS_VIDEO_QUOTES,
+            f"Fetching {len(video_models)} video quotes..."
+        )
+        
+        # Clean up any existing worker
+        if hasattr(self, 'video_quote_worker') and self.video_quote_worker and self.video_quote_worker.isRunning():
+            self.video_quote_worker.stop()
+            self.video_quote_worker.wait()
+        
+        # Create and start new worker
+        from src.core.video_quote_worker import VideoQuoteWorker
+        self.video_quote_worker = VideoQuoteWorker(self.api_client, video_models)
+        self.video_quote_worker.video_base_prices_updated.connect(self._handle_video_quotes_updated)
+        self.video_quote_worker.progress_updated.connect(self._handle_video_quote_progress)
+        self.video_quote_worker.error_occurred.connect(self._handle_video_quote_error)
+        self.video_quote_worker.start()
+    
+    def _handle_video_quotes_updated(self, prices):
+        """Handle video quotes updated - mark as success"""
+        # Also update the comparison widget
+        if hasattr(self, 'model_comparison_widget'):
+            self.model_comparison_widget.update_video_base_prices(prices)
+        
+        self.status_bar.set_process_success(
+            self.status_bar.PROCESS_VIDEO_QUOTES,
+            f"Got {len(prices)} quotes"
+        )
+    
+    def _handle_video_quote_progress(self, message):
+        """Handle video quote progress updates"""
+        self.status_bar.set_process_running(
+            self.status_bar.PROCESS_VIDEO_QUOTES,
+            message
+        )
 
     def _copy_models_data(self):
         """Create a deep copy of models data to prevent filtering from modifying the original data"""
@@ -2397,7 +2528,7 @@ class CombinedViewerApp(QMainWindow):
 
     def closeEvent(self, event):
         """Override close event to properly clean up resources"""
-        logger.debug("Close event triggered, cleaning up...")
+        logger.info("Close event triggered, cleaning up...")
 
         try:
             # Phase 2: Stop exchange rate service
@@ -2410,20 +2541,22 @@ class CombinedViewerApp(QMainWindow):
                 if timer.isActive():
                     timer.stop()
 
-            # Clean up threads
+            # Clean up threads - this may take some time
             self._cleanup_threads()
 
             # Clean up model comparison widget if it exists
             if hasattr(self, 'model_comparison_widget') and self.model_comparison_widget:
                 if hasattr(self.model_comparison_widget, 'analytics_worker'):
                     if self.model_comparison_widget.analytics_worker and self.model_comparison_widget.analytics_worker.isRunning():
-                        self.model_comparison_widget.analytics_worker.wait()
+                        self.model_comparison_widget.analytics_worker.quit()
+                        self.model_comparison_widget.analytics_worker.wait(5000)
 
-            logger.debug("Cleanup completed successfully")
+            logger.info("Cleanup completed successfully")
 
         except Exception as e:
-            logger.debug(f"Error during cleanup: {e}")
+            logger.error(f"Error during cleanup: {e}")
 
+        # Now allow the window to close
         event.accept()
 
     def _cleanup_threads(self):
@@ -2433,22 +2566,53 @@ class CombinedViewerApp(QMainWindow):
         # Clean up API worker
         if hasattr(self, 'api_worker') and self.api_worker and self.api_worker.isRunning():
             logger.debug("Waiting for API worker to finish...")
-            self.api_worker.wait()
+            self.api_worker.wait(5000)
 
         # Clean up style worker
         if hasattr(self, 'style_worker') and self.style_worker and self.style_worker.isRunning():
             logger.debug("Waiting for style worker to finish...")
-            self.style_worker.wait()
+            self.style_worker.wait(5000)
 
         # Clean up traits worker
         if hasattr(self, 'traits_worker') and self.traits_worker and self.traits_worker.isRunning():
             logger.debug("Waiting for traits worker to finish...")
-            self.traits_worker.wait()
+            self.traits_worker.wait(5000)
 
         # Clean up usage worker
         if self.usage_worker and self.usage_worker.isRunning():
-            logger.debug("Waiting for usage worker to finish...")
-            self.usage_worker.wait()
+            logger.debug("Stopping usage worker...")
+            self.usage_worker.stop()
+            self.usage_worker.wait(5000)
+
+        # Clean up web usage worker
+        if self.web_usage_worker and self.web_usage_worker.isRunning():
+            logger.debug("Stopping web usage worker...")
+            self.web_usage_worker.stop()
+            self.web_usage_worker.wait(5000)
+
+        # Clean up price worker
+        if hasattr(self, 'price_worker') and self.price_worker and self.price_worker.isRunning():
+            logger.debug("Stopping price worker...")
+            self.price_worker.stop()
+            self.price_worker.wait(5000)
+
+        # Clean up DIEM price worker
+        if hasattr(self, 'diem_price_worker') and self.diem_price_worker and self.diem_price_worker.isRunning():
+            logger.debug("Stopping DIEM price worker...")
+            self.diem_price_worker.stop()
+            self.diem_price_worker.wait(5000)
+
+        # Clean up cost analysis worker
+        if hasattr(self, 'cost_analysis_worker') and self.cost_analysis_worker and self.cost_analysis_worker.isRunning():
+            logger.debug("Stopping cost analysis worker...")
+            self.cost_analysis_worker.stop()
+            self.cost_analysis_worker.wait(5000)
+
+        # Clean up video quote worker
+        if hasattr(self, 'video_quote_worker') and self.video_quote_worker and self.video_quote_worker.isRunning():
+            logger.debug("Stopping video quote worker...")
+            self.video_quote_worker.stop()
+            self.video_quote_worker.wait(5000)
 
         logger.debug("Thread cleanup complete")
 

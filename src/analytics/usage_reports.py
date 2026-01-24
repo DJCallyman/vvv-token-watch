@@ -229,7 +229,7 @@ class UsageReportGenerator:
                     recommendations.append("Key hasn't been used in over 30 days - consider revoking")
                 elif days_since_use > 7:
                     recommendations.append("Key usage has been inactive recently - verify applications")
-            except:
+            except (ValueError, TypeError, AttributeError):
                 pass
         else:
             recommendations.append("No usage history available - verify key is active")

@@ -16,6 +16,7 @@ import requests
 from PySide6.QtCore import QThread, Signal
 
 from src.core.venice_api_client import VeniceAPIClient
+from src.config.config import Config
 
 
 class CostAnalysisWorker(QThread):
@@ -31,10 +32,10 @@ class CostAnalysisWorker(QThread):
     
     # Cache configuration
     CACHE_FILE = Path("data/billing_cache.json")
-    CACHE_TTL_SECONDS = 300  # 5 minutes
-    INCREMENTAL_THRESHOLD_SECONDS = 3600  # 1 hour
-    MAX_PAGES = 20
-    PAGE_SIZE = 500
+    CACHE_TTL_SECONDS = Config.CACHE_TTL_SECONDS
+    INCREMENTAL_THRESHOLD_SECONDS = Config.INCREMENTAL_THRESHOLD_SECONDS
+    MAX_PAGES = Config.CACHE_MAX_PAGES
+    PAGE_SIZE = Config.CACHE_PAGE_SIZE
     
     def __init__(self, admin_key: str, analysis_days: int = 7, parent=None):
         """
@@ -204,7 +205,7 @@ class CostAnalysisWorker(QThread):
                 try:
                     error_body = e.response.json()
                     self.error_occurred.emit(f"API Error: {error_body.get('message', str(error_body))}")
-                except:
+                except (ValueError, AttributeError):
                     self.error_occurred.emit(f"API Error (400): {e.response.text[:200]}")
             elif status == 401:
                 self.error_occurred.emit("Authentication failed - check VENICE_ADMIN_KEY")

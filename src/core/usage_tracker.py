@@ -270,39 +270,6 @@ class UsageWorker(QThread):
 
             return api_keys
             
-            # PRESERVED FOR FUTURE USE: Daily usage distribution logic
-            # Uncomment and modify the above code if daily per-key distribution is needed
-            # 
-            # # Get daily usage totals for the target date
-            # daily_usage = self.get_daily_usage(target_date)
-            # 
-            # api_keys = []
-            # for key_data in keys_data.get("data", []):
-            #     key_id = key_data.get("id", "unknown")
-            #     
-            #     # Distribute the total daily usage across all active keys
-            #     num_active_keys = len([k for k in keys_data.get("data", []) if k.get("isActive", True)])
-            #     
-            #     # Distribute daily usage evenly across active keys (approximation)
-            #     key_diem_usage = daily_usage['diem'] / max(1, num_active_keys)
-            #     key_usd_usage = daily_usage['usd'] / max(1, num_active_keys)
-            #     
-            #     metrics = UsageMetrics(
-            #         diem=key_diem_usage,
-            #         usd=key_usd_usage
-            #     )
-            #
-            #     api_key_usage = APIKeyUsage(
-            #         id=key_id,
-            #         name=key_data.get("description", f"Key {key_id[-8:]}"),
-            #         usage=metrics,
-            #         created_at=key_data.get("createdAt", "2025-01-01T00:00:00Z"),
-            #         is_active=key_data.get("isActive", True),
-            #         last_used_at=key_data.get("lastUsedAt")
-            #     )
-            #     api_keys.append(api_key_usage)
-            #
-            # return api_keys
 
         except Exception as e:
             raise Exception(f"Failed to fetch keys with daily usage: {str(e)}")
