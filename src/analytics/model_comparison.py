@@ -938,16 +938,20 @@ class ModelComparisonWidget(QWidget):
             return item, sort_key
         
         # Capability columns (text models only) - map to correct API field names
-        if column_key in ("vision", "functions", "web_search", "reasoning", "logprobs"):
+        if column_key in ("vision", "functions", "web_search", "reasoning", "logprobs",
+                         "response_schema", "optimized_for_code", "audio_input", "video_input"):
             is_text_model = model_type == 'text'
             if is_text_model:
-                # Map column keys to actual API capability field names
                 cap_key_map = {
                     'vision': 'supportsVision',
                     'functions': 'supportsFunctionCalling',
                     'web_search': 'supportsWebSearch',
                     'reasoning': 'supportsReasoning',
                     'logprobs': 'supportsLogProbs',
+                    'response_schema': 'supportsResponseSchema',
+                    'optimized_for_code': 'optimizedForCode',
+                    'audio_input': 'supportsAudioInput',
+                    'video_input': 'supportsVideoInput',
                 }
                 cap_key = cap_key_map.get(column_key, '')
                 cap_enabled = capabilities.get(cap_key, False)
@@ -967,8 +971,11 @@ class ModelComparisonWidget(QWidget):
         # Price columns
         if column_key == "input_price":
             if model_type == 'text':
-                input_cost = pricing.get('input', {}).get('usd', 0) * 1000
-                item = QTableWidgetItem(f"${input_cost:.3f}")
+                input_cost = pricing.get('input', {}).get('usd', 0)
+                if input_cost > 0:
+                    item = QTableWidgetItem(f"${input_cost:.2f}")
+                else:
+                    item = QTableWidgetItem("—")
                 item.setData(Qt.UserRole, input_cost)
                 return item, input_cost
             elif model_type == 'tts':
@@ -978,8 +985,11 @@ class ModelComparisonWidget(QWidget):
                 item.setData(Qt.UserRole, per_char)
                 return item, per_char
             elif model_type == 'embedding':
-                input_cost = pricing.get('input', {}).get('usd', 0) * 1000
-                item = QTableWidgetItem(f"${input_cost:.3f}")
+                input_cost = pricing.get('input', {}).get('usd', 0)
+                if input_cost > 0:
+                    item = QTableWidgetItem(f"${input_cost:.2f}")
+                else:
+                    item = QTableWidgetItem("—")
                 item.setData(Qt.UserRole, input_cost)
                 return item, input_cost
             elif model_type in ('image', 'upscale', 'inpaint', 'video'):
@@ -1007,8 +1017,11 @@ class ModelComparisonWidget(QWidget):
         
         if column_key == "output_price":
             if model_type == 'text':
-                output_cost = pricing.get('output', {}).get('usd', 0) * 1000
-                item = QTableWidgetItem(f"${output_cost:.3f}")
+                output_cost = pricing.get('output', {}).get('usd', 0)
+                if output_cost > 0:
+                    item = QTableWidgetItem(f"${output_cost:.2f}")
+                else:
+                    item = QTableWidgetItem("—")
                 item.setData(Qt.UserRole, output_cost)
                 return item, output_cost
             return QTableWidgetItem("—"), 0.0
@@ -1018,8 +1031,11 @@ class ModelComparisonWidget(QWidget):
             cache_key = "cache_input" if column_key == "cache_input" else "cache_write"
             cache_pricing = pricing.get(cache_key, {})
             if cache_pricing:
-                cache_cost = cache_pricing.get('usd', 0) * 1000  # Convert to $/1K tokens
-                item = QTableWidgetItem(f"${cache_cost:.3f}")
+                cache_cost = cache_pricing.get('usd', 0)
+                if cache_cost > 0:
+                    item = QTableWidgetItem(f"${cache_cost:.2f}")
+                else:
+                    item = QTableWidgetItem("—")
                 item.setData(Qt.UserRole, cache_cost)
                 return item, cache_cost
             return QTableWidgetItem("—"), 0.0
@@ -1030,7 +1046,28 @@ class ModelComparisonWidget(QWidget):
             if privacy:
                 item = QTableWidgetItem(privacy)
             return item, privacy if privacy else ""
-        
+
+        # Quantization - string field in capabilities (fp16, fp8, fp4, etc.)
+        if column_key == "quantization":
+            quant = capabilities.get('quantization', '')
+            display_val = "-" if quant in ('', 'not-available') else quant
+            item = QTableWidgetItem(display_val)
+            return item, quant if quant else ""
+
+        # Date Added - Unix timestamp from API
+        if column_key == "date_added":
+            created = model.get('created')
+            if created:
+                from datetime import datetime
+                try:
+                    dt = datetime.fromtimestamp(created)
+                    date_str = dt.strftime("%Y-%m-%d")
+                    item = QTableWidgetItem(date_str)
+                    return item, created
+                except (ValueError, OSError):
+                    pass
+            return QTableWidgetItem("—"), 0
+
         # Image/video specific columns
         if column_key == "resolutions":
             resolutions = constraints.get('resolutions', [])
@@ -1320,7 +1357,8 @@ class ModelComparisonWidget(QWidget):
                 if hasattr(item, 'toolTip') and item.toolTip():
                     standard_item.setToolTip(item.toolTip())
                 # Set colors for capability columns
-                if col_def.key in ("vision", "functions", "web_search", "reasoning", "logprobs"):
+                if col_def.key in ("vision", "functions", "web_search", "reasoning", "logprobs",
+                                   "response_schema", "optimized_for_code", "audio_input", "video_input"):
                     if item.text() == "✓":
                         standard_item.setBackground(QColor("#4CAF50"))
                         standard_item.setForeground(QColor("#ffffff"))

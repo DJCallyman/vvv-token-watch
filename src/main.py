@@ -35,6 +35,7 @@ from src.widgets.backend_status_bar import BackendStatusBar
 from src.core.web_usage import WebUsageWorker, WebUsageMetrics
 from src.core.unified_usage import UnifiedUsageIntegrator
 from src.widgets.cost_optimization_widget import CostOptimizationWidget
+from src.widgets.cache_tracking_widget import CacheTrackingWidget
 from src.core.price_worker import PriceWorker
 from src.core.cost_analysis_worker import CostAnalysisWorker
 from src.core.model_cache import ModelCacheManager
@@ -766,6 +767,9 @@ class CombinedViewerApp(QMainWindow):
         if PHASE2_AVAILABLE:
             self.create_leaderboard_tab()
         
+        # Create cache tracking tab
+        self.create_cache_tracking_tab()
+        
         # Initialize Models tab and Compare tab with cached data
         # This populates them immediately on startup without requiring "Connect" button
         self._init_models_tabs_from_cache()
@@ -1368,9 +1372,14 @@ class CombinedViewerApp(QMainWindow):
             return
         
         # Check if worker is already running
-        if hasattr(self, 'price_worker') and self.price_worker and self.price_worker.isRunning():
-            logger.debug("Price worker already running, skipping duplicate start")
-            return
+        if hasattr(self, 'price_worker') and self.price_worker:
+            try:
+                if self.price_worker.isRunning():
+                    logger.debug("Price worker already running, skipping duplicate start")
+                    return
+            except RuntimeError:
+                # C++ object deleted, treat as not running
+                self.price_worker = None
         
         # Update status bar
         self.status_bar.set_process_running(
@@ -2450,6 +2459,19 @@ class CombinedViewerApp(QMainWindow):
         # Add tab to main tabs
         self.main_tabs.addTab(self.leaderboard_tab, "📊 Usage Leaderboard")
 
+    def create_cache_tracking_tab(self):
+        """Create the prompt cache tracking tab"""
+        self.cache_tracking_tab = QWidget()
+        tab_layout = QVBoxLayout(self.cache_tracking_tab)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Create the cache tracking widget
+        self.cache_tracking_widget = CacheTrackingWidget(parent=self)
+        tab_layout.addWidget(self.cache_tracking_widget)
+
+        # Add tab to main tabs
+        self.main_tabs.addTab(self.cache_tracking_tab, "💾 Prompt Cache")
+
     def update_model_comparison_data(self):
         """Update the comparison widget with new model data"""
         if hasattr(self, 'model_comparison_widget') and self.model_comparison_widget:
@@ -2550,6 +2572,12 @@ class CombinedViewerApp(QMainWindow):
                     if self.model_comparison_widget.analytics_worker and self.model_comparison_widget.analytics_worker.isRunning():
                         self.model_comparison_widget.analytics_worker.quit()
                         self.model_comparison_widget.analytics_worker.wait(5000)
+
+            # Clean up cache tracking widget
+            if hasattr(self, 'cache_tracking_widget') and self.cache_tracking_widget:
+                logger.debug("Cleaning up cache tracking widget...")
+                self.cache_tracking_widget.close()
+                self.cache_tracking_widget.deleteLater()
 
             logger.info("Cleanup completed successfully")
 

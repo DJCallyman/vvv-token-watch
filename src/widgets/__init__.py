@@ -9,6 +9,7 @@ from .status_indicator import StatusIndicator
 from .topup_widget import TopUpWidget
 from .usage_leaderboard import UsageLeaderboardWidget
 from .vvv_display import TokenDisplayWidget, BalanceDisplayWidget, APIKeyUsageWidget
+from .cache_tracking_widget import CacheTrackingWidget
 
 __all__ = [
     'ActionButton', 'ActionButtonWidget',
@@ -19,5 +20,6 @@ __all__ = [
     'StatusIndicator',
     'TopUpWidget',
     'UsageLeaderboardWidget',
-    'TokenDisplayWidget', 'BalanceDisplayWidget', 'APIKeyUsageWidget'
+    'TokenDisplayWidget', 'BalanceDisplayWidget', 'APIKeyUsageWidget',
+    'CacheTrackingWidget'
 ]

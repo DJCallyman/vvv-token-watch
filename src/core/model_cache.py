@@ -27,6 +27,11 @@ class CachedModel:
     input_price_usd: Optional[float] = None
     output_price_usd: Optional[float] = None
     generation_price_usd: Optional[float] = None
+    cache_input_price_usd: Optional[float] = None  # Cached read price (discounted)
+    cache_input_price_diem: Optional[float] = None  # Cached read price in DIEM
+    cache_write_price_usd: Optional[float] = None   # Cache write price (may have premium)
+    cache_write_price_diem: Optional[float] = None  # Cache write price in DIEM
+    supports_cache: bool = False                    # Whether model supports prompt caching
     capabilities: List[str] = None
     is_beta: bool = False
     context_window: Optional[int] = None
@@ -34,6 +39,8 @@ class CachedModel:
     def __post_init__(self):
         if self.capabilities is None:
             self.capabilities = []
+        if self.cache_input_price_usd is not None or self.cache_write_price_usd is not None:
+            self.supports_cache = True
 
 
 class ModelCacheManager:
@@ -115,10 +122,21 @@ class ModelCacheManager:
                 input_price = None
                 output_price = None
                 generation_price = None
-                
+                cache_input_price_usd = None
+                cache_input_price_diem = None
+                cache_write_price_usd = None
+                cache_write_price_diem = None
+
                 if model_type == 'text':
                     input_price = pricing.get('input', {}).get('usd')
                     output_price = pricing.get('output', {}).get('usd')
+                    # Extract cache pricing
+                    cache_pricing = pricing.get('cache_input', {})
+                    cache_input_price_usd = cache_pricing.get('usd')
+                    cache_input_price_diem = cache_pricing.get('diem')
+                    cache_write_pricing = pricing.get('cache_write', {})
+                    cache_write_price_usd = cache_write_pricing.get('usd')
+                    cache_write_price_diem = cache_write_pricing.get('diem')
                 elif model_type in ('image', 'upscale', 'inpaint'):
                     generation_price = pricing.get('generation', {}).get('usd')
                 elif model_type == 'tts':
@@ -153,6 +171,10 @@ class ModelCacheManager:
                     input_price_usd=input_price,
                     output_price_usd=output_price,
                     generation_price_usd=generation_price,
+                    cache_input_price_usd=cache_input_price_usd,
+                    cache_input_price_diem=cache_input_price_diem,
+                    cache_write_price_usd=cache_write_price_usd,
+                    cache_write_price_diem=cache_write_price_diem,
                     capabilities=capabilities,
                     is_beta=model_spec.get('beta', False),
                     context_window=model_spec.get('availableContextTokens')
@@ -182,6 +204,10 @@ class ModelCacheManager:
                         'input_price_usd': m.input_price_usd,
                         'output_price_usd': m.output_price_usd,
                         'generation_price_usd': m.generation_price_usd,
+                        'cache_input_price_usd': m.cache_input_price_usd,
+                        'cache_input_price_diem': m.cache_input_price_diem,
+                        'cache_write_price_usd': m.cache_write_price_usd,
+                        'cache_write_price_diem': m.cache_write_price_diem,
                         'capabilities': m.capabilities,
                         'is_beta': m.is_beta,
                         'context_window': m.context_window,
@@ -220,6 +246,10 @@ class ModelCacheManager:
                     input_price_usd=model_dict.get('input_price_usd'),
                     output_price_usd=model_dict.get('output_price_usd'),
                     generation_price_usd=model_dict.get('generation_price_usd'),
+                    cache_input_price_usd=model_dict.get('cache_input_price_usd'),
+                    cache_input_price_diem=model_dict.get('cache_input_price_diem'),
+                    cache_write_price_usd=model_dict.get('cache_write_price_usd'),
+                    cache_write_price_diem=model_dict.get('cache_write_price_diem'),
                     capabilities=model_dict.get('capabilities', []),
                     is_beta=model_dict.get('is_beta', False),
                     context_window=model_dict.get('context_window')
@@ -305,6 +335,162 @@ class ModelCacheManager:
         output_cost = (completion_tokens * model.output_price_usd) / 1_000_000
         
         return input_cost + output_cost
+
+    def calculate_cache_read_cost(self, model_id: str, cached_tokens: int, currency: str = "USD") -> Optional[float]:
+        """
+        Calculate cost for cached tokens read from cache (discounted rate).
+
+        Args:
+            model_id: The model ID
+            cached_tokens: Number of tokens served from cache
+            currency: Currency for calculation (USD or DIEM)
+
+        Returns:
+            Cost in specified currency or None if not found
+        """
+        model = self.get_model(model_id)
+        if not model or model.model_type != 'text':
+            return None
+
+        if currency == "USD":
+            price_per_m = model.cache_input_price_usd
+        else:
+            price_per_m = model.cache_input_price_diem
+
+        if price_per_m is None:
+            return None
+
+        return (cached_tokens * price_per_m) / 1_000_000
+
+    def calculate_cache_write_cost(self, model_id: str, cache_creation_tokens: int, currency: str = "USD") -> Optional[float]:
+        """
+        Calculate cost for tokens written to cache (may have premium for some providers).
+
+        Args:
+            model_id: The model ID
+            cache_creation_tokens: Number of tokens written to cache
+            currency: Currency for calculation (USD or DIEM)
+
+        Returns:
+            Cost in specified currency or None if not found
+        """
+        model = self.get_model(model_id)
+        if not model or model.model_type != 'text':
+            return None
+
+        if currency == "USD":
+            price_per_m = model.cache_write_price_usd
+        else:
+            price_per_m = model.cache_write_price_diem
+
+        if price_per_m is None:
+            return None
+
+        return (cache_creation_tokens * price_per_m) / 1_000_000
+
+    def calculate_regular_input_cost(self, model_id: str, prompt_tokens: int, currency: str = "USD") -> Optional[float]:
+        """
+        Calculate cost for regular (non-cached) input tokens.
+
+        Args:
+            model_id: The model ID
+            prompt_tokens: Number of input tokens
+            currency: Currency for calculation (USD or DIEM)
+
+        Returns:
+            Cost in specified currency or None if not found
+        """
+        model = self.get_model(model_id)
+        if not model or model.model_type != 'text':
+            return None
+
+        if currency == "USD":
+            price_per_m = model.input_price_usd
+        else:
+            return None  # DIEM pricing not typically exposed in API
+
+        if price_per_m is None:
+            return None
+
+        return (prompt_tokens * price_per_m) / 1_000_000
+
+    def calculate_cache_savings(self, model_id: str, cached_tokens: int, regular_input_cost: float) -> Optional[float]:
+        """
+        Calculate savings from cache usage.
+
+        Args:
+            model_id: The model ID
+            cached_tokens: Number of tokens served from cache
+            regular_input_cost: What the cost would be without caching
+
+        Returns:
+            Savings amount in USD or None if not found
+        """
+        cache_cost = self.calculate_cache_read_cost(model_id, cached_tokens)
+        if cache_cost is None:
+            return None
+
+        return regular_input_cost - cache_cost
+
+    def get_cache_discount_percent(self, model_id: str) -> Optional[float]:
+        """
+        Get the cache discount percentage for a model.
+
+        Args:
+            model_id: The model ID
+
+        Returns:
+            Discount percentage (e.g., 90 for 90% discount) or None if not available
+        """
+        model = self.get_model(model_id)
+        if not model or model.model_type != 'text':
+            return None
+
+        if model.input_price_usd is None or model.cache_input_price_usd is None:
+            return None
+
+        if model.input_price_usd == 0:
+            return None
+
+        discount = (1 - (model.cache_input_price_usd / model.input_price_usd)) * 100
+        return discount
+
+    def get_model_pricing_summary(self, model_id: str) -> Optional[Dict]:
+        """
+        Get a summary of all pricing for a model.
+
+        Args:
+            model_id: The model ID
+
+        Returns:
+            Dict with pricing summary or None if model not found
+        """
+        model = self.get_model(model_id)
+        if not model:
+            return None
+
+        summary = {
+            'id': model.id,
+            'name': model.name,
+            'model_type': model.model_type,
+            'input_per_1m_usd': model.input_price_usd,
+            'output_per_1m_usd': model.output_price_usd,
+            'cache_input_per_1m_usd': model.cache_input_price_usd,
+            'cache_write_per_1m_usd': model.cache_write_price_usd,
+            'cache_discount_percent': self.get_cache_discount_percent(model_id),
+            'supports_cache': model.supports_cache,
+        }
+
+        return summary
+
+    def get_models_with_cache_support(self) -> List[CachedModel]:
+        """
+        Get all models that support prompt caching.
+
+        Returns:
+            List of CachedModel objects with cache support
+        """
+        return [m for m in self.models.values() if m.supports_cache]
     
     def get_raw_model_data(self, model_id: str) -> Optional[Dict]:
         """
