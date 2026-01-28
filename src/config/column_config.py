@@ -42,15 +42,21 @@ TEXT_COLUMNS: List[ColumnDefinition] = [
     ColumnDefinition("model", "Model", WIDTH_RESIZE, 160),
     ColumnDefinition("type", "Type", WIDTH_RESIZE, 80),
     ColumnDefinition("context", "Context", WIDTH_RESIZE, 100),
+    ColumnDefinition("quantization", "Quant", WIDTH_RESIZE, 70),
+    ColumnDefinition("date_added", "Added", WIDTH_RESIZE, 90),
     ColumnDefinition("vision", "Vision", WIDTH_RESIZE, 70),
     ColumnDefinition("functions", "Functions", WIDTH_RESIZE, 85),
     ColumnDefinition("web_search", "Web Search", WIDTH_RESIZE, 90),
     ColumnDefinition("reasoning", "Reasoning", WIDTH_RESIZE, 85),
     ColumnDefinition("logprobs", "LogProbs", WIDTH_RESIZE, 80),
-    ColumnDefinition("input_price", "Input $/1K", WIDTH_RESIZE, 110),
-    ColumnDefinition("output_price", "Output $/1K", WIDTH_STRETCH, 120),
-    ColumnDefinition("cache_input", "Cache Input", WIDTH_RESIZE, 110),
-    ColumnDefinition("cache_write", "Cache Write", WIDTH_RESIZE, 110),
+    ColumnDefinition("response_schema", "JSON", WIDTH_RESIZE, 55),
+    ColumnDefinition("optimized_for_code", "Code Opt", WIDTH_RESIZE, 70),
+    ColumnDefinition("audio_input", "Audio In", WIDTH_RESIZE, 75),
+    ColumnDefinition("video_input", "Video In", WIDTH_RESIZE, 75),
+    ColumnDefinition("input_price", "Input $/1M", WIDTH_RESIZE, 110),
+    ColumnDefinition("output_price", "Output $/1M", WIDTH_STRETCH, 120),
+    ColumnDefinition("cache_input", "Cache Read $/1M", WIDTH_RESIZE, 110),
+    ColumnDefinition("cache_write", "Cache Write $/1M", WIDTH_RESIZE, 110),
     ColumnDefinition("privacy", "Privacy", WIDTH_RESIZE, 90),
 ]
 
@@ -96,7 +102,7 @@ EMBEDDING_COLUMNS: List[ColumnDefinition] = [
     ColumnDefinition("model", "Model", WIDTH_RESIZE, 160),
     ColumnDefinition("type", "Type", WIDTH_RESIZE, 80),
     ColumnDefinition("dimensions", "Dimensions", WIDTH_RESIZE, 110),
-    ColumnDefinition("input_price", "Input $/1K", WIDTH_STRETCH, 110),
+    ColumnDefinition("input_price", "Input $/1M", WIDTH_STRETCH, 110),
 ]
 
 UPSCALE_COLUMNS: List[ColumnDefinition] = [
