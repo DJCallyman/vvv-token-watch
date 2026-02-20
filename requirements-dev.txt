@@ -1,0 +1,13 @@
+# Development Dependencies
+# Install with: pip install -r requirements-dev.txt
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+
+# Build Dependencies (already in requirements.txt, but listed here for completeness)
+pyinstaller>=6.0.0
+
+# Optional: For creating DMG installers on macOS
+# Install via Homebrew: brew install create-dmg

@@ -109,12 +109,12 @@ class VideoQuoteWorker(BaseAPIWorker):
                 self.emit_progress(f"Getting quote for {model_id}")
                 
                 # Call quote API
-                logger.info(f"Sending quote request for {model_id}: {quote_params}")
+                logger.debug(f"Sending quote request for {model_id}: {quote_params}")
                 response = self.api_client.post("/video/quote", data=quote_params, timeout=30)
                 
                 if response.status_code == 200:
                     quote_data = response.json()
-                    logger.info(f"Quote response for {model_id}: {quote_data}")
+                    logger.debug(f"Quote response for {model_id}: {quote_data}")
                     base_price = VideoBasePrice(
                         model_id=model_id,
                         base_usd=quote_data.get('quote', 0.0),  # The key is 'quote', not 'usd'
@@ -156,3 +156,4 @@ class VideoQuoteWorker(BaseAPIWorker):
             self.result.emit(result)
             if result['success'] and result['data']:
                 self.video_base_prices_updated.emit(result['data'])
+                logger.info(f"Video model quotes obtained: {len(result['data'])} models")
