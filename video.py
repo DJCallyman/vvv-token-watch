@@ -1,9 +1,12 @@
+import os
 import requests
 import time
-import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configuration
-API_KEY = "REDACTED_VENICE_KEY_2"
+API_KEY = os.getenv("VENICE_API_KEY", "")
 BASE_URL = "https://api.venice.ai/api/v1"
 MODEL = "wan-2.5-preview-text-to-video" # Example text-to-video model
 PROMPT = "A cinematic shot of a futuristic city with flying vehicles at sunset."
@@ -71,7 +74,7 @@ def generate_video():
             break
 
 if __name__ == "__main__":
-    if API_KEY == "your_venice_api_key_here":
-        print("Please set your API_KEY in the script.")
+    if not API_KEY:
+        print("Please set VENICE_API_KEY in your .env file.")
     else:
         generate_video()

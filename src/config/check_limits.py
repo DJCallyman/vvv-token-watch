@@ -1,11 +1,18 @@
+import os
 import requests
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # The API endpoint for rate limit logs
 url = "https://api.venice.ai/api/v1/api_keys/rate_limits/log"
 
-# Your provided API Key
-api_key = "REDACTED_VENICE_KEY_1"
+# Load API key from environment
+api_key = os.getenv("VENICE_API_KEY") or os.getenv("VENICE_ADMIN_KEY")
+if not api_key:
+    print("Error: Set VENICE_API_KEY or VENICE_ADMIN_KEY in your .env file")
+    exit(1)
 
 # Setup the headers with Bearer authentication
 headers = {
