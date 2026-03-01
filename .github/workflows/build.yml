@@ -3,8 +3,6 @@ name: Build and Push Docker Image
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
   release:
     types: [published]
 
@@ -70,7 +68,6 @@ jobs:
   build-docker:
     needs: [test-backend, test-frontend]
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
     permissions:
       contents: read
       packages: write
