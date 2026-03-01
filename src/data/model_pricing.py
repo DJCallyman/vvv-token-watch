@@ -90,6 +90,9 @@ class ModelPricingDatabase:
     and optimization recommendations.
     """
     
+    # Cache for combined models dict to avoid recreating on every call
+    _all_models_cache: Optional[Dict[str, 'ModelPricing']] = None
+    
     # Chat Models (Stable) - Updated 2025-11-29
     CHAT_MODELS = {
         "qwen3-4b": ModelPricing(
@@ -367,16 +370,23 @@ class ModelPricingDatabase:
     
     @classmethod
     def get_all_models(cls) -> Dict[str, ModelPricing]:
-        """Get all models combined"""
-        all_models = {}
-        all_models.update(cls.CHAT_MODELS)
-        all_models.update(cls.BETA_CHAT_MODELS)
-        all_models.update(cls.IMAGE_MODELS)
-        all_models.update(cls.IMAGE_OPERATIONS)
-        all_models.update(cls.AUDIO_MODELS)
-        all_models.update(cls.EMBEDDING_MODELS)
-        all_models.update(cls.WEB_FEATURES)
-        return all_models
+        """Get all models combined (cached for performance)."""
+        if cls._all_models_cache is None:
+            all_models = {}
+            all_models.update(cls.CHAT_MODELS)
+            all_models.update(cls.BETA_CHAT_MODELS)
+            all_models.update(cls.IMAGE_MODELS)
+            all_models.update(cls.IMAGE_OPERATIONS)
+            all_models.update(cls.AUDIO_MODELS)
+            all_models.update(cls.EMBEDDING_MODELS)
+            all_models.update(cls.WEB_FEATURES)
+            cls._all_models_cache = all_models
+        return cls._all_models_cache
+    
+    @classmethod
+    def clear_cache(cls) -> None:
+        """Clear the models cache (useful for testing or dynamic updates)."""
+        cls._all_models_cache = None
     
     @classmethod
     def get_model(cls, model_id: str) -> Optional[ModelPricing]:

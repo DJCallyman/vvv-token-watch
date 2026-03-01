@@ -342,9 +342,7 @@ class CacheTrackingWidget(QWidget):
 
     def _start_cache_worker(self):
         """Start the cache tracking worker thread."""
-        if self.cache_worker and self.cache_worker.isRunning():
-            self.cache_worker.terminate()
-            self.cache_worker.wait()
+        self._cleanup_worker()
 
         self.cache_worker = CacheTrackingWorker(
             admin_key=Config.VENICE_ADMIN_KEY,
@@ -356,6 +354,43 @@ class CacheTrackingWidget(QWidget):
         self.cache_worker.status_update.connect(self._on_status_update)
 
         self.cache_worker.start()
+    
+    def _cleanup_worker(self):
+        """Properly clean up worker thread."""
+        if self.cache_worker is not None:
+            try:
+                try:
+                    self.cache_worker.cache_data_ready.disconnect()
+                    self.cache_worker.error_occurred.disconnect()
+                    self.cache_worker.status_update.disconnect()
+                except RuntimeError:
+                    pass
+                
+                if self.cache_worker.isRunning():
+                    self.cache_worker.quit()
+                    if not self.cache_worker.wait(3000):
+                        logger.warning("Worker did not stop gracefully, terminating")
+                        self.cache_worker.terminate()
+                        self.cache_worker.wait()
+                
+                self.cache_worker.deleteLater()
+            except RuntimeError:
+                pass
+            self.cache_worker = None
+
+    def refresh(self):
+        """Refresh cache data."""
+        self._start_cache_worker()
+
+    def close(self):
+        """Clean up worker thread on widget close."""
+        self._cleanup_worker()
+        super().close()
+
+    def closeEvent(self, event):
+        """Handle widget close event."""
+        self._cleanup_worker()
+        super().closeEvent(event)
 
     def _on_cache_data_ready(self, bundle):
         """Handle cache data ready signal."""

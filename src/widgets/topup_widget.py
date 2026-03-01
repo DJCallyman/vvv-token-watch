@@ -398,19 +398,19 @@ class TopUpWidget(QWidget):
         if self.animation:
             self.animation.stop()
         
-        # Create a simple scale animation
-        self.main_add_button.size()
+        original_style = self.main_add_button.styleSheet()
         
-        # Quick scale down and up
-        self.main_add_button.setStyleSheet(self.main_add_button.styleSheet() + """
-            QPushButton {
-                transform: scale(0.95);
-            }
-        """)
+        darker_bg = self.theme_colors.get('button_pressed', '#1a5a1a')
+        pressed_style = original_style.replace(
+            f"background-color: {self.theme_colors.get('button_background', '#2d7d2d')};",
+            f"background-color: {darker_bg};"
+        )
+        if darker_bg not in pressed_style:
+            pressed_style = f"{original_style}\n            QPushButton {{ background-color: {darker_bg}; }}"
         
-        QTimer.singleShot(100, lambda: self.main_add_button.setStyleSheet(
-            self.main_add_button.styleSheet().replace("transform: scale(0.95);", "")
-        ))
+        self.main_add_button.setStyleSheet(pressed_style)
+        
+        QTimer.singleShot(100, lambda: self.main_add_button.setStyleSheet(original_style))
     
     def show_feedback(self, message: str):
         """

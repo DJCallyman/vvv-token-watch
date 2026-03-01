@@ -15,6 +15,24 @@ from src.config.config import Config
 logger = logging.getLogger(__name__)
 
 
+def mask_api_key(api_key: str, visible_chars: int = 4) -> str:
+    """
+    Mask API key for safe logging.
+    
+    Args:
+        api_key: The API key to mask
+        visible_chars: Number of characters to show at start and end
+        
+    Returns:
+        Masked key like "sk-xxxx...xxxx"
+    """
+    if not api_key:
+        return "<empty>"
+    if len(api_key) <= visible_chars * 2:
+        return f"{api_key[:visible_chars]}..."
+    return f"{api_key[:visible_chars]}...{api_key[-visible_chars:]}"
+
+
 class VeniceAPIClient:
     """
     Base client for Venice API requests with shared configuration.
@@ -38,6 +56,7 @@ class VeniceAPIClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
+        logger.debug(f"VeniceAPIClient initialized with key: {mask_api_key(api_key)}")
     
     def get(self, endpoint: str, params: Optional[Dict] = None, timeout: int = 30) -> requests.Response:
         """

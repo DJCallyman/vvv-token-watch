@@ -99,7 +99,7 @@ except Exception as e:
         msg.setText(f"Failed to start:\n{str(e)}")
         msg.setDetailedText(traceback.format_exc())
         msg.exec()
-    except:
+    except Exception:
         pass
     
     sys.exit(1)

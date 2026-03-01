@@ -514,8 +514,188 @@ class UnifiedUsageIntegrator:
 
 
 # ============================================================================
-# Utility Functions
+# SKU Parsing Helpers (Private)
 # ============================================================================
+
+def _extract_version(parts: list) -> str:
+    """Extract version number from parts list."""
+    return next((p for p in parts if p.replace('.', '').isdigit()), '')
+
+
+def _extract_duration(parts: list) -> str:
+    """Extract duration (e.g., '8s') from parts list."""
+    return next((p for p in parts if p.endswith('s') and p[:-1].isdigit()), '')
+
+
+def _extract_resolution(parts: list) -> str:
+    """Extract resolution (e.g., '720p') from parts list."""
+    return next((p for p in parts if 'p' in p and p.replace('p', '').isdigit()), '')
+
+
+def _format_video_details(duration: str, resolution: str) -> str:
+    """Format duration and resolution into details string."""
+    details = ', '.join(filter(None, [duration, resolution]))
+    return f" ({details})" if details else ""
+
+
+def _parse_veo_version(parts: list) -> str:
+    """Extract Veo version from combined or separate forms."""
+    veo_part = next((p for p in parts if p.startswith('veo')), None)
+    if not veo_part:
+        return ''
+    
+    if len(veo_part) > 3:
+        num_part = veo_part[3:]
+        if num_part.replace('.', '').isdigit():
+            if '.' not in num_part and len(num_part) == 2:
+                return f"{num_part[0]}.{num_part[1]}"
+            return num_part
+    elif veo_part == 'veo':
+        idx = parts.index(veo_part)
+        if idx + 1 < len(parts) and parts[idx + 1].replace('.', '').isdigit():
+            return parts[idx + 1]
+    return ''
+
+
+def _format_veo_sku(parts: list) -> str:
+    """Format Veo SKU into display name."""
+    version = _parse_veo_version(parts)
+    quality = 'Full' if 'full' in parts else 'Fast' if 'fast' in parts else ''
+    mode = 'I2V' if 'image' in parts else 'T2V' if 'text' in parts else ''
+    duration = _extract_duration(parts)
+    resolution = _extract_resolution(parts)
+    
+    name_parts = [p for p in ["Veo", version, quality, mode] if p]
+    return ' '.join(name_parts) + _format_video_details(duration, resolution)
+
+
+def _format_sora_sku(parts: list) -> str:
+    """Format Sora SKU into display name."""
+    version = _extract_version(parts)
+    tier = 'Pro' if 'pro' in parts else ''
+    duration = _extract_duration(parts)
+    resolution = _extract_resolution(parts)
+    
+    name_parts = [p for p in ["Sora", version, tier] if p]
+    return ' '.join(name_parts) + _format_video_details(duration, resolution)
+
+
+def _format_wan_sku(parts: list) -> str:
+    """Format Wan SKU into display name."""
+    version = _extract_version(parts)
+    tier = 'Pro' if 'pro' in parts else ''
+    duration = _extract_duration(parts)
+    resolution = _extract_resolution(parts)
+    
+    name_parts = [p for p in ["Wan", version, tier] if p]
+    return ' '.join(name_parts) + _format_video_details(duration, resolution)
+
+
+def _format_kling_sku(parts: list) -> str:
+    """Format Kling SKU into display name."""
+    version = _extract_version(parts)
+    tier = 'Turbo Pro' if 'turbo' in parts and 'pro' in parts else 'Turbo' if 'turbo' in parts else ''
+    duration = _extract_duration(parts)
+    mode = 'Image-to-Video' if 'image' in parts else 'Text-to-Video' if 'text' in parts else ''
+    
+    name_parts = [p for p in ["Kling", version, tier] if p]
+    details = ', '.join(filter(None, [mode, duration]))
+    return ' '.join(name_parts) + (f" ({details})" if details else "")
+
+
+def _format_ltx_sku(parts: list) -> str:
+    """Format LTX/Longcat SKU into display name."""
+    model_name = 'LTX' if 'ltx' in parts else 'Longcat'
+    version = _extract_version(parts)
+    quality = 'Fast' if 'fast' in parts else 'Full' if 'full' in parts else ''
+    duration = _extract_duration(parts)
+    resolution = _extract_resolution(parts)
+    mode = 'I2V' if 'image' in parts else 'T2V' if 'text' in parts else ''
+    
+    name_parts = [p for p in [model_name, version, quality, mode] if p]
+    return ' '.join(name_parts) + _format_video_details(duration, resolution)
+
+
+def _format_grok_sku(parts: list) -> str:
+    """Format Grok SKU into display name."""
+    version = _extract_version(parts)
+    tier = 'Fast' if 'fast' in parts else ''
+    io_type = 'Input' if 'input' in parts else 'Output' if 'output' in parts else ''
+    
+    name_parts = [p for p in ["Grok", version, tier] if p]
+    return ' '.join(name_parts) + (f" ({io_type})" if io_type else "")
+
+
+def _format_glm_sku(parts: list, sku: str) -> str:
+    """Format GLM SKU into display name."""
+    version = ''
+    for part in parts:
+        if 'glm' in part:
+            idx = parts.index(part)
+            if idx + 1 < len(parts) and parts[idx + 1].replace('.', '').isdigit():
+                version = parts[idx + 1]
+            break
+        if part.replace('.', '').isdigit():
+            version = part
+    
+    io_type = 'Input' if 'input' in parts else 'Output' if 'output' in parts else ''
+    return f"GLM {version}" + (f" ({io_type})" if io_type else "")
+
+
+def _format_llm_sku(parts: list, sku: str) -> str:
+    """Format generic LLM SKU into display name."""
+    model_name = parts[0].title() if parts else "LLM"
+    version = next((p for p in parts if p.replace('.', '').replace('b', '').isdigit()), '')
+    io_type = 'Input' if 'input' in parts else 'Output' if 'output' in parts else ''
+    
+    name_parts = [p for p in [model_name, version] if p]
+    return ' '.join(name_parts) + (f" ({io_type})" if io_type else "")
+
+
+def _format_flux_sku(parts: list) -> str:
+    """Format Flux SKU into display name."""
+    version = _extract_version(parts)
+    tier = 'Pro' if 'pro' in parts else ''
+    name_parts = [p for p in ["Flux", version, tier] if p]
+    return ' '.join(name_parts) if name_parts else "Flux"
+
+
+def _format_seedream_sku(parts: list) -> str:
+    """Format Seedream SKU into display name."""
+    version = next((p for p in parts if p.replace('v', '').isdigit()), '')
+    return f"Seedream {version}" if version else "Seedream"
+
+
+def _format_stable_diffusion_sku(parts: list) -> str:
+    """Format Stable Diffusion SKU into display name."""
+    version = _extract_version(parts)
+    return f"Stable Diffusion {version}" if version else "Stable Diffusion"
+
+
+def _format_upscale_sku(sku: str) -> str:
+    """Format Upscale SKU into display name."""
+    scale = '4x' if '4x' in sku else '2x' if '2x' in sku else ''
+    return f"Upscaler {scale}" if scale else "Upscaler"
+
+
+# ============================================================================
+# SKU Display Name Formatting (Public API)
+# ============================================================================
+
+_SKU_FORMATTERS = {
+    'veo': _format_veo_sku,
+    'sora': _format_sora_sku,
+    'wan': _format_wan_sku,
+    'kling': _format_kling_sku,
+    'ovi': lambda parts: "Ovi Image-to-Video",
+    'ltx': _format_ltx_sku,
+    'longcat': _format_ltx_sku,
+    'grok': _format_grok_sku,
+    'flux': _format_flux_sku,
+    'seedream': _format_seedream_sku,
+    'hidream': lambda parts: "HiDream",
+}
+
 
 def format_sku_display_name(sku: str) -> str:
     """
@@ -528,139 +708,134 @@ def format_sku_display_name(sku: str) -> str:
     if not sku:
         return "Unknown Service"
     
-    # Extract model name
     parts = sku.lower().split('-')
     
-    # Common patterns
-    # Check for Veo (handle both 'veo' in parts and 'veoXX' combined form)
-    veo_part = next((p for p in parts if p.startswith('veo')), None)
-    if veo_part or 'veo' in parts:
-        # Find version - handle veo31 -> 3.1, veo2 -> 2, etc.
-        version = ''
-        if veo_part and len(veo_part) > 3:
-            # Extract numbers after 'veo' (e.g., veo31 -> 31)
-            num_part = veo_part[3:]
-            if num_part.replace('.', '').isdigit():
-                # Insert decimal if needed (31 -> 3.1, 20 -> 2.0)
-                if '.' not in num_part and len(num_part) == 2:
-                    version = f"{num_part[0]}.{num_part[1]}"
-                else:
-                    version = num_part
-        elif veo_part == 'veo':
-            # Look for version in next part
-            idx = parts.index(veo_part)
-            if idx + 1 < len(parts) and parts[idx + 1].replace('.', '').isdigit():
-                version = parts[idx + 1]
-        
-        quality = 'Full' if 'full' in parts else 'Fast' if 'fast' in parts else ''
-        mode = 'I2V' if 'image' in parts else 'T2V' if 'text' in parts else ''
-        duration = next((p for p in parts if p.endswith('s') and p[:-1].isdigit()), '')
-        resolution = next((p for p in parts if 'p' in p and p.replace('p', '').isdigit()), '')
-        name_parts = [p for p in ["Veo", version, quality, mode] if p]
-        details = ', '.join(filter(None, [duration, resolution]))
-        return ' '.join(name_parts) + (f" ({details})" if details else "")
+    # Video models
+    if any(p.startswith('veo') for p in parts) or 'veo' in parts:
+        return _format_veo_sku(parts)
     
-    elif 'sora' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        tier = 'Pro' if 'pro' in parts else ''
-        duration = next((p for p in parts if p.endswith('s') and p[:-1].isdigit()), '')
-        resolution = next((p for p in parts if 'p' in p and p.replace('p', '').isdigit()), '')
-        name_parts = [p for p in ["Sora", version, tier] if p]
-        details = ', '.join(filter(None, [duration, resolution]))
-        return ' '.join(name_parts) + (f" ({details})" if details else "")
+    # Check for registered formatters
+    for key, formatter in _SKU_FORMATTERS.items():
+        if key in parts:
+            return formatter(parts)
     
-    elif 'wan' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        tier = 'Pro' if 'pro' in parts else ''
-        duration = next((p for p in parts if p.endswith('s') and p[:-1].isdigit()), '')
-        resolution = next((p for p in parts if 'p' in p and p.replace('p', '').isdigit()), '')
-        name_parts = [p for p in ["Wan", version, tier] if p]
-        details = ', '.join(filter(None, [duration, resolution]))
-        return ' '.join(name_parts) + (f" ({details})" if details else "")
+    # GLM models
+    if 'glm' in sku.lower() or 'zai' in parts:
+        return _format_glm_sku(parts, sku)
     
-    elif 'kling' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        tier = 'Turbo Pro' if 'turbo' in parts and 'pro' in parts else 'Turbo' if 'turbo' in parts else ''
-        duration = next((p for p in parts if p.endswith('s') and p[:-1].isdigit()), '')
-        mode = 'Image-to-Video' if 'image' in parts else 'Text-to-Video' if 'text' in parts else ''
-        name_parts = [p for p in ["Kling", version, tier] if p]
-        details = ', '.join(filter(None, [mode, duration]))
-        return ' '.join(name_parts) + (f" ({details})" if details else "")
+    # Generic LLM token usage
+    if 'llm' in parts or 'mtoken' in sku.lower():
+        return _format_llm_sku(parts, sku)
     
-    elif 'ovi' in parts:
-        return "Ovi Image-to-Video"
-    
-    elif 'ltx' in parts or 'longcat' in parts:
-        # LTX and Longcat video models
-        model_name = 'LTX' if 'ltx' in parts else 'Longcat'
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        quality = 'Fast' if 'fast' in parts else 'Full' if 'full' in parts else ''
-        duration = next((p for p in parts if p.endswith('s') and p[:-1].isdigit()), '')
-        resolution = next((p for p in parts if 'p' in p and p.replace('p', '').isdigit()), '')
-        mode = 'I2V' if 'image' in parts else 'T2V' if 'text' in parts else ''
-        name_parts = [p for p in [model_name, version, quality, mode] if p]
-        details = ', '.join(filter(None, [duration, resolution]))
-        return ' '.join(name_parts) + (f" ({details})" if details else "")
-    
-    # === LLM / Text Models ===
-    elif 'grok' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        tier = 'Fast' if 'fast' in parts else ''
-        io_type = 'Input' if 'input' in parts else 'Output' if 'output' in parts else ''
-        name_parts = [p for p in ["Grok", version, tier] if p]
-        return ' '.join(name_parts) + (f" ({io_type})" if io_type else "")
-    
-    elif 'glm' in sku.lower() or 'zai' in parts:
-        # GLM models (e.g., zai-org-glm-4.6-llm-input-mtoken)
-        version = ''
-        for part in parts:
-            if 'glm' in part:
-                # Extract version after 'glm' if present
-                idx = parts.index(part)
-                if idx + 1 < len(parts) and parts[idx + 1].replace('.', '').isdigit():
-                    version = parts[idx + 1]
-                break
-            if part.replace('.', '').isdigit():
-                version = part
-        io_type = 'Input' if 'input' in parts else 'Output' if 'output' in parts else ''
-        return f"GLM {version}" + (f" ({io_type})" if io_type else "")
-    
-    elif 'llm' in parts or 'mtoken' in sku.lower():
-        # Generic LLM token usage (e.g., mistral-31-24b-llm-input-mtoken)
-        model_name = parts[0].title() if parts else "LLM"
-        version = next((p for p in parts if p.replace('.', '').replace('b', '').isdigit()), '')
-        io_type = 'Input' if 'input' in parts else 'Output' if 'output' in parts else ''
-        name_parts = [p for p in [model_name, version] if p]
-        return ' '.join(name_parts) + (f" ({io_type})" if io_type else "")
-    
-    # === Image Models ===
-    elif 'nano' in parts and 'banana' in parts:
+    # Image models
+    if 'nano' in parts and 'banana' in parts:
         return "Nano Banana Pro"
     
-    elif 'flux' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        tier = 'Pro' if 'pro' in parts else ''
-        name_parts = [p for p in ["Flux", version, tier] if p]
-        return ' '.join(name_parts) if name_parts else "Flux"
+    if 'stable' in parts or 'sd' in parts:
+        return _format_stable_diffusion_sku(parts)
     
-    elif 'seedream' in parts:
-        version = next((p for p in parts if p.replace('v', '').isdigit()), '')
-        return f"Seedream {version}" if version else "Seedream"
-    
-    elif 'hidream' in parts:
-        return "HiDream"
-    
-    elif 'stable' in parts or 'sd' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        return f"Stable Diffusion {version}" if version else "Stable Diffusion"
-    
-    elif 'upscale' in sku.lower():
-        scale = '4x' if '4x' in sku else '2x' if '2x' in sku else ''
-        return f"Upscaler {scale}" if scale else "Upscaler"
+    if 'upscale' in sku.lower():
+        return _format_upscale_sku(sku)
     
     # Fallback: capitalize and clean up
     clean_name = sku.replace('-', ' ').replace('_', ' ').title()
-    return clean_name[:40]  # Truncate long names
+    return clean_name[:40]
+
+
+# ============================================================================
+# Base Model Name Extraction Helpers
+# ============================================================================
+
+def _extract_veo_base(parts: list) -> str:
+    """Extract base name for Veo models."""
+    version = _parse_veo_version(parts)
+    return f"Veo {version}" if version else "Veo"
+
+
+def _extract_sora_base(parts: list) -> str:
+    """Extract base name for Sora models."""
+    version = _extract_version(parts)
+    tier = 'Pro' if 'pro' in parts else ''
+    name_parts = [p for p in ["Sora", version, tier] if p]
+    return ' '.join(name_parts) if name_parts else "Sora"
+
+
+def _extract_wan_base(parts: list) -> str:
+    """Extract base name for Wan models."""
+    version = _extract_version(parts)
+    tier = 'Pro' if 'pro' in parts else ''
+    preview = 'Preview' if 'preview' in parts else ''
+    name_parts = [p for p in ["Wan", version, tier, preview] if p]
+    return ' '.join(name_parts) if name_parts else "Wan"
+
+
+def _extract_kling_base(parts: list) -> str:
+    """Extract base name for Kling models."""
+    version = _extract_version(parts)
+    tier = 'Turbo Pro' if 'turbo' in parts and 'pro' in parts else 'Turbo' if 'turbo' in parts else ''
+    name_parts = [p for p in ["Kling", version, tier] if p]
+    return ' '.join(name_parts) if name_parts else "Kling"
+
+
+def _extract_ltx_base(parts: list) -> str:
+    """Extract base name for LTX models."""
+    version = _extract_version(parts)
+    quality = 'Fast' if 'fast' in parts else 'Full' if 'full' in parts else ''
+    name_parts = [p for p in ["LTX", version, quality] if p]
+    return ' '.join(name_parts) if name_parts else "LTX"
+
+
+def _extract_grok_base(parts: list) -> str:
+    """Extract base name for Grok models."""
+    version = _extract_version(parts)
+    tier = 'Fast' if 'fast' in parts else ''
+    name_parts = [p for p in ["Grok", version, tier] if p]
+    return ' '.join(name_parts) if name_parts else "Grok"
+
+
+def _extract_glm_base(parts: list, sku: str) -> str:
+    """Extract base name for GLM models."""
+    version = ''
+    for part in parts:
+        if 'glm' in part:
+            idx = parts.index(part)
+            if idx + 1 < len(parts) and parts[idx + 1].replace('.', '').isdigit():
+                version = parts[idx + 1]
+            break
+        if part.replace('.', '').isdigit():
+            version = part
+    return f"GLM {version}" if version else "GLM"
+
+
+def _extract_flux_base(parts: list) -> str:
+    """Extract base name for Flux models."""
+    version = _extract_version(parts)
+    tier = 'Pro' if 'pro' in parts else ''
+    name_parts = [p for p in ["Flux", version, tier] if p]
+    return ' '.join(name_parts) if name_parts else "Flux"
+
+
+def _extract_seedream_base(parts: list) -> str:
+    """Extract base name for Seedream models."""
+    version = next((p for p in parts if p.replace('v', '').isdigit()), '')
+    return f"Seedream {version}" if version else "Seedream"
+
+
+# Map of model keywords to their base extractors
+_BASE_EXTRACTORS = {
+    'sora': _extract_sora_base,
+    'wan': _extract_wan_base,
+    'kling': _extract_kling_base,
+    'ovi': lambda parts: "Ovi",
+    'ltx': _extract_ltx_base,
+    'longcat': lambda parts: "Longcat",
+    'grok': _extract_grok_base,
+    'flux': _extract_flux_base,
+    'seedream': _extract_seedream_base,
+    'hidream': lambda parts: "HiDream",
+    'stable': lambda parts: "Stable Diffusion",
+    'sd': lambda parts: "Stable Diffusion",
+}
 
 
 def extract_base_model_name(sku: str) -> str:
@@ -680,100 +855,30 @@ def extract_base_model_name(sku: str) -> str:
     
     parts = sku.lower().split('-')
     
-    # === Video Models ===
-    # Check for Veo (handle both 'veo' in parts and 'veoXX' combined form)
-    veo_part = next((p for p in parts if p.startswith('veo')), None)
-    if veo_part:
-        version = ''
-        if len(veo_part) > 3:
-            num_part = veo_part[3:]
-            if num_part.replace('.', '').isdigit():
-                if '.' not in num_part and len(num_part) == 2:
-                    version = f"{num_part[0]}.{num_part[1]}"
-                else:
-                    version = num_part
-        elif veo_part == 'veo':
-            idx = parts.index(veo_part)
-            if idx + 1 < len(parts) and parts[idx + 1].replace('.', '').isdigit():
-                version = parts[idx + 1]
-        return f"Veo {version}" if version else "Veo"
+    # Veo models (handle combined form like 'veo31')
+    if any(p.startswith('veo') for p in parts):
+        return _extract_veo_base(parts)
     
-    elif 'sora' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        tier = 'Pro' if 'pro' in parts else ''
-        name_parts = [p for p in ["Sora", version, tier] if p]
-        return ' '.join(name_parts) if name_parts else "Sora"
+    # Check for registered extractors
+    for key, extractor in _BASE_EXTRACTORS.items():
+        if key in parts:
+            return extractor(parts)
     
-    elif 'wan' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        tier = 'Pro' if 'pro' in parts else ''
-        preview = 'Preview' if 'preview' in parts else ''
-        name_parts = [p for p in ["Wan", version, tier, preview] if p]
-        return ' '.join(name_parts) if name_parts else "Wan"
+    # GLM models
+    if 'glm' in sku.lower() or 'zai' in parts:
+        return _extract_glm_base(parts, sku)
     
-    elif 'kling' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        tier = 'Turbo Pro' if 'turbo' in parts and 'pro' in parts else 'Turbo' if 'turbo' in parts else ''
-        name_parts = [p for p in ["Kling", version, tier] if p]
-        return ' '.join(name_parts) if name_parts else "Kling"
-    
-    elif 'ovi' in parts:
-        return "Ovi"
-    
-    elif 'ltx' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        quality = 'Fast' if 'fast' in parts else 'Full' if 'full' in parts else ''
-        name_parts = [p for p in ["LTX", version, quality] if p]
-        return ' '.join(name_parts) if name_parts else "LTX"
-    
-    elif 'longcat' in parts:
-        return "Longcat"
-    
-    # === LLM / Text Models ===
-    elif 'grok' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        tier = 'Fast' if 'fast' in parts else ''
-        name_parts = [p for p in ["Grok", version, tier] if p]
-        return ' '.join(name_parts) if name_parts else "Grok"
-    
-    elif 'glm' in sku.lower() or 'zai' in parts:
-        version = ''
-        for part in parts:
-            if 'glm' in part:
-                idx = parts.index(part)
-                if idx + 1 < len(parts) and parts[idx + 1].replace('.', '').isdigit():
-                    version = parts[idx + 1]
-                break
-            if part.replace('.', '').isdigit():
-                version = part
-        return f"GLM {version}" if version else "GLM"
-    
-    elif any(llm in parts for llm in ['mistral', 'llama', 'qwen', 'deepseek']):
+    # Other LLM models
+    if any(llm in parts for llm in ['mistral', 'llama', 'qwen', 'deepseek']):
         model_name = next((p for p in parts if p in ['mistral', 'llama', 'qwen', 'deepseek']), parts[0])
         version = next((p for p in parts if p.replace('.', '').replace('b', '').isdigit()), '')
         return f"{model_name.title()} {version}" if version else model_name.title()
     
-    # === Image Models ===
-    elif 'nano' in parts and 'banana' in parts:
+    # Image models
+    if 'nano' in parts and 'banana' in parts:
         return "Nano Banana Pro"
     
-    elif 'flux' in parts:
-        version = next((p for p in parts if p.replace('.', '').isdigit()), '')
-        tier = 'Pro' if 'pro' in parts else ''
-        name_parts = [p for p in ["Flux", version, tier] if p]
-        return ' '.join(name_parts) if name_parts else "Flux"
-    
-    elif 'seedream' in parts:
-        version = next((p for p in parts if p.replace('v', '').isdigit()), '')
-        return f"Seedream {version}" if version else "Seedream"
-    
-    elif 'hidream' in parts:
-        return "HiDream"
-    
-    elif 'stable' in parts or 'sd' in parts:
-        return "Stable Diffusion"
-    
-    elif 'upscale' in sku.lower():
+    if 'upscale' in sku.lower():
         return "Upscaler"
     
     # Fallback

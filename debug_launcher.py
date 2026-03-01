@@ -48,7 +48,7 @@ except Exception as e:
         msg.setDetailedText(traceback.format_exc())
         msg.setStandardButtons(QMessageBox.Ok)
         msg.exec()
-    except:
+    except Exception:
         # Fallback to osascript
         os.system(f'osascript -e \'display dialog "VVV Token Watch Error: {str(e)}" buttons {{"OK"}} default button "OK" with icon stop\'')
     

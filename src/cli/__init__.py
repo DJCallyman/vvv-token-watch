@@ -1,3 +1,7 @@
 """Command-line interface tools."""
 
-__all__ = []
+from .model_viewer import ModelViewerWidget
+
+__all__ = [
+    'ModelViewerWidget',
+]

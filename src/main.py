@@ -187,6 +187,12 @@ class CombinedViewerApp(QMainWindow):
         self.setWindowTitle("Venice AI Models & CoinGecko Price Viewer")
         self.setMinimumSize(1200, 850)  # Increased minimum size for better chart display
         
+        # Set window icon
+        icon_path = os.path.join(os.path.dirname(__file__), "..", "resources", "app.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+            logger.debug(f"Set window icon from: {icon_path}")
+        
         # Set a good default size for 1470x956 display
         self.resize(1280, 920)
         
@@ -2349,14 +2355,12 @@ class CombinedViewerApp(QMainWindow):
             self.display_layout.addWidget(error_label, alignment=Qt.AlignCenter)
             return
 
-        # Store original data and filter from it - NEVER modify the original!
-        # Create a deep copy to prevent ANY potential reference issues
-        import copy
-        original_models = copy.deepcopy(self.models_data['data'])
+        # Filter models directly - we only read, never modify the original
+        models_list = self.models_data['data']
         filtered_models = []
 
         # Apply current filter to create display list
-        for model in original_models:
+        for model in models_list:
             # Defensive programming: ensure model is a dictionary
             if not isinstance(model, dict):
                 logger.debug(f"Skipping invalid model data: {model}")
@@ -2407,7 +2411,7 @@ class CombinedViewerApp(QMainWindow):
             if type_match and trait_match and search_match:
                 filtered_models.append(model)
 
-        logger.debug(f"Filtered {len(filtered_models)} models out of {len(original_models)} total models")
+        logger.debug(f"Filtered {len(filtered_models)} models out of {len(models_list)} total models")
         
         # Show search results indicator
         if search_text:
@@ -2630,9 +2634,15 @@ class CombinedViewerApp(QMainWindow):
         )
 
     def _copy_models_data(self):
-        """Create a deep copy of models data to prevent filtering from modifying the original data"""
-        import copy
-        return copy.deepcopy(self.models_data) if self.models_data else None
+        """Create a copy of models data using JSON serialization (faster than deepcopy for large dicts)."""
+        if not self.models_data:
+            return None
+        try:
+            import json
+            return json.loads(json.dumps(self.models_data))
+        except (TypeError, ValueError):
+            import copy
+            return copy.deepcopy(self.models_data)
 
     def __del__(self):
         """Destructor to clean up resources"""
@@ -3020,7 +3030,7 @@ class CombinedViewerApp(QMainWindow):
             trend = self.usage_analytics.get_usage_trend(days=7)
             
             # Calculate days remaining estimate
-            getattr(self.exchange_rate_service.current_rate, 'rate', Config.DEFAULT_EXCHANGE_RATE) if self.exchange_rate_service.current_rate else Config.DEFAULT_EXCHANGE_RATE
+            current_rate = getattr(self.exchange_rate_service.current_rate, 'rate', Config.DEFAULT_EXCHANGE_RATE) if self.exchange_rate_service.current_rate else Config.DEFAULT_EXCHANGE_RATE
             days_remaining = self.usage_analytics.estimate_days_remaining(balance_info.usd)
             trend.days_remaining_estimate = days_remaining
             
@@ -3186,6 +3196,34 @@ class CombinedViewerApp(QMainWindow):
 def main():
     """Main entry point for the application."""
     app = QApplication(sys.argv)
+    
+    # Set application metadata
+    app.setApplicationName("VVV Token Watch")
+    app.setApplicationDisplayName("VVV Token Watch")
+    app.setOrganizationName("VVV")
+    
+    # Set application icon
+    # On macOS, use white background icon for better dock visibility
+    import platform
+    is_macos = platform.system() == 'Darwin'
+    
+    if is_macos:
+        icon_path = os.path.join(os.path.dirname(__file__), "..", "resources", "app_white_bg.png")
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(os.path.dirname(__file__), "..", "resources", "app.png")
+    else:
+        icon_path = os.path.join(os.path.dirname(__file__), "..", "resources", "app.png")
+    
+    if os.path.exists(icon_path):
+        app_icon = QIcon(icon_path)
+        if not app_icon.isNull():
+            app.setWindowIcon(app_icon)
+            logger.info(f"Set application icon from: {icon_path}")
+        else:
+            logger.warning(f"Failed to load application icon from: {icon_path}")
+    else:
+        logger.warning(f"Application icon not found at: {icon_path}")
+    
     window = CombinedViewerApp()
     window.show()
     sys.exit(app.exec())

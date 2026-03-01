@@ -49,7 +49,7 @@ except Exception as e:
             'osascript', '-e',
             f'display dialog "VVV Token Watch failed to start: {str(e)}" buttons {{"OK"}} default button "OK" with icon stop'
         ])
-    except:
+    except Exception:
         pass
     
     sys.exit(1)

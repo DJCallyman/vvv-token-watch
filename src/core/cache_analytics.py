@@ -291,9 +291,6 @@ class CacheAnalytics:
                 elif 'cache' in sku_lower and 'write' in sku_lower:
                     cache_write_cost += amount
 
-            if model_id == "unknown" or model_id not in model_stats:
-                model_id = model_id
-
             if model_stats[model_id].model_name == "":
                 model_stats[model_id].model_id = model_id
                 model_stats[model_id].model_name = self._get_model_display_name(model_id)

@@ -96,13 +96,13 @@ class TestBaseWorker:
         client = VeniceAPIClient("test_key")
         worker = BaseAPIWorker(client)
         
-        # Should have _should_stop attribute
-        assert hasattr(worker, '_should_stop')
-        assert not worker._should_stop
+        # Should have _stop_event attribute (thread-safe)
+        assert hasattr(worker, '_stop_event')
+        assert not worker._stop_event.is_set()
         
-        # Stop should set flag
+        # Stop should set event
         worker.stop()
-        assert worker._should_stop
+        assert worker._stop_event.is_set()
     
     def test_base_worker_has_stop_method(self):
         """Test that base worker has stop method."""
@@ -115,6 +115,19 @@ class TestBaseWorker:
         # Verify stop method exists
         assert hasattr(worker, 'stop')
         assert callable(getattr(worker, 'stop'))
+    
+    def test_base_worker_has_is_stopped_method(self):
+        """Test that base worker has is_stopped method for thread-safe check."""
+        from src.core.base_worker import BaseAPIWorker
+        from src.core.venice_api_client import VeniceAPIClient
+        
+        client = VeniceAPIClient("test_key")
+        worker = BaseAPIWorker(client)
+        
+        assert hasattr(worker, 'is_stopped')
+        assert not worker.is_stopped()
+        worker.stop()
+        assert worker.is_stopped()
     
     def test_base_worker_has_fetch_data(self):
         """Test that base worker requires fetch_data implementation."""

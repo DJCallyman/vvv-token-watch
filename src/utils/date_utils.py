@@ -17,6 +17,31 @@ class DateFormatter:
     """Utility class for formatting dates in human-friendly formats."""
     
     @staticmethod
+    def _get_now() -> datetime:
+        """
+        Get current UTC time as timezone-aware datetime.
+        
+        Returns:
+            Timezone-aware datetime in UTC
+        """
+        return datetime.now(timezone.utc)
+    
+    @staticmethod
+    def _make_aware(dt: datetime) -> datetime:
+        """
+        Ensure datetime is timezone-aware.
+        
+        Args:
+            dt: Datetime object (may be naive or aware)
+            
+        Returns:
+            Timezone-aware datetime in UTC
+        """
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+    
+    @staticmethod
     def create_date_range(days: int = 7, end_date: Optional[datetime] = None) -> Dict[str, str]:
         """
         Create API-compatible date range parameters for Venice API.
@@ -30,7 +55,9 @@ class DateFormatter:
             Example: {"startDate": "2025-10-26T00:00:00Z", "endDate": "2025-11-02T23:59:59Z"}
         """
         if end_date is None:
-            end_date = datetime.now(timezone.utc)
+            end_date = DateFormatter._get_now()
+        else:
+            end_date = DateFormatter._make_aware(end_date)
         
         start_date = end_date - timedelta(days=days)
         
@@ -52,7 +79,7 @@ class DateFormatter:
             Example: {"startDate": "2025-11-02T00:00:00Z", "endDate": "2025-11-02T23:59:59Z"}
         """
         if target_date is None:
-            today = datetime.now(timezone.utc).date()
+            today = DateFormatter._get_now().date()
             target_date = today.isoformat()
         
         return {
@@ -72,7 +99,9 @@ class DateFormatter:
             ISO 8601 formatted timestamp string
         """
         if dt is None:
-            dt = datetime.now(timezone.utc)
+            dt = DateFormatter._get_now()
+        else:
+            dt = DateFormatter._make_aware(dt)
         
         return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     
@@ -95,36 +124,30 @@ class DateFormatter:
         """
         try:
             if isinstance(iso_timestamp, str):
-                # Handle various ISO timestamp formats
                 timestamp = DateFormatter._parse_iso_timestamp(iso_timestamp)
             elif isinstance(iso_timestamp, datetime):
-                timestamp = iso_timestamp
+                timestamp = DateFormatter._make_aware(iso_timestamp)
             else:
                 return f"{context} at unknown time"
             
-            now = datetime.utcnow()
+            now = DateFormatter._get_now()
             diff = now - timestamp
             
-            # If it's very recent (less than 1 minute)
             if diff.total_seconds() < 60:
                 return f"{context} just now"
             
-            # If it's within the last 24 hours, use relative time
             if diff.days == 0:
                 return f"{context} {DateFormatter.relative_time(iso_timestamp)}"
             
-            # If it's within the last 7 days
             if diff.days < 7:
                 if diff.days == 1:
                     return f"{context} yesterday"
                 else:
                     return f"{context} {diff.days} days ago"
             
-            # If it's within the current year, show month and day
             if timestamp.year == now.year:
                 return f"{context} on {timestamp.strftime('%b %d')}"
             
-            # For older dates, show full date
             return f"{context} on {timestamp.strftime('%b %d, %Y')}"
             
         except Exception as e:
@@ -146,59 +169,51 @@ class DateFormatter:
             if isinstance(iso_timestamp, str):
                 timestamp = DateFormatter._parse_iso_timestamp(iso_timestamp)
             elif isinstance(iso_timestamp, datetime):
-                timestamp = iso_timestamp
+                timestamp = DateFormatter._make_aware(iso_timestamp)
             else:
                 return "unknown time ago"
             
-            now = datetime.utcnow()
+            now = DateFormatter._get_now()
             diff = now - timestamp
             
-            # Handle future times (shouldn't happen, but just in case)
             if diff.total_seconds() < 0:
                 return "in the future"
             
             seconds = int(diff.total_seconds())
             
-            # Less than 1 minute
             if seconds < 60:
                 return "just now"
             
-            # Minutes
             minutes = seconds // 60
             if minutes < 60:
                 if minutes == 1:
                     return "1 minute ago"
                 return f"{minutes} minutes ago"
             
-            # Hours
             hours = minutes // 60
             if hours < 24:
                 if hours == 1:
                     return "1 hour ago"
                 return f"{hours} hours ago"
             
-            # Days
             days = diff.days
             if days < 7:
                 if days == 1:
                     return "yesterday"
                 return f"{days} days ago"
             
-            # Weeks
             weeks = days // 7
             if weeks < 4:
                 if weeks == 1:
                     return "last week"
                 return f"{weeks} weeks ago"
             
-            # Months (approximate)
             months = days // 30
             if months < 12:
                 if months == 1:
                     return "last month"
                 return f"{months} months ago"
             
-            # Years
             years = days // 365
             if years == 1:
                 return "last year"
@@ -211,43 +226,41 @@ class DateFormatter:
     @staticmethod
     def _parse_iso_timestamp(iso_string: str) -> datetime:
         """
-        Parse various ISO timestamp formats into datetime object.
+        Parse various ISO timestamp formats into timezone-aware datetime object.
         
         Args:
             iso_string: ISO timestamp string
             
         Returns:
-            datetime object
+            Timezone-aware datetime object
             
         Raises:
             ValueError: If timestamp format is not recognized
         """
-        # Remove any timezone info and normalize
         iso_string = iso_string.strip()
         
-        # Handle common ISO formats
         formats = [
-            '%Y-%m-%dT%H:%M:%S.%fZ',    # 2025-01-01T00:00:00.000Z
-            '%Y-%m-%dT%H:%M:%SZ',       # 2025-01-01T00:00:00Z
-            '%Y-%m-%dT%H:%M:%S.%f',     # 2025-01-01T00:00:00.000
-            '%Y-%m-%dT%H:%M:%S',        # 2025-01-01T00:00:00
-            '%Y-%m-%d %H:%M:%S',        # 2025-01-01 00:00:00
-            '%Y-%m-%d',                 # 2025-01-01
+            '%Y-%m-%dT%H:%M:%S.%fZ',
+            '%Y-%m-%dT%H:%M:%SZ',
+            '%Y-%m-%dT%H:%M:%S.%f',
+            '%Y-%m-%dT%H:%M:%S',
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d',
         ]
         
         for fmt in formats:
             try:
-                return datetime.strptime(iso_string, fmt)
+                dt = datetime.strptime(iso_string, fmt)
+                return DateFormatter._make_aware(dt)
             except ValueError:
                 continue
         
-        # Try to handle timezone offsets by removing them
         if '+' in iso_string or iso_string.endswith(('Z',)):
-            # Remove timezone info and try again
             clean_string = re.sub(r'[+-]\d{2}:?\d{2}$|Z$', '', iso_string)
             for fmt in formats:
                 try:
-                    return datetime.strptime(clean_string, fmt)
+                    dt = datetime.strptime(clean_string, fmt)
+                    return DateFormatter._make_aware(dt)
                 except ValueError:
                     continue
         
@@ -272,24 +285,21 @@ class DateFormatter:
             if isinstance(timestamp, str):
                 dt = DateFormatter._parse_iso_timestamp(timestamp)
             elif isinstance(timestamp, datetime):
-                dt = timestamp
+                dt = DateFormatter._make_aware(timestamp)
             else:
                 return "Unknown date"
             
-            now = datetime.utcnow()
+            now = DateFormatter._get_now()
             diff = now - dt
             
-            # For very recent times, use relative format
-            if diff.total_seconds() < 3600:  # Less than 1 hour
+            if diff.total_seconds() < 3600:
                 relative = DateFormatter.relative_time(timestamp)
                 return f"{context} {relative}" if context else relative
             
-            # For today, show time
             if diff.days == 0 and show_time:
                 time_str = dt.strftime('%I:%M %p').lstrip('0')
                 return f"{context} today at {time_str}" if context else f"Today at {time_str}"
             
-            # For this week, show day name
             if diff.days < 7:
                 day_name = dt.strftime('%A')
                 if show_time:
@@ -299,7 +309,6 @@ class DateFormatter:
                     result = day_name
                 return f"{context} {result}" if context else result
             
-            # For this year, show month and day
             if dt.year == now.year:
                 date_str = dt.strftime('%b %d')
                 if show_time:
@@ -309,7 +318,6 @@ class DateFormatter:
                     result = date_str
                 return f"{context} {result}" if context else result
             
-            # For older dates, show full date
             date_str = dt.strftime('%b %d, %Y')
             if show_time:
                 time_str = dt.strftime('%I:%M %p').lstrip('0')

@@ -6,6 +6,7 @@ and provide consistent error handling, signal definitions, and execution pattern
 """
 
 import logging
+import threading
 from typing import Dict, Any, Optional
 from PySide6.QtCore import QThread, Signal
 
@@ -23,6 +24,7 @@ class BaseAPIWorker(QThread):
     - Consistent signal definitions
     - Centralized error handling
     - Template method pattern for data fetching
+    - Thread-safe stop mechanism using threading.Event
     - Logging integration
     
     Subclasses should override fetch_data() method.
@@ -43,7 +45,7 @@ class BaseAPIWorker(QThread):
         """
         super().__init__(parent)
         self.api_client = api_client
-        self._should_stop = False
+        self._stop_event = threading.Event()
     
     def run(self):
         """
@@ -53,10 +55,9 @@ class BaseAPIWorker(QThread):
         result = {'success': False, 'data': None, 'error': None}
         
         try:
-            # Don't use logger in worker thread - can cause crashes on macOS
             data = self.fetch_data()
             
-            if self._should_stop:
+            if self._stop_event.is_set():
                 return
             
             result['success'] = True
@@ -67,7 +68,8 @@ class BaseAPIWorker(QThread):
             result['error'] = error_msg
         
         finally:
-            self.result.emit(result)
+            if not self._stop_event.is_set():
+                self.result.emit(result)
     
     def fetch_data(self) -> Any:
         """
@@ -97,8 +99,12 @@ class BaseAPIWorker(QThread):
         return error_msg
     
     def stop(self):
-        """Request the worker to stop (for long-running operations)"""
-        self._should_stop = True
+        """Request the worker to stop (thread-safe)."""
+        self._stop_event.set()
+    
+    def is_stopped(self) -> bool:
+        """Check if stop has been requested (thread-safe)."""
+        return self._stop_event.is_set()
     
     def emit_progress(self, message: str):
         """Helper to emit progress updates"""
@@ -133,9 +139,12 @@ class SimpleAPIWorker(BaseAPIWorker):
         """Fetch data from the configured endpoint"""
         self.emit_progress(f"Fetching from {self.endpoint}")
         response = self.api_client.get(self.endpoint, params=self.params, timeout=self.timeout)
-        data = response.json()
         
-        # Validate response structure
+        try:
+            data = response.json()
+        except Exception as json_err:
+            raise ValueError(f"Invalid JSON response: {json_err}")
+        
         if not data or 'data' not in data:
             raise ValueError("API response missing 'data' key or is empty")
         

@@ -537,7 +537,23 @@ class BackendStatusBar(QStatusBar):
         """Setup timers for periodic updates."""
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self._update_activity_summary)
-        self.update_timer.start(1000)  # Update every second
+        self.update_timer.start(1000)
+    
+    def cleanup(self):
+        """Clean up resources."""
+        if hasattr(self, 'update_timer') and self.update_timer:
+            self.update_timer.stop()
+        
+        if hasattr(self, 'fade_animation'):
+            self.fade_animation.stop()
+        
+        for process_id in list(self.processes.keys()):
+            self.unregister_process(process_id)
+    
+    def closeEvent(self, event):
+        """Handle widget close event."""
+        self.cleanup()
+        super().closeEvent(event)
     
     def _initialize_default_processes(self):
         """Initialize default backend processes."""

@@ -6,9 +6,15 @@ across multiple files and provide consistent model name handling.
 """
 
 import re
+import warnings
 from typing import List, Dict, Any, Optional, Tuple
 
 from src.data.model_pricing import ModelPricingDatabase, ModelPricing
+
+
+# Pre-compiled regex patterns for performance
+_VARIANT_PATTERN = re.compile(r'-(instruct|turbo|vision|chat|base)$')
+_VERSION_PATTERN = re.compile(r'^([a-zA-Z]+-[0-9]+(?:\.[0-9]+)?)')
 
 
 class ModelNameParser:
@@ -77,12 +83,12 @@ class ModelNameParser:
         # First clean the SKU
         cleaned = ModelNameParser.clean_sku_name(sku)
         
-        # Remove common variant indicators
-        cleaned = re.sub(r'-(instruct|turbo|vision|chat|base)$', '', cleaned)
+        # Remove common variant indicators (using pre-compiled pattern)
+        cleaned = _VARIANT_PATTERN.sub('', cleaned)
         
         # Extract base model (before version numbers)
         # Pattern: model-name followed by version like 3.3, 70b, etc.
-        match = re.match(r'^([a-zA-Z]+-[0-9]+(?:\.[0-9]+)?)', cleaned)
+        match = _VERSION_PATTERN.match(cleaned)
         if match:
             return match.group(1)
         
@@ -203,15 +209,21 @@ class ModelNameParser:
         """
         Get pricing information for a model based on its SKU.
         
-        DEPRECATED: Use ModelCacheManager.get_model() instead for current pricing.
-        This method is kept for backward compatibility and fallback scenarios.
-        
+        .. deprecated:: 2.0
+            Use ModelCacheManager.get_model() instead for current pricing.
+            This method is kept for backward compatibility and fallback scenarios.
+
         Args:
             sku: Raw SKU string (e.g., "llama-3.3-70b-llm-input-mtoken")
             
         Returns:
             ModelPricing object or None if not found
         """
+        warnings.warn(
+            "get_model_pricing is deprecated, use ModelCacheManager.get_model() instead",
+            DeprecationWarning,
+            stacklevel=2
+        )
         clean_model_id = ModelNameParser.clean_sku_name(sku)
         return ModelPricingDatabase.get_model(clean_model_id)
     
@@ -220,8 +232,9 @@ class ModelNameParser:
         """
         Calculate cost for a specific SKU based on units consumed.
 
-        DEPRECATED: Use ModelCacheManager.calculate_text_cost() instead for current pricing.
-        This method is kept for backward compatibility and fallback scenarios.
+        .. deprecated:: 2.0
+            Use ModelCacheManager.calculate_text_cost() instead for current pricing.
+            This method is kept for backward compatibility and fallback scenarios.
 
         For chat models:
         - Input SKUs: units = tokens, cost = (tokens * input_price) / 1M
@@ -240,6 +253,11 @@ class ModelNameParser:
         Returns:
             Cost in USD or None if pricing not found
         """
+        warnings.warn(
+            "calculate_sku_cost is deprecated, use ModelCacheManager.calculate_text_cost() instead",
+            DeprecationWarning,
+            stacklevel=2
+        )
         pricing = ModelNameParser.get_model_pricing(sku)
         if not pricing:
             return None
@@ -267,9 +285,10 @@ class ModelNameParser:
         """
         Find cheaper alternative models for a given SKU.
         
-        DEPRECATED: Use ModelCacheManager._find_cheaper_alternatives_from_cache() instead.
-        This method is kept for backward compatibility and fallback scenarios.
-        
+        .. deprecated:: 2.0
+            Use ModelCacheManager methods instead for current model data.
+            This method is kept for backward compatibility and fallback scenarios.
+
         Args:
             current_sku: Current SKU being used
             min_savings_percent: Minimum savings percentage to include (default 10%)
@@ -277,6 +296,11 @@ class ModelNameParser:
         Returns:
             List of (model_id, display_name, savings_percent) tuples
         """
+        warnings.warn(
+            "find_model_alternatives is deprecated, use ModelCacheManager methods instead",
+            DeprecationWarning,
+            stacklevel=2
+        )
         clean_model_id = ModelNameParser.clean_sku_name(current_sku)
         current_pricing = ModelPricingDatabase.get_model(clean_model_id)
         

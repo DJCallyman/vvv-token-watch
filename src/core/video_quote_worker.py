@@ -53,54 +53,50 @@ class VideoQuoteWorker(BaseAPIWorker):
         """Fetch base prices for all video models."""
         base_prices = []
         
+        def parse_duration(dur_str):
+            """Parse duration string like '5s' to float."""
+            try:
+                return float(dur_str.rstrip('s'))
+            except (ValueError, AttributeError):
+                return 999
+        
+        def res_to_num(res):
+            """Parse resolution string like '720p' to int."""
+            try:
+                return int(res.rstrip('p'))
+            except ValueError:
+                return 999
+        
         for model in self.video_models:
+            model_id = "unknown"
+            
             try:
                 model_id = model.get('id')
                 if not model_id:
                     continue
                 
-                # Extract minimal parameters from model constraints
                 constraints = model.get('model_spec', {}).get('constraints', {})
                 
-                # Get minimum duration
                 durations = constraints.get('durations', [])
                 if durations:
-                    # Parse duration strings like "5s", "8s" to find the minimum numeric value
-                    def parse_duration(dur_str):
-                        try:
-                            # Remove 's' suffix and convert to float
-                            return float(dur_str.rstrip('s'))
-                        except (ValueError, AttributeError):
-                            return 999  # Invalid durations at end
-                    
                     min_duration = min(durations, key=parse_duration)
                     min_duration_value = parse_duration(min_duration)
                 else:
-                    min_duration = "5s"  # Default
+                    min_duration = "5s"
                     min_duration_value = 5.0
                 
-                # Get aspect ratio (use first available)
                 aspect_ratios = constraints.get('aspect_ratios', [])
-                aspect_ratio = aspect_ratios[0] if aspect_ratios else "16:9"  # Default
+                aspect_ratio = aspect_ratios[0] if aspect_ratios else "16:9"
                 
-                # Get lowest resolution (sort by numeric value)
                 resolutions = constraints.get('resolutions', [])
                 if resolutions:
-                    # Extract numeric part and sort (e.g., "720p" -> 720)
-                    def res_to_num(res):
-                        try:
-                            return int(res.rstrip('p'))
-                        except ValueError:
-                            return 999  # Put invalid resolutions at end
-                    
                     min_resolution = min(resolutions, key=res_to_num)
                 else:
-                    min_resolution = "720p"  # Default
+                    min_resolution = "720p"
                 
-                # Prepare quote request
                 quote_params = {
                     "model": model_id,
-                    "duration": min_duration,  # String format like "5s"
+                    "duration": min_duration,
                     "resolution": min_resolution,
                     "aspect_ratio": aspect_ratio,
                     "audio": False
@@ -108,16 +104,20 @@ class VideoQuoteWorker(BaseAPIWorker):
                 
                 self.emit_progress(f"Getting quote for {model_id}")
                 
-                # Call quote API
                 logger.debug(f"Sending quote request for {model_id}: {quote_params}")
                 response = self.api_client.post("/video/quote", data=quote_params, timeout=30)
                 
                 if response.status_code == 200:
-                    quote_data = response.json()
+                    try:
+                        quote_data = response.json()
+                    except Exception as json_err:
+                        logger.warning(f"Invalid JSON response for {model_id}: {json_err}")
+                        continue
+                    
                     logger.debug(f"Quote response for {model_id}: {quote_data}")
                     base_price = VideoBasePrice(
                         model_id=model_id,
-                        base_usd=quote_data.get('quote', 0.0),  # The key is 'quote', not 'usd'
+                        base_usd=quote_data.get('quote', 0.0),
                         base_diem=quote_data.get('diem', 0.0),
                         min_duration=min_duration_value,
                         min_resolution=min_resolution
@@ -141,7 +141,7 @@ class VideoQuoteWorker(BaseAPIWorker):
         try:
             data = self.fetch_data()
             
-            if self._should_stop:
+            if self._stop_event.is_set():
                 return
             
             result['success'] = True
@@ -153,7 +153,8 @@ class VideoQuoteWorker(BaseAPIWorker):
         
         finally:
             # Emit both standard result and custom signal
-            self.result.emit(result)
-            if result['success'] and result['data']:
-                self.video_base_prices_updated.emit(result['data'])
-                logger.info(f"Video model quotes obtained: {len(result['data'])} models")
+            if not self._stop_event.is_set():
+                self.result.emit(result)
+                if result['success'] and result['data']:
+                    self.video_base_prices_updated.emit(result['data'])
+                    logger.info(f"Video model quotes obtained: {len(result['data'])} models")

@@ -57,17 +57,23 @@ class ExchangeRateService(QObject):
         super().__init__(parent)
         
         self.cache_ttl = timedelta(minutes=cache_ttl_minutes)
-        self.cache_file = os.path.join(os.getcwd(), "exchange_rate_cache.json")
+        self.cache_file = self._get_cache_path()
         
         self.current_rate: Optional[ExchangeRateData] = None
         self.rate_history: List[ExchangeRateData] = []
         
-        # Rate update timer
+        self._worker: Optional[ExchangeRateWorker] = None
+        
         self.update_timer = QTimer()
         self.update_timer.timeout.connect(self.fetch_current_rate)
         
-        # Load cached data
         self.load_cached_rate()
+    
+    def _get_cache_path(self) -> str:
+        """Get proper cache file path."""
+        cache_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+        os.makedirs(cache_dir, exist_ok=True)
+        return os.path.join(cache_dir, "exchange_rate_cache.json")
     
     def start_automatic_updates(self, interval_minutes: int = 5) -> None:
         """
@@ -76,24 +82,46 @@ class ExchangeRateService(QObject):
         Args:
             interval_minutes: Update interval in minutes
         """
-        self.update_timer.start(interval_minutes * 60 * 1000)  # Convert to milliseconds
+        self.update_timer.start(interval_minutes * 60 * 1000)
         
-        # Fetch immediately if no current rate or rate is stale
         if (not self.current_rate or 
             datetime.now() - self.current_rate.timestamp > self.cache_ttl):
             self.fetch_current_rate()
     
     def stop_automatic_updates(self) -> None:
-        """Stop automatic rate updates."""
+        """Stop automatic rate updates and cleanup worker."""
         self.update_timer.stop()
+        self._cleanup_worker()
+    
+    def _cleanup_worker(self) -> None:
+        """Clean up worker thread."""
+        if self._worker is not None:
+            try:
+                if self._worker.isRunning():
+                    self._worker.quit()
+                    if not self._worker.wait(2000):
+                        self._worker.terminate()
+                        self._worker.wait()
+                self._worker.deleteLater()
+            except RuntimeError:
+                pass
+            self._worker = None
     
     def fetch_current_rate(self) -> None:
         """Fetch current exchange rate using available sources."""
-        # Try Venice API first, then fallback to CoinGecko
-        worker = ExchangeRateWorker()
-        worker.rate_fetched.connect(self._handle_rate_update)
-        worker.error_occurred.connect(self._handle_rate_error)
-        worker.start()
+        self._cleanup_worker()
+        
+        self._worker = ExchangeRateWorker()
+        self._worker.rate_fetched.connect(self._handle_rate_update)
+        self._worker.error_occurred.connect(self._handle_rate_error)
+        self._worker.finished.connect(lambda: self._on_worker_finished(self._worker))
+        
+        self._worker.start()
+    
+    def _on_worker_finished(self, worker) -> None:
+        """Handle worker thread completion."""
+        if worker == self._worker:
+            self._worker = None
     
     def _handle_rate_update(self, rate_data: ExchangeRateData) -> None:
         """Handle successful rate update."""
@@ -143,16 +171,17 @@ class ExchangeRateService(QObject):
         if len(self.rate_history) < 2:
             return None
         
-        # Find rate from ~24 hours ago
         target_time = datetime.now() - timedelta(hours=24)
         
-        # Find closest historical rate
         closest_rate = min(
-            self.rate_history[:-1],  # Exclude current rate
+            self.rate_history[:-1],
             key=lambda r: abs((r.timestamp - target_time).total_seconds())
         )
         
         if not self.current_rate:
+            return None
+        
+        if closest_rate.rate == 0:
             return None
         
         change = ((self.current_rate.rate - closest_rate.rate) / closest_rate.rate) * 100
@@ -172,7 +201,7 @@ class ExchangeRateService(QObject):
                     "cached_at": datetime.now().isoformat()
                 }
                 
-                with open(self.cache_file, 'w') as f:
+                with open(self.cache_file, 'w', encoding='utf-8') as f:
                     json.dump(cache_data, f, indent=2)
                     
         except Exception as e:
@@ -182,12 +211,15 @@ class ExchangeRateService(QObject):
         """Load cached rate from file."""
         try:
             if os.path.exists(self.cache_file):
-                with open(self.cache_file, 'r') as f:
+                with open(self.cache_file, 'r', encoding='utf-8') as f:
                     cache_data = json.load(f)
                 
-                cached_time = datetime.fromisoformat(cache_data["timestamp"])
+                try:
+                    cached_time = datetime.fromisoformat(cache_data["timestamp"])
+                except (ValueError, KeyError) as e:
+                    logger.warning(f"Invalid cache timestamp: {e}")
+                    return
                 
-                # Check if cache is still valid
                 if datetime.now() - cached_time <= self.cache_ttl:
                     self.current_rate = ExchangeRateData(
                         rate=float(cache_data["rate"]),

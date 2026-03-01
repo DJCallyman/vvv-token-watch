@@ -3,6 +3,7 @@ Web app usage tracking for Venice AI.
 Fetches usage data from /billing/usage endpoint and filters for web app consumption.
 """
 
+import logging
 from dataclasses import dataclass
 from typing import List, Dict, Any
 from PySide6.QtCore import QThread, Signal
@@ -10,6 +11,11 @@ import requests
 
 from src.core.venice_api_client import VeniceAPIClient
 from src.utils.date_utils import DateFormatter
+
+
+logger = logging.getLogger(__name__)
+
+MAX_PAGINATION_PAGES = 100
 
 
 @dataclass
@@ -87,7 +93,6 @@ class WebUsageWorker(QThread):
         Returns:
             WebUsageMetrics with aggregated data
         """
-        # Calculate date range using utility
         date_params = DateFormatter.create_date_range(days=self.days)
         
         params = {
@@ -106,21 +111,23 @@ class WebUsageWorker(QThread):
         page = 1
         api_inference_count = 0
         
-        # Fetch all pages (unfortunately we can't filter server-side)
-        while True:
+        while page <= MAX_PAGINATION_PAGES:
             params["page"] = page
             
             try:
                 response = self.api_client.get("/billing/usage", params=params)
                 
-                data = response.json()
+                try:
+                    data = response.json()
+                except Exception as json_err:
+                    raise Exception(f"Invalid JSON response: {json_err}")
+                
                 records = data.get("data", [])
                 pagination = data.get("pagination", {})
                 
                 if not records:
                     break
                 
-                # Filter records client-side
                 for record in records:
                     notes = record.get("notes", "")
                     
@@ -128,12 +135,14 @@ class WebUsageWorker(QThread):
                         api_inference_count += 1
                         continue
                     
-                    # This is web app usage
-                    amount = abs(float(record.get("amount", 0)))
+                    try:
+                        amount = abs(float(record.get("amount", 0)))
+                    except (ValueError, TypeError):
+                        amount = 0.0
+                    
                     currency = record.get("currency", "")
                     sku = record.get("sku", "unknown")
                     
-                    # Track totals
                     if currency == "USD":
                         total_usd += amount
                     elif currency == "DIEM":
@@ -141,46 +150,53 @@ class WebUsageWorker(QThread):
                     elif currency == "VCU":
                         total_vcu += amount
                     
-                    # Create usage item
+                    try:
+                        units = float(record.get("units", 0))
+                        price_per_unit = float(record.get("pricePerUnitUsd", 0))
+                    except (ValueError, TypeError):
+                        units = 0.0
+                        price_per_unit = 0.0
+                    
                     item = WebUsageItem(
                         sku=sku,
                         amount=amount,
                         currency=currency,
-                        units=float(record.get("units", 0)),
-                        price_per_unit_usd=float(record.get("pricePerUnitUsd", 0)),
+                        units=units,
+                        price_per_unit_usd=price_per_unit,
                         timestamp=record.get("timestamp", ""),
                         notes=notes
                     )
                     all_web_records.append(item)
                     
-                    # Track by SKU
                     if sku not in sku_breakdown:
                         sku_breakdown[sku] = {
                             "count": 0,
                             "amount": 0.0,
                             "currency": currency,
                             "units": 0.0,
-                            "notes": notes  # Store usage type (Video Inference, Image Inference, etc.)
+                            "notes": notes
                         }
                     sku_breakdown[sku]["count"] += 1
                     sku_breakdown[sku]["amount"] += amount
                     sku_breakdown[sku]["units"] += item.units
                 
-                # Update progress
                 web_count = len(all_web_records)
                 self.progress_updated.emit(
                     f"Page {page}/{pagination.get('totalPages', '?')}: "
                     f"{web_count} web app, {api_inference_count} API filtered"
                 )
                 
-                # Check if more pages
-                if page >= pagination.get("totalPages", 0):
+                total_pages = pagination.get("totalPages", 1)
+                if page >= total_pages:
                     break
                 
                 page += 1
                 
             except Exception as e:
                 raise Exception(f"Failed to fetch billing usage: {str(e)}")
+        
+        if page > MAX_PAGINATION_PAGES:
+            logger.warning(f"Reached maximum pagination limit ({MAX_PAGINATION_PAGES} pages)")
         
         return WebUsageMetrics(
             diem=total_diem,

@@ -7,6 +7,7 @@ and pricing information. Includes caching and fallback mechanisms for reliabilit
 
 import json
 import logging
+import os
 from typing import Dict, List, Optional
 from pathlib import Path
 from dataclasses import dataclass
@@ -16,6 +17,9 @@ from src.core.venice_api_client import VeniceAPIClient
 from src.config.config import Config
 
 logger = logging.getLogger(__name__)
+
+# File permissions for sensitive cache files (owner read/write only)
+SENSITIVE_FILE_MODE = 0o600
 
 
 @dataclass
@@ -188,7 +192,7 @@ class ModelCacheManager:
                 continue
     
     def _save_cache(self) -> None:
-        """Save models to local cache file."""
+        """Save models to local cache file with secure permissions."""
         try:
             self.CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
             
@@ -217,8 +221,16 @@ class ModelCacheManager:
                 'raw_api_data': self.raw_api_data
             }
             
-            with open(self.CACHE_FILE, 'w') as f:
+            # Write with secure permissions
+            with open(self.CACHE_FILE, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, indent=2)
+            
+            # Set restrictive file permissions (owner read/write only)
+            try:
+                os.chmod(self.CACHE_FILE, SENSITIVE_FILE_MODE)
+            except OSError as e:
+                logger.warning(f"Could not set file permissions on cache: {e}")
+            
             logger.debug(f"Saved model cache to {self.CACHE_FILE} (timestamp: {self.cache_timestamp})")
             
         except Exception as e:
@@ -231,7 +243,7 @@ class ModelCacheManager:
                 logger.debug(f"No cache file found at {self.CACHE_FILE}")
                 return
             
-            with open(self.CACHE_FILE, 'r') as f:
+            with open(self.CACHE_FILE, 'r', encoding='utf-8') as f:
                 cache_data = json.load(f)
             
             # Load timestamp if present
@@ -299,15 +311,13 @@ class ModelCacheManager:
         if not model:
             return None
         
-        # For text models, use input or output price
         if model.model_type == 'text':
             price_per_m = model.output_price_usd if is_output else model.input_price_usd
             if price_per_m is not None:
                 return (price_per_m * tokens) / 1_000_000
         
-        # For image/generation models, use generation price
         if model.generation_price_usd is not None:
-            return model.generation_price_usd * tokens  # Usually per generation, not per token
+            return model.generation_price_usd
         
         return None
     

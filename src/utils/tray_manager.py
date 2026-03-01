@@ -4,9 +4,10 @@ Provides minimize to tray functionality and notifications.
 """
 
 from PySide6.QtWidgets import QSystemTrayIcon, QMenu, QWidget, QApplication
-from PySide6.QtCore import Signal, QObject
-from PySide6.QtGui import QIcon, QAction
+from PySide6.QtCore import Signal, QObject, QSize, Qt
+from PySide6.QtGui import QIcon, QAction, QPixmap, QPainter, QColor, QFont
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +45,12 @@ class TrayManager(QObject):
         self.tray_icon = QSystemTrayIcon(self.parent())
         self.tray_icon.setToolTip("VVV Token Watch")
         
-        # Try to set an icon (will use default if not found)
-        try:
-            # For now, use a default icon - can be customized later
-            self.tray_icon.setIcon(QIcon.fromTheme("applications-system"))
-        except Exception as e:
-            logger.debug(f"Could not set tray icon: {e}")
+        # Try to set an icon with multiple fallbacks
+        icon = self._load_tray_icon()
+        if icon and not icon.isNull():
+            self.tray_icon.setIcon(icon)
+        else:
+            logger.warning("Could not load tray icon, tray may not display correctly")
         
         # Create context menu
         self.tray_menu = QMenu()
@@ -83,6 +84,106 @@ class TrayManager(QObject):
         self.tray_icon.show()
         
         logger.info("System tray initialized successfully")
+    
+    def _load_tray_icon(self) -> QIcon:
+        """
+        Load tray icon with multiple fallback options.
+        
+        Returns:
+            QIcon or None if no icon could be loaded
+        """
+        import sys
+        
+        resource_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "resources"))
+        logger.info(f"Loading tray icon from: {resource_dir}")
+        
+        # Try solid icons first (more visible on semi-transparent backgrounds)
+        solid_paths = [
+            os.path.join(resource_dir, "app_solid_22.png"),
+            os.path.join(resource_dir, "app_solid_16.png"),
+            os.path.join(resource_dir, "app_solid_32.png"),
+            os.path.join(resource_dir, "app_solid_64.png"),
+        ]
+        for path in solid_paths:
+            if os.path.exists(path):
+                icon = QIcon(path)
+                if icon and not icon.isNull():
+                    logger.info(f"Using solid icon: {path}")
+                    return icon
+        
+        # On macOS, try template icons as fallback (black silhouettes)
+        if sys.platform == 'darwin':
+            template_paths = [
+                os.path.join(resource_dir, "app_template_22.png"),
+                os.path.join(resource_dir, "app_template_16.png"),
+            ]
+            for path in template_paths:
+                if os.path.exists(path):
+                    icon = QIcon(path)
+                    if icon and not icon.isNull():
+                        icon.setIsMask(True)
+                        logger.info(f"Using macOS template icon: {path}")
+                        return icon
+        
+        # Try standard app icons
+        icon_paths = [
+            os.path.join(resource_dir, "app_22.png"),
+            os.path.join(resource_dir, "app_32.png"),
+            os.path.join(resource_dir, "app.png"),
+        ]
+        for path in icon_paths:
+            if os.path.exists(path):
+                icon = QIcon(path)
+                if icon and not icon.isNull():
+                    logger.info(f"Using app icon: {path}")
+                    return icon
+        
+        # Try theme icons (common on Linux)
+        theme_icons = ["applications-system", "system-run", "preferences-system"]
+        for theme_icon in theme_icons:
+            icon = QIcon.fromTheme(theme_icon)
+            if icon and not icon.isNull():
+                logger.info(f"Using theme icon: {theme_icon}")
+                return icon
+        
+        # Create a simple fallback icon programmatically
+        icon = self._create_fallback_icon()
+        if icon and not icon.isNull():
+            logger.info("Using programmatically created fallback icon")
+            return icon
+        
+        logger.error("Could not load any tray icon")
+        return None
+    
+    def _create_fallback_icon(self) -> QIcon:
+        """Create a simple fallback icon programmatically."""
+        try:
+            # Create a 22x22 icon (typical tray icon size on macOS)
+            size = 22
+            pixmap = QPixmap(size, size)
+            pixmap.fill(QColor(0, 0, 0, 0))  # Transparent background
+            
+            painter = QPainter(pixmap)
+            painter.setRenderHint(QPainter.Antialiasing)
+            
+            # Draw a simple "V" letter on a colored circle
+            painter.setBrush(QColor(0, 122, 255))  # Blue color
+            painter.setPen(QColor(255, 255, 255))  # White pen
+            
+            # Draw circle background
+            painter.drawEllipse(1, 1, size - 2, size - 2)
+            
+            # Draw "V" text
+            font = QFont("Arial", 12, QFont.Bold)
+            painter.setFont(font)
+            painter.drawText(pixmap.rect(), QPainter.AlignCenter, "V")
+            
+            painter.end()
+            
+            return QIcon(pixmap)
+        except Exception as e:
+            logger.debug(f"Could not create fallback icon: {e}")
+            return QIcon()
     
     def _on_activated(self, reason):
         """Handle tray icon activation."""

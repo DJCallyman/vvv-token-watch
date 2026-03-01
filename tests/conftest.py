@@ -159,3 +159,154 @@ def mock_requests_session():
     session.get = Mock()
     session.post = Mock()
     return session
+
+
+@pytest.fixture
+def mock_api_client():
+    """Create a mock VeniceAPIClient for testing."""
+    from unittest.mock import MagicMock
+    client = MagicMock()
+    client.api_key = "test_api_key"
+    client.base_url = "https://api.venice.ai/api/v1"
+    client.get = MagicMock(return_value=MagicMock(status_code=200, json=lambda: {"data": []}))
+    client.post = MagicMock(return_value=MagicMock(status_code=200, json=lambda: {"success": True}))
+    return client
+
+
+@pytest.fixture
+def mock_balance_info():
+    """Create a mock BalanceInfo for testing."""
+    from src.core.usage_tracker import BalanceInfo
+    return BalanceInfo(
+        diem=1000.0,
+        usd=50.0,
+        updated_at="2024-01-01T00:00:00Z"
+    )
+
+
+@pytest.fixture
+def mock_api_key_usage():
+    """Create a mock APIKeyUsage for testing."""
+    from src.core.usage_tracker import APIKeyUsage, UsageMetrics
+    return APIKeyUsage(
+        id="key_test123",
+        name="Test API Key",
+        is_active=True,
+        created_at="2024-01-01T00:00:00Z",
+        last_used_at="2024-01-15T12:00:00Z",
+        usage=UsageMetrics(diem=10.0, usd=1.5)
+    )
+
+
+@pytest.fixture
+def mock_cached_model():
+    """Create a mock CachedModel for testing."""
+    from src.core.model_cache import CachedModel
+    return CachedModel(
+        id="test-model",
+        name="Test Model",
+        model_type="text",
+        input_price_usd=0.60,
+        output_price_usd=6.00,
+        cache_input_price_usd=0.06,
+        cache_write_price_usd=0.75,
+        supports_cache=True,
+        capabilities=["vision", "function_calling"]
+    )
+
+
+@pytest.fixture
+def mock_exchange_rate_data():
+    """Create mock exchange rate data for testing."""
+    from src.services.exchange_rate_service import ExchangeRateData
+    from datetime import datetime
+    return ExchangeRateData(
+        rate=0.05,
+        timestamp=datetime.now(),
+        change_24h=2.5,
+        volume_24h=100000.0,
+        source="test",
+        confidence=0.9
+    )
+
+
+@pytest.fixture
+def qt_app():
+    """Qt application fixture for widget tests."""
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    yield app
+
+
+@pytest.fixture
+def sample_billing_records():
+    """Provide sample billing records for cache analytics testing."""
+    return [
+        {
+            "sku": "llama-llm-input-mtoken",
+            "amount": -0.0006,
+            "currency": "USD",
+            "pricePerUnitUsd": 0.60,
+            "units": 0.001,
+            "timestamp": "2024-01-15T10:00:00Z",
+            "inferenceDetails": {
+                "requestId": "req-1",
+                "promptTokens": 500,
+                "completionTokens": 100
+            }
+        },
+        {
+            "sku": "llama-llm-cache-input-mtoken",
+            "amount": -0.00006,
+            "currency": "USD",
+            "pricePerUnitUsd": 0.06,
+            "units": 0.001,
+            "timestamp": "2024-01-15T10:00:00Z",
+            "inferenceDetails": {
+                "requestId": "req-1",
+                "promptTokens": 500,
+                "completionTokens": 100
+            }
+        },
+        {
+            "sku": "llama-llm-output-mtoken",
+            "amount": -0.0006,
+            "currency": "USD",
+            "pricePerUnitUsd": 6.00,
+            "units": 0.0001,
+            "timestamp": "2024-01-15T10:00:00Z",
+            "inferenceDetails": {
+                "requestId": "req-1",
+                "promptTokens": 500,
+                "completionTokens": 100
+            }
+        },
+        {
+            "sku": "deepseek-llm-input-mtoken",
+            "amount": -0.0003,
+            "currency": "USD",
+            "pricePerUnitUsd": 0.30,
+            "units": 0.001,
+            "timestamp": "2024-01-15T11:00:00Z",
+            "inferenceDetails": {
+                "requestId": "req-2",
+                "promptTokens": 800,
+                "completionTokens": 200
+            }
+        },
+        {
+            "sku": "deepseek-llm-output-mtoken",
+            "amount": -0.0005,
+            "currency": "USD",
+            "pricePerUnitUsd": 0.50,
+            "units": 0.001,
+            "timestamp": "2024-01-15T11:00:00Z",
+            "inferenceDetails": {
+                "requestId": "req-2",
+                "promptTokens": 800,
+                "completionTokens": 200
+            }
+        }
+    ]
