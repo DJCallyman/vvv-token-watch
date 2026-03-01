@@ -1,9 +1,25 @@
 import os
+import sys
+from pathlib import Path
 from dotenv import load_dotenv
 from typing import Dict, Any
 
-# Load environment variables from .env file
-load_dotenv()
+# Determine the correct path for bundled apps
+if getattr(sys, 'frozen', False):
+    # Running as bundled executable (PyInstaller)
+    # sys.executable points to the binary inside the .app bundle
+    bundle_dir = Path(sys.executable).parent.parent.parent.parent
+    env_path = bundle_dir / '.env'
+else:
+    # Running from source
+    bundle_dir = Path(__file__).parent.parent.parent
+    env_path = bundle_dir / '.env'
+
+# Load environment variables from .env file (use bundled path if exists, otherwise default)
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    load_dotenv()  # Fallback to default behavior
 
 class Config:
     """Centralized configuration class for the application."""
@@ -40,6 +56,10 @@ class Config:
     THEME_MODE = os.getenv('THEME_MODE', 'dark')
     USAGE_REFRESH_INTERVAL_MS = int(os.getenv('USAGE_REFRESH_INTERVAL_MS', '30000'))
     
+    # System Tray and Notifications
+    MINIMIZE_TO_TRAY = os.getenv('MINIMIZE_TO_TRAY', 'true').lower() in ('true', '1', 'yes')
+    ENABLE_NOTIFICATIONS = os.getenv('ENABLE_NOTIFICATIONS', 'true').lower() in ('true', '1', 'yes')
+    
     # Cache Configuration
     CACHE_TTL_SECONDS = int(os.getenv('CACHE_TTL_SECONDS', '300'))
     INCREMENTAL_THRESHOLD_SECONDS = int(os.getenv('INCREMENTAL_THRESHOLD_SECONDS', '3600'))
@@ -67,7 +87,7 @@ class Config:
     DEFAULT_REQUEST_TIMEOUT_SECONDS = int(os.getenv('DEFAULT_REQUEST_TIMEOUT_SECONDS', '30'))
     
     # Debug Configuration
-    DEBUG_MODE = os.getenv('DEBUG_MODE', 'false').lower() in ('true', '1', 'yes')
+    LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO').upper()
     
     # Validation
     @classmethod
@@ -105,5 +125,5 @@ class Config:
             'VENICE_API_BASE_URL': cls.VENICE_API_BASE_URL,
             'VENICE_EXCHANGE_RATE_URL': cls.VENICE_EXCHANGE_RATE_URL,
             'COINGECKO_PRICE_URL': cls.COINGECKO_PRICE_URL,
-            'DEBUG_MODE': cls.DEBUG_MODE
+            'LOG_LEVEL': cls.LOG_LEVEL
         }

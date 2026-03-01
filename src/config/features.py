@@ -5,6 +5,7 @@ This module provides centralized feature availability checking to eliminate
 scattered try/except import patterns throughout the codebase.
 """
 
+import functools
 import logging
 from typing import Dict, Any, Optional
 
@@ -150,6 +151,7 @@ class FeatureGuard:
     
     def __call__(self, func):
         """Use as decorator"""
+        @functools.wraps(func)
         def wrapper(*args, **kwargs):
             if self.feature_check():
                 return func(*args, **kwargs)

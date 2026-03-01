@@ -226,6 +226,7 @@ class APIKeyManagementWidget(QWidget):
     
     # Signals for management actions
     key_revoked = Signal(str)               # key_id
+    key_renamed = Signal(str, str)          # key_id, new_name
     
     def __init__(self, api_key_usage: APIKeyUsage, theme_colors: Dict[str, str], balance_info: BalanceInfo = None, parent=None):
         super().__init__(parent)
@@ -386,8 +387,7 @@ class APIKeyManagementWidget(QWidget):
         """)
     
     def setup_connections(self):
-        """Setup signal connections"""
-        pass  # Connections will be made when action menu is created
+        """Setup signal connections - connections are made when action menu is created."""
     
     def show_action_menu(self):
         """Show the action menu"""

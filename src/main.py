@@ -4,13 +4,15 @@ from typing import Dict, Optional, List
 import logging
 import warnings
 import urllib3
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                                  QLabel, QPushButton, QComboBox, QFrame, QScrollArea,
                                  QMessageBox, QStatusBar, QTabWidget, QGroupBox,
-                                 QTextEdit, QLineEdit)
+                                 QTextEdit, QLineEdit, QSystemTrayIcon, QMenu)
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QDoubleValidator
+from PySide6.QtGui import QFont, QDoubleValidator, QIcon, QAction
 
 # Add the project directory to Python path (make it dynamic)
 import os
@@ -20,6 +22,7 @@ sys.path.insert(0, project_root)
 # Import local modules using relative imports (now a standalone repo)
 from src.utils.utils import format_currency, validate_holding_amount, ValidationState
 from src.utils.error_handler import ErrorHandler
+from src.utils.tray_manager import TrayManager
 from src.config.config import Config
 from src.config.theme import Theme
 from src.config.features import FeatureFlags
@@ -35,6 +38,7 @@ from src.widgets.backend_status_bar import BackendStatusBar
 from src.core.web_usage import WebUsageWorker, WebUsageMetrics
 from src.core.unified_usage import UnifiedUsageIntegrator
 from src.widgets.cost_optimization_widget import CostOptimizationWidget
+from src.widgets.cache_tracking_widget import CacheTrackingWidget
 from src.core.price_worker import PriceWorker
 from src.core.cost_analysis_worker import CostAnalysisWorker
 from src.core.model_cache import ModelCacheManager
@@ -51,7 +55,7 @@ def setup_logging():
     Replaces scattered print() statements with proper logging.
     """
     # Determine log level from config
-    log_level = logging.DEBUG if Config.DEBUG_MODE else logging.INFO
+    log_level = getattr(logging, Config.LOG_LEVEL)
     
     # Create formatters
     detailed_formatter = logging.Formatter(
@@ -62,24 +66,38 @@ def setup_logging():
         '[%(levelname)s] %(message)s'
     )
     
-    # File handler for all logs
-    file_handler = logging.FileHandler('app.log', encoding='utf-8')
+    # Determine log directory (use user's home directory for writable location)
+    log_dir = Path.home() / 'Library' / 'Logs' / 'VVV-Token-Watch'
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Rotating file handler for all logs (max 10MB, keep 5 backups)
+    file_handler = RotatingFileHandler(
+        log_dir / 'app.log',
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5,
+        encoding='utf-8'
+    )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(detailed_formatter)
     
-    # File handler for errors only
-    error_handler = logging.FileHandler('error_log.txt', encoding='utf-8')
+    # Rotating file handler for errors only (max 5MB, keep 3 backups)
+    error_handler = RotatingFileHandler(
+        log_dir / 'error_log.txt',
+        maxBytes=5*1024*1024,  # 5MB
+        backupCount=3,
+        encoding='utf-8'
+    )
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(detailed_formatter)
     
     # Console handler for INFO and above
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(log_level)
+    console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(simple_formatter)
     
     # Configure root logger
     root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
+    root_logger.setLevel(logging.INFO)
     root_logger.addHandler(file_handler)
     root_logger.addHandler(error_handler)
     root_logger.addHandler(console_handler)
@@ -87,6 +105,10 @@ def setup_logging():
     # Quiet down noisy third-party loggers
     logging.getLogger('urllib3').setLevel(logging.WARNING)
     logging.getLogger('requests').setLevel(logging.WARNING)
+    logging.getLogger('matplotlib').setLevel(logging.WARNING)
+    
+    # Set src logger to INFO to suppress DEBUG messages from app code
+    logging.getLogger('src').setLevel(logging.INFO)
     
     return root_logger
 
@@ -165,6 +187,12 @@ class CombinedViewerApp(QMainWindow):
         self.setWindowTitle("Venice AI Models & CoinGecko Price Viewer")
         self.setMinimumSize(1200, 850)  # Increased minimum size for better chart display
         
+        # Set window icon
+        icon_path = os.path.join(os.path.dirname(__file__), "..", "resources", "app.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+            logger.debug(f"Set window icon from: {icon_path}")
+        
         # Set a good default size for 1470x956 display
         self.resize(1280, 920)
         
@@ -241,6 +269,13 @@ class CombinedViewerApp(QMainWindow):
         
         # Connect theme change signal before initializing UI
         self.theme.theme_changed.connect(self._on_theme_changed)
+        
+        # Initialize system tray
+        self.tray_manager = None
+        self._minimize_to_tray = getattr(Config, 'MINIMIZE_TO_TRAY', True)
+        self._was_minimized = False  # Track if window was minimized to tray
+        self._is_fully_initialized = False  # Track if window is fully initialized
+        self._init_tray_manager()
         
         # Initialize UI
         self.init_ui()
@@ -349,6 +384,9 @@ class CombinedViewerApp(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Setup keyboard shortcuts
+        self._setup_keyboard_shortcuts()
         
         # Create comprehensive backend status bar
         self.status_bar = BackendStatusBar(self.theme)
@@ -736,6 +774,25 @@ class CombinedViewerApp(QMainWindow):
         logger.debug(f"Traits combobox has {self.traits_combobox.count()} items")
         controls_layout.addWidget(self.traits_combobox)
 
+        # Add search box for filtering models
+        self.model_search_input = QLineEdit()
+        self.model_search_input.setPlaceholderText("🔍 Search models...")
+        self.model_search_input.setFixedWidth(200)
+        self.model_search_input.textChanged.connect(self._on_model_search_changed)
+        self.model_search_input.setStyleSheet(f"""
+            QLineEdit {{
+                background-color: {self.theme.card_background};
+                color: {self.theme.text};
+                border: 1px solid {self.theme.border};
+                border-radius: 4px;
+                padding: 5px;
+            }}
+            QLineEdit:focus {{
+                border: 2px solid {self.theme.accent};
+            }}
+        """)
+        controls_layout.addWidget(self.model_search_input)
+
         models_tab_layout.addLayout(controls_layout)
 
         # Create scroll area for model display
@@ -765,6 +822,9 @@ class CombinedViewerApp(QMainWindow):
         # Create fifth tab: Usage Leaderboard (Phase 2)
         if PHASE2_AVAILABLE:
             self.create_leaderboard_tab()
+        
+        # Create cache tracking tab
+        self.create_cache_tracking_tab()
         
         # Initialize Models tab and Compare tab with cached data
         # This populates them immediately on startup without requiring "Connect" button
@@ -1368,9 +1428,14 @@ class CombinedViewerApp(QMainWindow):
             return
         
         # Check if worker is already running
-        if hasattr(self, 'price_worker') and self.price_worker and self.price_worker.isRunning():
-            logger.debug("Price worker already running, skipping duplicate start")
-            return
+        if hasattr(self, 'price_worker') and self.price_worker:
+            try:
+                if self.price_worker.isRunning():
+                    logger.debug("Price worker already running, skipping duplicate start")
+                    return
+            except RuntimeError:
+                # C++ object deleted, treat as not running
+                self.price_worker = None
         
         # Update status bar
         self.status_bar.set_process_running(
@@ -2253,10 +2318,32 @@ class CombinedViewerApp(QMainWindow):
         # For now, just log the error since video quotes are background operations
         # Could add a status indicator later if needed
     
+    def _on_model_search_changed(self, search_text: str):
+        """Handle model search text changes."""
+        # Debounce search to avoid excessive filtering
+        if hasattr(self, '_search_timer'):
+            self._search_timer.stop()
+        else:
+            self._search_timer = QTimer(self)
+            self._search_timer.setSingleShot(True)
+            self._search_timer.timeout.connect(self._apply_model_search)
+        
+        self._pending_search_text = search_text
+        self._search_timer.start(300)  # 300ms debounce
+    
+    def _apply_model_search(self):
+        """Apply the pending model search filter."""
+        if hasattr(self, '_pending_search_text'):
+            self.display_filtered_models()
+    
     def display_filtered_models(self):
-        """Display models filtered by selected type."""
+        """Display models filtered by selected type, trait, and search text."""
         selected_type = self.type_combobox.currentText()
         selected_trait = self.traits_combobox.currentText()
+        search_text = getattr(self, '_pending_search_text', '') or (
+            self.model_search_input.text().lower() if hasattr(self, 'model_search_input') else ''
+        )
+        
         self.clear_display_frame()
 
         # Ensure scroll area is reset
@@ -2268,14 +2355,12 @@ class CombinedViewerApp(QMainWindow):
             self.display_layout.addWidget(error_label, alignment=Qt.AlignCenter)
             return
 
-        # Store original data and filter from it - NEVER modify the original!
-        # Create a deep copy to prevent ANY potential reference issues
-        import copy
-        original_models = copy.deepcopy(self.models_data['data'])
+        # Filter models directly - we only read, never modify the original
+        models_list = self.models_data['data']
         filtered_models = []
 
         # Apply current filter to create display list
-        for model in original_models:
+        for model in models_list:
             # Defensive programming: ensure model is a dictionary
             if not isinstance(model, dict):
                 logger.debug(f"Skipping invalid model data: {model}")
@@ -2305,13 +2390,34 @@ class CombinedViewerApp(QMainWindow):
 
             trait_match = selected_trait == "all" or selected_trait in traits
             type_match = selected_type == "all" or model_type == selected_type
+            
+            # Search text matching (case-insensitive)
+            search_match = True
+            if search_text:
+                search_lower = search_text.lower()
+                model_id_lower = model_id.lower()
+                type_lower = model_type.lower()
+                traits_lower = [t.lower() for t in traits]
+                
+                # Search in model ID, type, and traits
+                search_match = (
+                    search_lower in model_id_lower or
+                    search_lower in type_lower or
+                    any(search_lower in trait for trait in traits_lower)
+                )
 
-            logger.debug(f"Model '{model_id}' - Type: {model_type}, Traits: {traits}, Type match: {type_match}, Trait match: {trait_match}")
+            logger.debug(f"Model '{model_id}' - Type: {model_type}, Traits: {traits}, Type match: {type_match}, Trait match: {trait_match}, Search match: {search_match}")
 
-            if type_match and trait_match:
+            if type_match and trait_match and search_match:
                 filtered_models.append(model)
 
-        logger.debug(f"Filtered {len(filtered_models)} models out of {len(original_models)} total models")
+        logger.debug(f"Filtered {len(filtered_models)} models out of {len(models_list)} total models")
+        
+        # Show search results indicator
+        if search_text:
+            results_label = QLabel(f"Search: '{search_text}' - {len(filtered_models)} models found")
+            results_label.setStyleSheet(f"color: {self.theme.text}; font-style: italic;")
+            self.display_layout.addWidget(results_label)
 
         found_models = False
         models_container = QWidget()
@@ -2450,6 +2556,19 @@ class CombinedViewerApp(QMainWindow):
         # Add tab to main tabs
         self.main_tabs.addTab(self.leaderboard_tab, "📊 Usage Leaderboard")
 
+    def create_cache_tracking_tab(self):
+        """Create the prompt cache tracking tab"""
+        self.cache_tracking_tab = QWidget()
+        tab_layout = QVBoxLayout(self.cache_tracking_tab)
+        tab_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Create the cache tracking widget
+        self.cache_tracking_widget = CacheTrackingWidget(parent=self)
+        tab_layout.addWidget(self.cache_tracking_widget)
+
+        # Add tab to main tabs
+        self.main_tabs.addTab(self.cache_tracking_tab, "💾 Prompt Cache")
+
     def update_model_comparison_data(self):
         """Update the comparison widget with new model data"""
         if hasattr(self, 'model_comparison_widget') and self.model_comparison_widget:
@@ -2515,9 +2634,15 @@ class CombinedViewerApp(QMainWindow):
         )
 
     def _copy_models_data(self):
-        """Create a deep copy of models data to prevent filtering from modifying the original data"""
-        import copy
-        return copy.deepcopy(self.models_data) if self.models_data else None
+        """Create a copy of models data using JSON serialization (faster than deepcopy for large dicts)."""
+        if not self.models_data:
+            return None
+        try:
+            import json
+            return json.loads(json.dumps(self.models_data))
+        except (TypeError, ValueError):
+            import copy
+            return copy.deepcopy(self.models_data)
 
     def __del__(self):
         """Destructor to clean up resources"""
@@ -2531,6 +2656,11 @@ class CombinedViewerApp(QMainWindow):
         logger.info("Close event triggered, cleaning up...")
 
         try:
+            # Hide tray icon first to prevent it from keeping app in dock
+            if hasattr(self, 'tray_manager') and self.tray_manager:
+                logger.debug("Hiding tray icon...")
+                self.tray_manager.hide()
+            
             # Phase 2: Stop exchange rate service
             if hasattr(self, 'exchange_rate_service') and self.exchange_rate_service:
                 logger.debug("Stopping exchange rate service...")
@@ -2551,68 +2681,202 @@ class CombinedViewerApp(QMainWindow):
                         self.model_comparison_widget.analytics_worker.quit()
                         self.model_comparison_widget.analytics_worker.wait(5000)
 
+            # Clean up cache tracking widget
+            if hasattr(self, 'cache_tracking_widget') and self.cache_tracking_widget:
+                logger.debug("Cleaning up cache tracking widget...")
+                self.cache_tracking_widget.close()
+                self.cache_tracking_widget.deleteLater()
+
             logger.info("Cleanup completed successfully")
 
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
 
-        # Now allow the window to close
+        # Accept the close event
         event.accept()
+        
+        # Ensure the application fully quits
+        QApplication.instance().quit()
 
+    def _init_tray_manager(self):
+        """Initialize system tray manager."""
+        try:
+            self.tray_manager = TrayManager(self, self.theme.theme_colors)
+            
+            # Connect tray signals
+            self.tray_manager.show_requested.connect(self._on_tray_show)
+            self.tray_manager.quit_requested.connect(self._on_tray_quit)
+            self.tray_manager.refresh_requested.connect(self.refresh_all_action)
+            
+            logger.info("System tray manager initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize system tray: {e}")
+            self.tray_manager = None
+
+    def _on_tray_show(self):
+        """Handle show request from system tray."""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _on_tray_quit(self):
+        """Handle quit request from system tray."""
+        self._minimize_to_tray = False  # Force close
+        self.close()
+
+    def changeEvent(self, event):
+        """Handle window state changes for minimize to tray."""
+        if event.type() == event.Type.WindowStateChange:
+            # Only process minimize-to-tray if fully initialized and tray is available
+            if (getattr(self, '_is_fully_initialized', False) and 
+                self._minimize_to_tray and 
+                self.tray_manager and 
+                self.tray_manager.is_available()):
+                
+                window_state = self.windowState()
+                
+                if window_state & Qt.WindowMinimized:
+                    # Window was minimized - hide it to tray
+                    self._was_minimized = True
+                    QTimer.singleShot(0, self.hide)
+                    self.tray_manager.show_notification(
+                        "VVV Token Watch",
+                        "Application minimized to tray",
+                        QSystemTrayIcon.Information
+                    )
+                elif getattr(self, '_was_minimized', False):
+                    # Window is being restored from minimized state
+                    self._was_minimized = False
+                    self.show()
+                    self.raise_()
+                    self.activateWindow()
+                    
+        super().changeEvent(event)
+
+    def showEvent(self, event):
+        """Handle window show event - mark as initialized after first show."""
+        super().showEvent(event)
+        # Mark as initialized after window is first shown
+        # This prevents minimize-to-tray from triggering during startup
+        if not getattr(self, '_is_fully_initialized', False):
+            self._is_fully_initialized = True
+            logger.debug("Window fully initialized")
+
+    def _setup_keyboard_shortcuts(self):
+        """Setup keyboard shortcuts for common actions."""
+        from PySide6.QtGui import QKeySequence, QShortcut
+        
+        # Refresh all data (Cmd/Ctrl + R)
+        refresh_shortcut = QShortcut(QKeySequence("Ctrl+R"), self)
+        refresh_shortcut.activated.connect(self.refresh_all_action)
+        
+        # Switch tabs (Cmd/Ctrl + 1-6)
+        for i in range(6):
+            shortcut = QShortcut(QKeySequence(f"Ctrl+{i+1}"), self)
+            shortcut.activated.connect(lambda idx=i: self._switch_to_tab(idx))
+        
+        # Focus search (Cmd/Ctrl + F)
+        search_shortcut = QShortcut(QKeySequence("Ctrl+F"), self)
+        search_shortcut.activated.connect(self._focus_search)
+        
+        # Toggle theme (Cmd/Ctrl + T)
+        theme_shortcut = QShortcut(QKeySequence("Ctrl+T"), self)
+        theme_shortcut.activated.connect(self._toggle_theme_shortcut)
+        
+        # Quit (Cmd/Ctrl + Q)
+        quit_shortcut = QShortcut(QKeySequence("Ctrl+Q"), self)
+        quit_shortcut.activated.connect(self.close)
+        
+        logger.debug("Keyboard shortcuts initialized")
+    
+    def _switch_to_tab(self, index: int):
+        """Switch to the specified tab."""
+        if index < self.main_tabs.count():
+            self.main_tabs.setCurrentIndex(index)
+    
+    def _focus_search(self):
+        """Focus the model search input."""
+        if hasattr(self, 'model_search_input'):
+            self.main_tabs.setCurrentIndex(1)  # Switch to Models tab
+            self.model_search_input.setFocus()
+            self.model_search_input.selectAll()
+    
+    def _toggle_theme_shortcut(self):
+        """Toggle theme via keyboard shortcut."""
+        self.theme.toggle_theme()
+    
     def _cleanup_threads(self):
         """Clean up all active threads to prevent crashes"""
         logger.debug("Cleaning up threads...")
 
+        # Helper function to safely stop and wait for a worker
+        def safe_stop_worker(name, worker):
+            if not worker:
+                return
+            try:
+                if worker.isRunning():
+                    logger.debug(f"Stopping {name}...")
+                    worker.stop()
+                    worker.wait(5000)
+            except RuntimeError as e:
+                # Handle "Internal C++ object already deleted" errors
+                if "already deleted" in str(e):
+                    logger.debug(f"{name} C++ object already deleted, skipping")
+                else:
+                    logger.warning(f"Error stopping {name}: {e}")
+            except Exception as e:
+                logger.warning(f"Unexpected error stopping {name}: {e}")
+
         # Clean up API worker
-        if hasattr(self, 'api_worker') and self.api_worker and self.api_worker.isRunning():
-            logger.debug("Waiting for API worker to finish...")
-            self.api_worker.wait(5000)
+        if hasattr(self, 'api_worker') and self.api_worker:
+            try:
+                if self.api_worker.isRunning():
+                    logger.debug("Waiting for API worker to finish...")
+                    self.api_worker.wait(5000)
+            except RuntimeError:
+                pass
 
         # Clean up style worker
-        if hasattr(self, 'style_worker') and self.style_worker and self.style_worker.isRunning():
-            logger.debug("Waiting for style worker to finish...")
-            self.style_worker.wait(5000)
+        if hasattr(self, 'style_worker') and self.style_worker:
+            try:
+                if self.style_worker.isRunning():
+                    logger.debug("Waiting for style worker to finish...")
+                    self.style_worker.wait(5000)
+            except RuntimeError:
+                pass
 
         # Clean up traits worker
-        if hasattr(self, 'traits_worker') and self.traits_worker and self.traits_worker.isRunning():
-            logger.debug("Waiting for traits worker to finish...")
-            self.traits_worker.wait(5000)
+        if hasattr(self, 'traits_worker') and self.traits_worker:
+            try:
+                if self.traits_worker.isRunning():
+                    logger.debug("Waiting for traits worker to finish...")
+                    self.traits_worker.wait(5000)
+            except RuntimeError:
+                pass
 
         # Clean up usage worker
-        if self.usage_worker and self.usage_worker.isRunning():
-            logger.debug("Stopping usage worker...")
-            self.usage_worker.stop()
-            self.usage_worker.wait(5000)
+        if hasattr(self, 'usage_worker') and self.usage_worker:
+            safe_stop_worker("usage worker", self.usage_worker)
 
         # Clean up web usage worker
-        if self.web_usage_worker and self.web_usage_worker.isRunning():
-            logger.debug("Stopping web usage worker...")
-            self.web_usage_worker.stop()
-            self.web_usage_worker.wait(5000)
+        if hasattr(self, 'web_usage_worker') and self.web_usage_worker:
+            safe_stop_worker("web usage worker", self.web_usage_worker)
 
         # Clean up price worker
-        if hasattr(self, 'price_worker') and self.price_worker and self.price_worker.isRunning():
-            logger.debug("Stopping price worker...")
-            self.price_worker.stop()
-            self.price_worker.wait(5000)
+        if hasattr(self, 'price_worker') and self.price_worker:
+            safe_stop_worker("price worker", self.price_worker)
 
         # Clean up DIEM price worker
-        if hasattr(self, 'diem_price_worker') and self.diem_price_worker and self.diem_price_worker.isRunning():
-            logger.debug("Stopping DIEM price worker...")
-            self.diem_price_worker.stop()
-            self.diem_price_worker.wait(5000)
+        if hasattr(self, 'diem_price_worker') and self.diem_price_worker:
+            safe_stop_worker("DIEM price worker", self.diem_price_worker)
 
         # Clean up cost analysis worker
-        if hasattr(self, 'cost_analysis_worker') and self.cost_analysis_worker and self.cost_analysis_worker.isRunning():
-            logger.debug("Stopping cost analysis worker...")
-            self.cost_analysis_worker.stop()
-            self.cost_analysis_worker.wait(5000)
+        if hasattr(self, 'cost_analysis_worker') and self.cost_analysis_worker:
+            safe_stop_worker("cost analysis worker", self.cost_analysis_worker)
 
         # Clean up video quote worker
-        if hasattr(self, 'video_quote_worker') and self.video_quote_worker and self.video_quote_worker.isRunning():
-            logger.debug("Stopping video quote worker...")
-            self.video_quote_worker.stop()
-            self.video_quote_worker.wait(5000)
+        if hasattr(self, 'video_quote_worker') and self.video_quote_worker:
+            safe_stop_worker("video quote worker", self.video_quote_worker)
 
         logger.debug("Thread cleanup complete")
 
@@ -2766,7 +3030,7 @@ class CombinedViewerApp(QMainWindow):
             trend = self.usage_analytics.get_usage_trend(days=7)
             
             # Calculate days remaining estimate
-            getattr(self.exchange_rate_service.current_rate, 'rate', Config.DEFAULT_EXCHANGE_RATE) if self.exchange_rate_service.current_rate else Config.DEFAULT_EXCHANGE_RATE
+            current_rate = getattr(self.exchange_rate_service.current_rate, 'rate', Config.DEFAULT_EXCHANGE_RATE) if self.exchange_rate_service.current_rate else Config.DEFAULT_EXCHANGE_RATE
             days_remaining = self.usage_analytics.estimate_days_remaining(balance_info.usd)
             trend.days_remaining_estimate = days_remaining
             
@@ -2932,6 +3196,34 @@ class CombinedViewerApp(QMainWindow):
 def main():
     """Main entry point for the application."""
     app = QApplication(sys.argv)
+    
+    # Set application metadata
+    app.setApplicationName("VVV Token Watch")
+    app.setApplicationDisplayName("VVV Token Watch")
+    app.setOrganizationName("VVV")
+    
+    # Set application icon
+    # On macOS, use white background icon for better dock visibility
+    import platform
+    is_macos = platform.system() == 'Darwin'
+    
+    if is_macos:
+        icon_path = os.path.join(os.path.dirname(__file__), "..", "resources", "app_white_bg.png")
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(os.path.dirname(__file__), "..", "resources", "app.png")
+    else:
+        icon_path = os.path.join(os.path.dirname(__file__), "..", "resources", "app.png")
+    
+    if os.path.exists(icon_path):
+        app_icon = QIcon(icon_path)
+        if not app_icon.isNull():
+            app.setWindowIcon(app_icon)
+            logger.info(f"Set application icon from: {icon_path}")
+        else:
+            logger.warning(f"Failed to load application icon from: {icon_path}")
+    else:
+        logger.warning(f"Application icon not found at: {icon_path}")
+    
     window = CombinedViewerApp()
     window.show()
     sys.exit(app.exec())

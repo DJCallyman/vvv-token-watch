@@ -506,58 +506,12 @@ class APIKeyUsageWidget(QWidget):
         """)
     
     def _update_progress_bars(self):
-        """Update the progress bars based on usage values."""
-        # For demonstration, we'll use arbitrary thresholds for coloring
-        # In a real implementation, these might be configurable or based on organization policies
-
-        diem_usage = self.api_key_usage.usage.diem
-        # Assuming a high usage threshold of 100 DIEM for coloring
-        diem_percent = min(100, (diem_usage / 100.0) * 100)
-        self.diem_progress.setValue(int(diem_percent))
-
-        # Color coding for DIEM usage
-        if diem_usage < 25:
-            diem_color = self.theme_colors['positive']
-        elif diem_usage < 75:
-            diem_color = self.theme_colors['warning']
-        else:
-            diem_color = self.theme_colors['negative']
-
-        self.diem_progress.setStyleSheet(f"""
-            QProgressBar {{
-                border: 1px solid {self.theme_colors['border']};
-                border-radius: 4px;
-            }}
-            QProgressBar::chunk {{
-                background-color: {diem_color};
-                border-radius: 4px;
-            }}
-        """)
-
-        usd_usage = self.api_key_usage.usage.usd
-        # Assuming a high usage threshold of $25 for coloring
-        usd_percent = min(100, (usd_usage / 25.0) * 100)
-        self.usd_progress.setValue(int(usd_percent))
-
-        # Color coding for USD usage
-        if usd_usage < 5:
-            usd_color = self.theme_colors['positive']
-        elif usd_usage < 20:
-            usd_color = self.theme_colors['warning']
-        else:
-            usd_color = self.theme_colors['negative']
-
-        self.usd_progress.setStyleSheet(f"""
-            QProgressBar {{
-                border: 1px solid {self.theme_colors['border']};
-                border-radius: 4px;
-            }}
-            QProgressBar::chunk {{
-                background-color: {usd_color};
-                border-radius: 4px;
-            }}
-        """)
-    
+        """
+        Update the progress bars based on usage values.
+        
+        Note: This method is deprecated. The widget no longer uses progress bars.
+        Kept for backward compatibility with existing code that calls this method.
+        """
     def update_usage(self, api_key_usage: APIKeyUsage):
         """
         Update the widget with new API key usage data.

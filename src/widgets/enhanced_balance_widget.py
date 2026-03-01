@@ -58,12 +58,49 @@ class HeroBalanceWidget(QWidget):
         self.days_remaining_estimate = None
         self.last_updated = None
         
-        # Analytics and rate data
         self.current_trend: Optional[UsageTrend] = None
         self.current_rate_data: Optional[ExchangeRateData] = None
         
+        self._pending_timers = []
+        
         self.init_ui()
         self.apply_hero_styling()
+    
+    def _schedule_timer(self, delay_ms: int, callback):
+        """
+        Schedule a timer with automatic cleanup tracking.
+        
+        Args:
+            delay_ms: Delay in milliseconds
+            callback: Function to call
+        """
+        def wrapped_callback():
+            self._pending_timers = [t for t in self._pending_timers if t.isActive()]
+            try:
+                callback()
+            except RuntimeError:
+                pass
+            except Exception:
+                pass
+        
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(wrapped_callback)
+        timer.start(delay_ms)
+        self._pending_timers.append(timer)
+        return timer
+    
+    def cleanup(self):
+        """Clean up resources before widget destruction."""
+        for timer in self._pending_timers:
+            if timer.isActive():
+                timer.stop()
+        self._pending_timers.clear()
+    
+    def closeEvent(self, event):
+        """Handle widget close event."""
+        self.cleanup()
+        super().closeEvent(event)
     
     def paintEvent(self, event):
         """Custom paint method to draw gradient background."""
@@ -203,8 +240,7 @@ class HeroBalanceWidget(QWidget):
         
         main_layout.addLayout(footer_layout)
         
-        # Apply initial styling after all components are created
-        QTimer.singleShot(100, self.apply_hero_styling)
+        self._schedule_timer(100, self.apply_hero_styling)
     
     def create_balance_container(self, title: str, amount: str, currency: str) -> Dict:
         """
@@ -353,11 +389,9 @@ class HeroBalanceWidget(QWidget):
             rate_text = f"Rate: 1 DIEM = ${exchange_rate:.4f}"
             self.rate_label.setText(rate_text)
         
-        # Reapply text styling to ensure white text is visible
         self._reapply_text_styling()
         
-        # Also force styling after a brief delay to override any parent styling
-        QTimer.singleShot(10, self._reapply_text_styling)
+        self._schedule_timer(10, self._reapply_text_styling)
 
         # Update status
         if diem_balance > 0:
@@ -475,13 +509,11 @@ class HeroBalanceWidget(QWidget):
         self.status_indicator.set_theme_colors(theme_colors)
         self.usage_indicator.set_theme_colors(theme_colors)
         
-        # Apply styling but IGNORE theme text colors - always use white on gradient
         self.apply_hero_styling()
-        self.update()  # Force repaint with new colors
+        self.update()
         
-        # CRITICAL: Force white text styling regardless of theme
-        QTimer.singleShot(50, self.force_text_styling)
-        QTimer.singleShot(100, self.force_text_styling)  # Double application for safety
+        self._schedule_timer(50, self.force_text_styling)
+        self._schedule_timer(100, self.force_text_styling)
     
     def force_text_styling(self):
         """Force reapplication of text styling - call this after widget is fully integrated."""
@@ -695,16 +727,20 @@ class HeroBalanceWidget(QWidget):
         if hasattr(self, 'usd_amount_label'):
             self.usd_amount_label.setToolTip(breakdown)
         
-        # Update usage indicator with combined trend
         if total_diem > 0:
             daily_avg = total_diem / 7.0
-            # Determine trend based on API key dominance
-            if api_keys_diem > web_usage_diem * 2:
-                pass
-            elif web_usage_diem > api_keys_diem * 2:
-                pass
-            else:
-                pass
             
-            # Update the usage indicator
-            self.usage_indicator.set_usage_trend("stable", daily_avg)
+            if api_keys_diem > web_usage_diem * 2:
+                trend_direction = "api_dominant"
+                trend_message = "Mostly API key usage"
+            elif web_usage_diem > api_keys_diem * 2:
+                trend_direction = "web_dominant"
+                trend_message = "Mostly web app usage"
+            else:
+                trend_direction = "balanced"
+                trend_message = "Balanced API & web usage"
+            
+            self.usage_indicator.set_usage_trend(trend_direction, daily_avg)
+            
+            if hasattr(self.usage_indicator, 'setToolTip'):
+                self.usage_indicator.setToolTip(trend_message)
