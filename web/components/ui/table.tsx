@@ -14,13 +14,19 @@ export function Table({ className, ...props }: TableProps) {
   )
 }
 
-export function TableHeader({ className, ...props }: TableProps) {
+export function TableHeader({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLTableSectionElement>) {
   return (
     <thead className={cn("[&_tr]:border-b", className)} {...props} />
   )
 }
 
-export function TableBody({ className, ...props }: TableProps) {
+export function TableBody({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLTableSectionElement>) {
   return (
     <tbody
       className={cn("[&_tr:last-child]:border-0", className)}
@@ -29,7 +35,7 @@ export function TableBody({ className, ...props }: TableProps) {
   )
 }
 
-export function TableRow({ className, ...props }: TableProps) {
+export function TableRow({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
   return (
     <tr
       className={cn(
