@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# Ensure data directories exist
+mkdir -p /data/logs
+
 # Start the backend server (run from /app so 'backend.*' imports resolve)
 cd /app
 python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 &

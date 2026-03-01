@@ -40,6 +40,7 @@
   <Config Name="CoinGecko API Key" Target="COINGECKO_API_KEY" Default="" Mode="" Description="Optional: CoinGecko Pro API key for higher rate limits" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
   <Config Name="VVV Holdings" Target="COINGECKO_HOLDING_AMOUNT" Default="2750" Mode="" Description="Your VVV token holdings for portfolio calculation" Type="Variable" Display="always" Required="false" Mask="false">2750</Config>
   <Config Name="DIEM Holdings" Target="DIEM_HOLDING_AMOUNT" Default="0" Mode="" Description="Your DIEM token holdings for portfolio calculation" Type="Variable" Display="always" Required="false" Mask="false">0</Config>
-  <Config Name="Log Level" Target="LOG_LEVEL" Default="INFO" Mode="" Description="Logging level: DEBUG, INFO, WARNING, ERROR" Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
   <Config Name="Web UI Port" Target="3000" Default="3000" Mode="tcp" Description="Port for web interface" Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="Data Directory" Target="/data" Default="/mnt/user/appdata/vvv-token-watch" Mode="rw" Description="Path for persistent logs and data (e.g. /mnt/user/appdata/vvv-token-watch)" Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/vvv-token-watch</Config>
+  <Config Name="Log Level" Target="LOG_LEVEL" Default="INFO" Mode="" Description="Logging verbosity: DEBUG shows full API request/response detail, INFO is normal operation" Type="Variable" Display="always" Required="false" Mask="false">INFO</Config>
 </Container>

@@ -23,6 +23,8 @@ class Settings(BaseSettings):
     DEFAULT_DAILY_USD_LIMIT: float = 25.0
     
     LOG_LEVEL: str = "INFO"
+    LOG_FILE_PATH: str = "/data/logs/app.log"
+    DATA_DIR: str = "/data"
     
     CACHE_TTL_SECONDS: int = 300
     
