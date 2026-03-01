@@ -14,6 +14,8 @@ services:
       - COINGECKO_HOLDING_AMOUNT=${COINGECKO_HOLDING_AMOUNT:-2750}
       - DIEM_HOLDING_AMOUNT=${DIEM_HOLDING_AMOUNT:-0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - app_data:/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,6 +42,7 @@ services:
 
 volumes:
   postgres_data:
+  app_data:
 
 networks:
   vvv-network:

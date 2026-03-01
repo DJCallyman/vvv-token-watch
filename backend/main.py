@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,9 +9,23 @@ from backend.api.routes import usage, balance, prices, models, health
 
 settings = get_settings()
 
+# Ensure log directory exists
+os.makedirs(os.path.dirname(settings.LOG_FILE_PATH), exist_ok=True)
+
+log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
+log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(logging.Formatter(log_format))
+
+# File handler (persistent across restarts)
+file_handler = logging.FileHandler(settings.LOG_FILE_PATH)
+file_handler.setFormatter(logging.Formatter(log_format))
+
 logging.basicConfig(
-    level=getattr(logging, settings.LOG_LEVEL),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=log_level,
+    handlers=[console_handler, file_handler]
 )
 logger = logging.getLogger(__name__)
 
