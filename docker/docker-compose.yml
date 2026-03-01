@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  vvv-token-watch:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - VENICE_ADMIN_KEY=${VENICE_ADMIN_KEY}
+      - COINGECKO_API_KEY=${COINGECKO_API_KEY:-}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://vvvwatch:vvvwatch@postgres:5432/vvvwatch}
+      - COINGECKO_HOLDING_AMOUNT=${COINGECKO_HOLDING_AMOUNT:-2750}
+      - DIEM_HOLDING_AMOUNT=${DIEM_HOLDING_AMOUNT:-0}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - vvv-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=vvvwatch
+      - POSTGRES_USER=${DB_USER:-vvvwatch}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-vvvwatch}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-vvvwatch} -d vvvwatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - vvv-network
+
+volumes:
+  postgres_data:
+
+networks:
+  vvv-network:
+    driver: bridge

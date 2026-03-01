@@ -68,3 +68,20 @@ get_webapp_usage.py
 
 # Plan Folder
 plans/
+
+# Node.js / Next.js (web frontend)
+web/node_modules/
+web/.next/
+web/out/
+web/.pnp
+web/.pnp.js
+web/coverage/
+web/*.tsbuildinfo
+web/npm-debug.log*
+web/yarn-debug.log*
+web/yarn-error.log*
+web/.vercel
+
+# Backend __pycache__
+backend/__pycache__/
+backend/**/__pycache__/

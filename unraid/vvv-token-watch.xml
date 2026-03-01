@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>VVV Token Watch</Name>
+  <Repository>ghcr.io/djcallyman/vvv-token-watch:latest</Repository>
+  <Registry>https://github.com/DJCallyman/vvv-token-watch/pkgs/container/vvv-token-watch</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/DJCallyman/vvv-token-watch/issues</Support>
+  <Project>https://github.com/DJCallyman/vvv-token-watch</Project>
+  <Overview>
+    Web dashboard for monitoring Venice AI API usage, balances, and token prices.
+    
+    Features:
+    - Real-time usage tracking across all API keys
+    - Balance and daily limit monitoring
+    - VVV and DIEM token price tracking
+    - Portfolio value calculation
+    
+    Requires an external PostgreSQL database.
+  </Overview>
+  <Category>Productivity: Network:Other</Category>
+  <WebUI>http://[IP]:[PORT:3000]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/DJCallyman/vvv-token-watch/main/unraid/vvv-token-watch.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/DJCallyman/vvv-token-watch/main/resources/app.png</Icon>
+  <ExtraParams></ExtraParams>
+  <PostArgs></PostArgs>
+  <CPUset></CPUset>
+  <DateInstalled></DateInstalled>
+  <DonateText></DonateText>
+  <DonateLink></DonateLink>
+  <Requires>
+    Requires an external PostgreSQL database. Create a database before starting the container.
+    
+    Example PostgreSQL setup:
+    docker run -d --name=postgres -e POSTGRES_DB=vvvwatch -e POSTGRES_USER=vvvwatch -e POSTGRES_PASSWORD=yourpassword postgres:15-alpine
+  </Requires>
+  <Config Name="Venice Admin Key" Target="VENICE_ADMIN_KEY" Default="" Mode="" Description="Your Venice AI Admin API key (required for usage tracking)" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="Database URL" Target="DATABASE_URL" Default="postgresql://vvvwatch:password@postgres:5432/vvvwatch" Mode="" Description="PostgreSQL connection string (postgres://user:password@host:port/database)" Type="Variable" Display="always" Required="true" Mask="false">postgresql://vvvwatch:password@postgres:5432/vvvwatch</Config>
+  <Config Name="CoinGecko API Key" Target="COINGECKO_API_KEY" Default="" Mode="" Description="Optional: CoinGecko Pro API key for higher rate limits" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
+  <Config Name="VVV Holdings" Target="COINGECKO_HOLDING_AMOUNT" Default="2750" Mode="" Description="Your VVV token holdings for portfolio calculation" Type="Variable" Display="always" Required="false" Mask="false">2750</Config>
+  <Config Name="DIEM Holdings" Target="DIEM_HOLDING_AMOUNT" Default="0" Mode="" Description="Your DIEM token holdings for portfolio calculation" Type="Variable" Display="always" Required="false" Mask="false">0</Config>
+  <Config Name="Log Level" Target="LOG_LEVEL" Default="INFO" Mode="" Description="Logging level: DEBUG, INFO, WARNING, ERROR" Type="Variable" Display="advanced" Required="false" Mask="false">INFO</Config>
+  <Config Name="Web UI Port" Target="3000" Default="3000" Mode="tcp" Description="Port for web interface" Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+</Container>
