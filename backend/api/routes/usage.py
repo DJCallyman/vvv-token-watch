@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
-from datetime import datetime, timezone, date
 from backend.core.venice_api_client import VeniceAPIClient
-from backend.core.usage_tracker import UsageTracker, APIKeyUsage, BalanceInfo
+from backend.core.usage_tracker import UsageTracker
 from backend.config import get_settings, Settings
 
 router = APIRouter()
@@ -14,21 +13,12 @@ def get_venice_client(settings: Settings = Depends(get_settings)) -> VeniceAPICl
 
 @router.get("/daily")
 async def get_daily_usage(
-    target_date: Optional[str] = None,
     client: VeniceAPIClient = Depends(get_venice_client)
 ):
     try:
-        if target_date is None:
-            target_date = datetime.now(timezone.utc).date().isoformat()
-        
         tracker = UsageTracker(client.api_key)
-        daily_usage = tracker.get_daily_usage(target_date)
-        
-        return {
-            "date": target_date,
-            "diem": daily_usage.get("diem", 0.0),
-            "usd": daily_usage.get("usd", 0.0)
-        }
+        result = tracker.get_epoch_usage()
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

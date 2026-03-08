@@ -3,7 +3,7 @@
 import { usePrices } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatCurrency, formatNumber } from '@/lib/utils'
-import { Coins, TrendingUp, TrendingDown } from 'lucide-react'
+import { Coins, TrendingUp } from 'lucide-react'
 
 export function PriceCards() {
   const { data: prices, isLoading, isError } = usePrices()
@@ -81,15 +81,32 @@ export function PriceCards() {
         </CardHeader>
         <CardContent>
           {prices.portfolio ? (
-            <>
-              <p className="text-2xl font-bold text-foreground">
-                {formatCurrency(prices.portfolio.total_usd)}
-              </p>
-              <div className="text-sm text-muted-foreground space-y-0.5">
-                <p>VVV: {formatNumber(prices.holdings.vvv)} @ {formatCurrency(prices.vvv?.usd || 0)}</p>
-                <p>DIEM: {formatNumber(prices.holdings.diem)} @ {formatCurrency(prices.diem?.usd || 0)}</p>
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">VVV Holdings</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {formatCurrency(prices.portfolio.vvv_value_usd)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatNumber(prices.holdings.vvv)} VVV @ {formatCurrency(prices.vvv?.usd || 0)}
+                </p>
               </div>
-            </>
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">DIEM Holdings</p>
+                <p className="text-2xl font-bold text-foreground">
+                  {formatCurrency(prices.portfolio.diem_value_usd)}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {formatNumber(prices.holdings.diem)} DIEM @ {formatCurrency(prices.diem?.usd || 0)}
+                </p>
+              </div>
+              <div className="pt-2 border-t border-border">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Total</p>
+                <p className="text-lg font-semibold text-foreground">
+                  {formatCurrency(prices.portfolio.total_usd)}
+                </p>
+              </div>
+            </div>
           ) : (
             <p className="text-muted-foreground">Set holdings to view portfolio</p>
           )}

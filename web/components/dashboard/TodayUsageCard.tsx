@@ -2,8 +2,8 @@
 
 import { useDailyUsage } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatNumber, formatCurrency, cn } from '@/lib/utils'
-import { Activity, TrendingUp, TrendingDown } from 'lucide-react'
+import { formatNumber, formatCurrency } from '@/lib/utils'
+import { Activity } from 'lucide-react'
 
 export function TodayUsageCard() {
   const { data: usage, isLoading, isError } = useDailyUsage()
@@ -28,20 +28,22 @@ export function TodayUsageCard() {
     )
   }
 
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric'
-  })
+  const epochStart = usage.epoch_start
+    ? new Date(usage.epoch_start).toLocaleString(undefined, {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      })
+    : null
 
   return (
     <Card className="h-full">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Activity className="w-5 h-5" />
-          Today&apos;s Usage
+          This Epoch&apos;s Usage
         </CardTitle>
-        <p className="text-sm text-muted-foreground">{today}</p>
+        {epochStart && (
+          <p className="text-xs text-muted-foreground">Since {epochStart}</p>
+        )}
       </CardHeader>
       <CardContent className="space-y-6">
         <div>

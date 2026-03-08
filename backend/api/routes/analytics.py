@@ -1,0 +1,468 @@
+"""
+Analytics API routes for model usage and performance metrics.
+"""
+
+import logging
+import re
+from typing import Dict, List, Any, Optional
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+
+from backend.core.venice_api_client import VeniceAPIClient
+from backend.config import get_settings, Settings
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+
+def get_venice_client(settings: Settings = Depends(get_settings)) -> VeniceAPIClient:
+    return VeniceAPIClient(settings.VENICE_ADMIN_KEY)
+
+
+class ModelAnalytics(BaseModel):
+    requests: int
+    tokens: int
+    prompt_tokens: int
+    completion_tokens: int
+    cost: float
+    avg_response_time_ms: float
+    success_rate: float
+    model_type: str = "other"
+
+
+class ModelRecommendation(BaseModel):
+    type: str
+    message: str
+    priority: str
+
+
+class AnalyticsResponse(BaseModel):
+    model_usage: Dict[str, ModelAnalytics]
+    total_requests: int
+    total_tokens: int
+    total_cost: float
+    period_days: int
+    recommendations: List[ModelRecommendation]
+
+
+class DailyUsage(BaseModel):
+    date: str
+    requests: int
+    tokens: int
+    cost: float
+
+
+class DailyAnalyticsResponse(BaseModel):
+    daily_usage: List[DailyUsage]
+    period_days: int
+
+
+def detect_model_type(sku: str) -> str:
+    """Detect the model type (llm, image, video, music, embedding, other) from SKU."""
+    s = sku.lower()
+
+    if s == 'credit-purchase':
+        return 'other'
+
+    # Video: e.g. grok-imagine-text-to-video-*, kling-v3-pro-text-to-video-*
+    if 'text-to-video' in s:
+        return 'video'
+
+    # Music: elevenlabs-music-*, minimax-music-*, stable-audio-*, ace-step-*
+    if any(kw in s for kw in ('music', 'stable-audio', 'ace-step')):
+        return 'music'
+
+    # Embedding: text-embedding-bge-m3-llm-*-mtoken (check before llm)
+    if 'embedding' in s:
+        return 'embedding'
+
+    # Image: *-image-unit, *-fixed-*img, *-edit-fixed-*
+    if re.search(r'-image-unit|-fixed-.*img|-edit-fixed-', s):
+        return 'image'
+
+    # LLM: *-llm-{input|output|cache-*}-mtoken
+    if '-llm-' in s:
+        return 'llm'
+
+    # Audio (speech/TTS if Venice ever adds them)
+    if 'audio' in s or 'speech' in s or 'tts' in s:
+        return 'audio'
+
+    return 'other'
+
+
+def clean_model_name(sku: str) -> str:
+    """Extract clean model name from SKU.
+
+    Handles all known Venice billing SKU patterns:
+      LLM:       {model}-llm-{extended-}?{cache-write-5m|cache-write|cache-input|input|output}-mtoken
+      Image:     {model}-image-unit | {model}-{edit-}?fixed-{1K-}?{websearch-}?1img
+      Video:     {model}-text-to-video-duration-{rate|resolution}-*
+      Music:     elevenlabs-music-duration-based-*, minimax-music-v2-fixed,
+                 ace-step-*-duration-based-*, stable-audio-*-fixed-*
+      Embedding: text-embedding-*-llm-{input|output}-mtoken
+      Other:     credit-purchase
+    """
+    s = sku.lower()
+
+    if s == 'credit-purchase':
+        return 'credit-purchase'
+
+    # --- Video: {model}-text-to-video-* ---
+    m = re.match(r'^(.+?)-text-to-video-', s)
+    if m:
+        return m.group(1)
+
+    # --- Music (checked before generic -fixed- to avoid false matches) ---
+    # elevenlabs-music-duration-based-{60s|120s|240s}
+    m = re.match(r'^(elevenlabs-music)-duration-based-', s)
+    if m:
+        return m.group(1)
+    # minimax-music-v2-fixed
+    m = re.match(r'^(minimax-music-v2)-fixed', s)
+    if m:
+        return m.group(1)
+    # ace-step-15-duration-based-*
+    m = re.match(r'^(ace-step-[\d.]+)-duration-based-', s)
+    if m:
+        return m.group(1)
+    # stable-audio-25-fixed-*
+    m = re.match(r'^(stable-audio-[\d.]+)-fixed-', s)
+    if m:
+        return m.group(1)
+
+    # --- Embedding: text-embedding-{name}-llm-{input|output}-mtoken ---
+    m = re.match(r'^(text-embedding-.+?)-llm-(?:input|output)-mtoken', s)
+    if m:
+        return m.group(1)
+
+    # --- LLM: {model}-llm-{extended-}?{variant}-mtoken ---
+    m = re.match(
+        r'^(.+?)-llm-(?:extended-)?(?:cache-write(?:-5m)?|cache-input|input|output)-mtoken',
+        s,
+    )
+    if m:
+        return m.group(1)
+
+    # --- Image: {model}-image-unit ---
+    m = re.match(r'^(.+?)-image-unit', s)
+    if m:
+        return m.group(1)
+
+    # --- Image edit: {model}-edit-fixed-* ---
+    m = re.match(r'^(.+?)-edit-fixed-', s)
+    if m:
+        return m.group(1)
+
+    # --- Image fixed: {model}-fixed-{1K-}?{websearch-}?{N}img ---
+    m = re.match(r'^(.+?)-fixed-(?:\d+[Kk]-)?(?:websearch-)?\d*img', s)
+    if m:
+        return m.group(1)
+
+    # Fallback: return as-is
+    return s
+
+
+def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Process raw billing usage data into analytics format."""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    model_data: Dict[str, Dict] = {}
+    request_tracker: Dict[str, set] = {}
+    
+    logger.info(f"Processing {len(usage_entries)} usage entries")
+    
+    for entry in usage_entries:
+        sku = entry.get('sku', 'unknown')
+        amount = entry.get('amount', 0)
+        inference = entry.get('inferenceDetails') or {}
+        
+        abs_amount = abs(amount)
+        if abs_amount == 0:
+            continue
+        
+        model_name = clean_model_name(sku)
+        model_type = detect_model_type(sku)
+        logger.debug(f"SKU: {sku} -> Model: {model_name}, Type: {model_type}, Amount: {abs_amount}")
+        
+        if model_name not in model_data:
+            model_data[model_name] = {
+                'requests': 0,
+                'tokens': 0,
+                'prompt_tokens': 0,
+                'completion_tokens': 0,
+                'cost': 0.0,
+                'response_times': [],
+                'success_count': 0,
+                'total_count': 0,
+                'model_type': model_type,
+            }
+            request_tracker[model_name] = set()
+        
+        request_id = None
+        if isinstance(inference, dict):
+            request_id = inference.get('requestId')
+            if not request_id:
+                request_id = None
+        
+        if request_id and request_id not in request_tracker[model_name]:
+            request_tracker[model_name].add(request_id)
+            model_data[model_name]['requests'] += 1
+        elif not request_id:
+            model_data[model_name]['requests'] += 1
+        
+        if isinstance(inference, dict):
+            prompt_tokens = inference.get('promptTokens') or 0
+            completion_tokens = inference.get('completionTokens') or 0
+            model_data[model_name]['prompt_tokens'] += prompt_tokens
+            model_data[model_name]['completion_tokens'] += completion_tokens
+            model_data[model_name]['tokens'] += prompt_tokens + completion_tokens
+            
+            if request_id and request_id not in request_tracker[model_name]:
+                model_data[model_name]['total_count'] += 1
+                if inference:
+                    model_data[model_name]['success_count'] += 1
+                    exec_time = inference.get('inferenceExecutionTime')
+                    if exec_time:
+                        model_data[model_name]['response_times'].append(exec_time)
+        
+        model_data[model_name]['cost'] += abs_amount
+    
+    logger.info(f"Found {len(model_data)} models with data")
+    
+    for model_name, data in model_data.items():
+        times = data['response_times']
+        data['avg_response_time_ms'] = sum(times) / len(times) if times else 0.0
+        data['success_rate'] = (
+            (data['success_count'] / data['total_count']) * 100 
+            if data['total_count'] > 0 else 100.0
+        )
+        del data['response_times']
+        del data['success_count']
+        del data['total_count']
+    
+    return model_data
+
+
+def generate_recommendations(model_data: Dict[str, Dict]) -> List[Dict[str, str]]:
+    """Generate actionable recommendations based on usage patterns."""
+    recommendations = []
+    
+    if not model_data:
+        return recommendations
+    
+    efficiency = {}
+    for model, data in model_data.items():
+        if data['tokens'] > 0:
+            efficiency[model] = data['cost'] / (data['tokens'] / 1000)
+    
+    if efficiency:
+        sorted_by_efficiency = sorted(efficiency.items(), key=lambda x: x[1])
+        most_efficient = sorted_by_efficiency[0]
+        least_efficient = sorted_by_efficiency[-1]
+        
+        if most_efficient[1] < least_efficient[1] * 0.5:
+            recommendations.append({
+                'type': 'efficiency',
+                'message': f"'{most_efficient[0]}' is most cost-efficient (${most_efficient[1]:.4f}/1K tokens)",
+                'priority': 'high'
+            })
+    
+    for model, data in model_data.items():
+        if data['avg_response_time_ms'] > 5000:
+            recommendations.append({
+                'type': 'performance',
+                'message': f"'{model}' has high latency ({data['avg_response_time_ms']/1000:.1f}s avg)",
+                'priority': 'medium'
+            })
+    
+    sorted_by_usage = sorted(model_data.items(), key=lambda x: x[1]['cost'], reverse=True)
+    if len(sorted_by_usage) > 1:
+        top_model = sorted_by_usage[0]
+        if top_model[1]['cost'] > sum(d['cost'] for _, d in sorted_by_usage[1:]) * 0.5:
+            recommendations.append({
+                'type': 'cost',
+                'message': f"'{top_model[0]}' accounts for {top_model[1]['cost']:.2f} DIEM usage",
+                'priority': 'high'
+            })
+    
+    return recommendations[:5]
+
+
+@router.get("/models", response_model=AnalyticsResponse)
+async def get_model_analytics(
+    days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
+    client: VeniceAPIClient = Depends(get_venice_client),
+    settings: Settings = Depends(get_settings)
+):
+    """
+    Get model usage analytics including requests, tokens, costs, and performance.
+    """
+    try:
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+
+        usage_entries = []
+        page = 1
+        max_pages = settings.API_MAX_PAGES
+        while page <= max_pages:
+            params = {
+                'startDate': start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                'endDate': end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                'limit': settings.API_PAGE_SIZE,
+                'sortOrder': 'desc',
+                'page': page,
+            }
+            response = client.get('/billing/usage', params=params)
+            data = response.json()
+            page_entries = data.get('data', [])
+            usage_entries.extend(page_entries)
+            total_pages = int(response.headers.get('x-pagination-total-pages', 1))
+            if page >= total_pages:
+                break
+            page += 1
+        logger.info(f"Analytics /models fetched {len(usage_entries)} billing entries across {page} page(s) for last {days} day(s)")
+        
+        model_data = process_usage_data(usage_entries)
+        
+        if not model_data:
+            return AnalyticsResponse(
+                model_usage={},
+                total_requests=0,
+                total_tokens=0,
+                total_cost=0.0,
+                period_days=days,
+                recommendations=[]
+            )
+        
+        model_analytics = {}
+        for model_name, mdata in model_data.items():
+            model_analytics[model_name] = ModelAnalytics(
+                requests=mdata['requests'],
+                tokens=mdata['tokens'],
+                prompt_tokens=mdata['prompt_tokens'],
+                completion_tokens=mdata['completion_tokens'],
+                cost=mdata['cost'],
+                avg_response_time_ms=mdata['avg_response_time_ms'],
+                success_rate=mdata['success_rate'],
+                model_type=mdata.get('model_type', 'other'),
+            )
+        
+        total_requests = sum(d['requests'] for d in model_data.values())
+        total_tokens = sum(d['tokens'] for d in model_data.values())
+        total_cost = sum(d['cost'] for d in model_data.values())
+        
+        recommendations = generate_recommendations(model_data)
+        
+        return AnalyticsResponse(
+            model_usage=model_analytics,
+            total_requests=total_requests,
+            total_tokens=total_tokens,
+            total_cost=total_cost,
+            period_days=days,
+            recommendations=[ModelRecommendation(**r) for r in recommendations]
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/daily", response_model=DailyAnalyticsResponse)
+async def get_daily_analytics(
+    days: int = Query(7, ge=1, le=30, description="Number of days to analyze"),
+    client: VeniceAPIClient = Depends(get_venice_client),
+    settings: Settings = Depends(get_settings)
+):
+    """
+    Get daily usage trends.
+    
+    Returns aggregated usage metrics per day for trend analysis.
+    """
+    try:
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        usage_entries = []
+        page = 1
+        max_pages = settings.API_MAX_PAGES
+        while page <= max_pages:
+            params = {
+                'startDate': start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                'endDate': end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
+                'limit': settings.API_PAGE_SIZE,
+                'sortOrder': 'asc',
+                'page': page,
+            }
+            response = client.get('/billing/usage', params=params)
+            data = response.json()
+            page_entries = data.get('data', [])
+            usage_entries.extend(page_entries)
+            total_pages = int(response.headers.get('x-pagination-total-pages', 1))
+            if page >= total_pages:
+                break
+            page += 1
+        logger.info(f"Analytics /daily fetched {len(usage_entries)} billing entries across {page} page(s)")
+        
+        daily_data: Dict[str, Dict] = {}
+        request_tracker: Dict[str, set] = {}
+        
+        for entry in usage_entries:
+            timestamp = entry.get('timestamp', '')
+            if not timestamp:
+                continue
+            
+            try:
+                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                date_key = dt.strftime('%Y-%m-%d')
+            except ValueError:
+                continue
+            
+            amount = abs(entry.get('amount', 0))
+            inference = entry.get('inferenceDetails') or {}
+            
+            if date_key not in daily_data:
+                daily_data[date_key] = {
+                    'requests': 0,
+                    'tokens': 0,
+                    'cost': 0.0
+                }
+                request_tracker[date_key] = set()
+            
+            request_id = None
+            if isinstance(inference, dict):
+                request_id = inference.get('requestId')
+            
+            date_request_key = f"{date_key}-{request_id}" if request_id else None
+            if date_request_key and date_request_key not in request_tracker[date_key]:
+                request_tracker[date_key].add(date_request_key)
+                daily_data[date_key]['requests'] += 1
+            elif not request_id:
+                daily_data[date_key]['requests'] += 1
+            
+            if isinstance(inference, dict):
+                prompt_tokens = inference.get('promptTokens') or 0
+                completion_tokens = inference.get('completionTokens') or 0
+                daily_data[date_key]['tokens'] += prompt_tokens + completion_tokens
+            
+            daily_data[date_key]['cost'] += amount
+        
+        daily_usage = [
+            DailyUsage(
+                date=date,
+                requests=data['requests'],
+                tokens=data['tokens'],
+                cost=data['cost']
+            )
+            for date, data in sorted(daily_data.items())
+        ]
+        
+        return DailyAnalyticsResponse(
+            daily_usage=daily_usage,
+            period_days=days
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
