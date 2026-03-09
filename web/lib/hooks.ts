@@ -42,3 +42,93 @@ export function useModels() {
     staleTime: 5 * 60 * 1000,
   })
 }
+
+export function useModel(modelId: string) {
+  return useQuery({
+    queryKey: ['model', modelId],
+    queryFn: () => fetchAPI<Model>(`/api/models/${modelId}`),
+    enabled: !!modelId,
+  })
+}
+
+export interface Model {
+  id: string
+  type: string
+  object?: string
+  created?: number
+  owned_by?: string
+  spec?: ModelSpec
+  model_spec?: ModelSpec
+  [key: string]: unknown
+}
+
+export interface ModelSpec {
+  context_length?: number
+  max_output_tokens?: number
+  availableContextTokens?: number
+  maxCompletionTokens?: number
+  dimensions?: number
+  embeddingDimensions?: number
+  voices?: string[]
+  supportedVoices?: string[]
+  privacy?: string
+  description?: string
+  name?: string
+  pricing?: {
+    input?: string | { usd?: number; diem?: number }
+    output?: string | { usd?: number; diem?: number }
+    generation?: { usd?: number }
+    perImage?: { usd?: number }
+    cache_input?: { usd?: number; diem?: number }
+    cache_write?: { usd?: number; diem?: number }
+    upscale?: { usd?: number }
+    inpaint?: { usd?: number }
+    resolutions?: Record<string, { usd?: number }>
+  }
+  capabilities?: {
+    supportsVision?: boolean
+    supportsFunctionCalling?: boolean
+    supportsWebSearch?: boolean
+    supportsReasoning?: boolean
+    supportsLogProbs?: boolean
+    supportsResponseSchema?: boolean
+    optimizedForCode?: boolean
+    supportsAudioInput?: boolean
+    supportsVideoInput?: boolean
+    supportsMultipleImages?: boolean
+    supportsReasoningEffort?: boolean
+    supportsTeeAttestation?: boolean
+    quantization?: string
+    [key: string]: unknown
+  }
+  traits?: string[] | Record<string, unknown>
+  constraints?: {
+    steps?: { max?: number; default?: number }
+    promptCharacterLimit?: number
+    resolutions?: string[]
+    durations?: number[]
+    aspect_ratios?: string[]
+    audio?: boolean
+    audio_configurable?: boolean
+    model_type?: string
+    upscale_factors?: string[]
+    factors?: string[]
+    [key: string]: unknown
+  }
+}
+
+async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const response = await fetch(endpoint, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.status} ${response.statusText}`)
+  }
+
+  return response.json()
+}

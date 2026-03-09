@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import get_settings
 from backend.database import init_db
-from backend.api.routes import usage, balance, prices, models, health
+from backend.api.routes import usage, balance, prices, models, health, analytics
 
 settings = get_settings()
 
@@ -28,6 +28,11 @@ logging.basicConfig(
     handlers=[console_handler, file_handler]
 )
 logger = logging.getLogger(__name__)
+
+# Apply LOG_LEVEL to uvicorn loggers for consistent verbosity
+logging.getLogger("uvicorn").setLevel(log_level)
+logging.getLogger("uvicorn.access").setLevel(log_level)
+logging.getLogger("uvicorn.error").setLevel(log_level)
 
 
 @asynccontextmanager
@@ -59,6 +64,7 @@ app.include_router(usage.router, prefix="/api/usage", tags=["usage"])
 app.include_router(balance.router, prefix="/api", tags=["balance"])
 app.include_router(prices.router, prefix="/api", tags=["prices"])
 app.include_router(models.router, prefix="/api", tags=["models"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 
 
 @app.get("/")

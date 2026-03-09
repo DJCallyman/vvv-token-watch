@@ -1,10 +1,168 @@
 # VVV Token Watch
 
-A PySide6 desktop application for monitoring Venice AI API usage, model catalogs, and cryptocurrency prices (Venice VVV & DIEM tokens).
+Monitoring tool for Venice AI API usage, account balance, and cryptocurrency prices (VVV & DIEM tokens).
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue)
-![Python](https://img.shields.io/badge/python-3.8+-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+Available in two deployment forms:
+- **Desktop app** — PySide6 (Qt6) application, runs locally on macOS/Windows/Linux
+- **Web app** — FastAPI backend + Next.js frontend, runs in Docker (e.g. Unraid)
+
+---
+
+## Features
+
+- **Account balance** — Remaining DIEM/USD credit and epoch reset time
+- **Epoch usage** — DIEM/USD consumed since the current epoch started (net of refunds/cancellations)
+- **API key leaderboard** — 7-day trailing usage per key
+- **Price tracking** — VVV and DIEM live prices via CoinGecko, with portfolio value
+- **Real-time refresh** — Configurable polling intervals
+
+---
+
+## Desktop App
+
+Built with PySide6 (Qt6). All API calls run in background `QThread` workers to keep the UI responsive.
+
+### Requirements
+
+- Python 3.8+
+- See `requirements.txt` for Python dependencies
+
+### Setup
+
+```bash
+git clone https://github.com/DJCallyman/vvv-token-watch.git
+cd vvv-token-watch
+
+python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+
+pip install -r requirements.txt
+
+cp .env.example .env            # then fill in your API keys
+```
+
+### Running
+
+```bash
+source venv/bin/activate
+python run.py
+```
+
+> **Note:** Always run via `run.py`, not `python src/main.py` — the launcher adds `src/` to the Python path so imports resolve correctly.
+
+### Building a macOS App Bundle
+
+```bash
+pip install pyinstaller
+./build_macos.sh
+# Output: dist/VVV Token Watch.app
+```
+
+---
+
+## Web App
+
+FastAPI backend + Next.js frontend, packaged as a single Docker image. Designed for self-hosted deployment (Unraid, docker-compose, etc.).
+
+### Architecture
+
+```
+browser → Next.js (port 3000) → /api/* rewrites → FastAPI (port 8000) → Venice API / CoinGecko
+```
+
+### Production (Docker)
+
+```bash
+cd docker
+cp .env.example .env   # fill in VENICE_ADMIN_KEY etc.
+docker compose up -d
+```
+
+Open `http://<host>:3000`.
+
+#### Unraid
+Import `unraid/vvv-token-watch.xml` via the Community Applications template manager. Fill in the variables in the template — no `.env` file needed.
+
+### Local Development (hot-reload)
+
+Runs Next.js dev server and uvicorn with `--reload` directly on your machine. Only PostgreSQL runs in Docker.
+
+**Prerequisites:** Docker, Python venv with `backend/requirements.txt` installed, Node.js.
+
+```bash
+source venv/bin/activate
+./dev.sh
+```
+
+First run will prompt for your API keys and create a local `.env`. Subsequent runs use the saved file.
+
+| Service   | URL                          |
+|-----------|------------------------------|
+| Frontend  | http://localhost:3000        |
+| Backend   | http://localhost:8000        |
+| API docs  | http://localhost:8000/docs   |
+
+Stop with **Ctrl+C** — all processes and the Postgres container are cleaned up automatically.
+
+### Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `VENICE_ADMIN_KEY` | ✅ | Venice Admin API key (not Inference Only) |
+| `DATABASE_URL` | ✅ | PostgreSQL connection string |
+| `COINGECKO_API_KEY` | — | CoinGecko API key (free tier if omitted) |
+| `COINGECKO_HOLDING_AMOUNT` | — | Your VVV holdings (default: 2750) |
+| `DIEM_HOLDING_AMOUNT` | — | Your DIEM holdings (default: 0) |
+| `COINGECKO_TOKEN_ID` | — | CoinGecko ID for VVV (default: `venice-token`) |
+| `DIEM_TOKEN_ID` | — | CoinGecko ID for DIEM (default: `diem`) |
+| `COINGECKO_CURRENCIES` | — | Currencies to fetch (default: `usd,aud`) |
+| `LOG_LEVEL` | — | `INFO` or `DEBUG` (default: `INFO`) |
+
+> **Admin key required:** Regular inference keys return 401 on `/billing/usage`. Create an Admin key at https://venice.ai/settings/api.
+
+---
+
+## Configuration (.env)
+
+See [.env.example](.env.example) for all available options with descriptions.
+
+---
+
+## Testing
+
+```bash
+pip install -r requirements-dev.txt
+python run_tests.py            # all tests
+python run_tests.py -c         # with coverage report
+python -m pytest tests/test_config.py -v  # single file
+```
+
+---
+
+## API Reference
+
+### Venice AI
+- `GET /api/v1/api_keys/rate_limits` — current epoch balance and reset time
+- `GET /api/v1/billing/usage` — itemised billing transactions
+- `GET /api/v1/api_keys` — API keys with 7-day trailing usage
+
+### Web App Endpoints
+- `GET /api/health`
+- `GET /api/balance`
+- `GET /api/usage/daily` — epoch usage (net of refunds)
+- `GET /api/usage/keys` — per-key usage
+- `GET /api/prices`
+- `GET /api/models`
+
+---
+
+## License
+
+MIT — see [LICENSE](LICENSE) for details.
+
+---
+
+*Not affiliated with Venice AI. Independent monitoring tool.*
 
 ## Features
 

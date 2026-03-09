@@ -21,11 +21,7 @@ async def get_balance(
         return {
             "diem": balance_info.diem,
             "usd": balance_info.usd,
-            "daily_diem_limit": balance_info.daily_diem_limit,
-            "daily_usd_limit": balance_info.daily_usd_limit,
             "next_epoch_begins": balance_info.next_epoch_begins,
-            "diem_usage_percent": round((balance_info.diem / balance_info.daily_diem_limit) * 100, 2) if balance_info.daily_diem_limit > 0 else 0,
-            "usd_usage_percent": round((balance_info.usd / balance_info.daily_usd_limit) * 100, 2) if balance_info.daily_usd_limit > 0 else 0
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

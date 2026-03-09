@@ -30,6 +30,7 @@ export interface DailyUsage {
   date: string
   diem: number
   usd: number
+  epoch_start?: string
 }
 
 export interface APIKeyUsage {
@@ -95,5 +96,9 @@ export const api = {
 
   async getHealth(): Promise<{ status: string; timestamp: string }> {
     return fetchAPI('/api/health')
+  },
+
+  async get<T>(endpoint: string): Promise<T> {
+    return fetchAPI<T>(endpoint)
   },
 }

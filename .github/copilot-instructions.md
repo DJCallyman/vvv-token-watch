@@ -1,7 +1,10 @@
 # VVV Token Watch - Copilot Instructions
 
 ## Project Overview
-PySide6 desktop application for monitoring Venice AI API usage, model status, and cryptocurrency prices. Built on Qt6 with threaded architecture for non-blocking API calls and real-time data updates.
+This project has two deployable applications that share Venice API logic:
+
+1. **Desktop app** (`src/`, entry point `run.py`) — PySide6 (Qt6) application for macOS/Windows/Linux
+2. **Web app** (`backend/` + `web/`) — FastAPI backend + Next.js frontend, Docker-packaged for self-hosted deployment (Unraid etc.)
 
 ## Features NOT Needed
 - **Rate Limit Tracking** - Not a feature I use or need. Do not implement rate limit monitoring, `/api_keys/rate_limits/log` endpoint integration, or rate limit header parsing.
@@ -199,12 +202,51 @@ Used project-wide to suppress SSL warnings for internal API calls.
 - **python-dotenv** - Load `.env` files for configuration
 - **matplotlib** - Charts in analytics widgets (Phase 2+)
 
-## Directory Reference
+## Directory Reference (Desktop)
 - `src/core/` - Business logic, API clients, data models
 - `src/widgets/` - UI components (inherit QWidget)
 - `src/config/` - Config loader, theme system
 - `src/services/` - External service integrations (exchange rates, key management)
 - `src/analytics/` - Usage reports, trend analysis
 - `src/utils/` - Currency formatting, date utilities
+
+---
+
+## Web App Architecture
+
+### Stack
+- **Backend:** FastAPI (`backend/`), Python 3.11, SQLAlchemy async, PostgreSQL
+- **Frontend:** Next.js 14 App Router (`web/`), React Query, Tailwind CSS, shadcn/ui
+- **Entry:** `backend/main.py` via uvicorn; frontend proxies `/api/*` to port 8000
+
+### Local Development
+```bash
+source venv/bin/activate
+./dev.sh   # starts PostgreSQL (Docker), uvicorn --reload, next dev
+```
+
+### Billing Usage — Critical Behaviour
+Usage is queried **epoch-based**, not UTC-date-based:
+1. Call `/api_keys/rate_limits` to get `nextEpochBegins`
+2. Subtract 24h to get epoch start
+3. Query `/billing/usage` across that window
+4. **Net the amounts** — charges are negative, refunds/cancellations are positive. Sum all and negate. Do NOT use `abs()` or filter by sign alone.
+
+### Portfolio Value
+VVV and DIEM are tracked as separate holdings. The prices endpoint returns `portfolio.vvv_value_usd` and `portfolio.diem_value_usd` as distinct fields with a `total_usd`. Never combine them into a single figure without showing the breakdown.
+
+### Web App Directory Reference
+- `backend/core/` - Venice API client, usage tracker (epoch-aware, net billing)
+- `backend/api/routes/` - FastAPI route handlers (balance, usage, prices, models, health)
+- `backend/config.py` - Pydantic Settings (reads `.env`)
+- `web/app/` - Next.js App Router pages
+- `web/components/dashboard/` - Dashboard cards (balance, usage, prices, leaderboard)
+- `web/components/usage/` - UsageView (dedicated usage page)
+- `web/components/balance/` - BalanceView
+- `web/lib/api.ts` - Typed API client
+- `web/lib/hooks.ts` - React Query hooks
+- `docker/` - Dockerfile, docker-compose.yml, start.sh
+- `unraid/` - Unraid Community Applications XML template
+
 - `data/` - Persistent JSON files (usage_history.json)
 - `scripts/` - Standalone test/debug scripts

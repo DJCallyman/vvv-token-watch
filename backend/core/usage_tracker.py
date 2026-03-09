@@ -78,6 +78,63 @@ class UsageTracker:
         except (KeyError, ValueError, json.JSONDecodeError) as e:
             raise Exception(f"Failed to parse rate limits response: {str(e)}")
     
+    def get_epoch_usage(self) -> Dict:
+        """Query billing usage from the start of the current epoch to now.
+        Uses nextEpochBegins from the rate limits endpoint to determine epoch start.
+        Returns usage totals plus the epoch_start datetime string.
+        """
+        try:
+            rl_response = self.api_client.get("/api_keys/rate_limits")
+            rl_data = rl_response.json().get("data", {})
+            next_epoch_str = rl_data.get("nextEpochBegins", "")
+
+            if next_epoch_str:
+                from datetime import timedelta
+                next_epoch = datetime.fromisoformat(next_epoch_str.replace("Z", "+00:00"))
+                epoch_start = next_epoch - timedelta(days=1)
+            else:
+                # Fallback: midnight UTC today
+                epoch_start = datetime.now(timezone.utc).replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
+
+            epoch_start_str = epoch_start.strftime("%Y-%m-%dT%H:%M:%SZ")
+            now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+            totals = {"diem": 0.0, "usd": 0.0}
+            page = 1
+            while True:
+                params = {
+                    "startDate": epoch_start_str,
+                    "endDate": now_str,
+                    "limit": 500,
+                    "page": page,
+                }
+                response = self.api_client.get("/billing/usage", params=params)
+                data = response.json().get("data", [])
+
+                for entry in data:
+                    currency = entry.get("currency", "").upper()
+                    amount = float(entry.get("amount", 0))
+                    if currency == "DIEM":
+                        totals["diem"] -= amount  # charges are negative, refunds positive
+                    elif currency == "USD":
+                        totals["usd"] -= amount
+
+                total_pages = int(response.headers.get("x-pagination-total-pages", 1))
+                if page >= total_pages:
+                    break
+                page += 1
+
+            return {
+                "diem": totals["diem"],
+                "usd": totals["usd"],
+                "epoch_start": epoch_start_str,
+                "next_epoch": next_epoch_str,
+            }
+        except Exception as e:
+            raise Exception(f"Failed to fetch epoch usage: {str(e)}")
+
     def get_daily_usage(self, target_date: Optional[str] = None) -> Dict[str, float]:
         try:
             if target_date is None:
@@ -101,12 +158,11 @@ class UsageTracker:
             
             for entry in data:
                 currency = entry.get('currency', '').upper()
-                amount = abs(float(entry.get('amount', 0)))
-                
+                amount = float(entry.get('amount', 0))
                 if currency == 'DIEM':
-                    daily_totals['diem'] += amount
+                    daily_totals['diem'] -= amount  # charges are negative, refunds positive
                 elif currency == 'USD':
-                    daily_totals['usd'] += amount
+                    daily_totals['usd'] -= amount
             
             return daily_totals
             

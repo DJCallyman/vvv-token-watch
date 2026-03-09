@@ -8,11 +8,13 @@ import {
   BarChart3, 
   Wallet, 
   DollarSign,
+  Cpu,
   Settings
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Models', href: '/models', icon: Cpu },
   { name: 'Usage', href: '/usage', icon: BarChart3 },
   { name: 'Balance', href: '/balance', icon: Wallet },
   { name: 'Prices', href: '/prices', icon: DollarSign },

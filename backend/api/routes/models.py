@@ -16,7 +16,9 @@ async def get_models(
     client: VeniceAPIClient = Depends(get_venice_client)
 ):
     try:
-        response = client.get("/models")
+        # Pass type=all to get all model types (text, image, audio, etc.)
+        # Without this, the API defaults to text models only
+        response = client.get("/models", params={"type": "all"})
         data = response.json()
         
         models = data.get("data", [])
