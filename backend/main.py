@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import get_settings
 from backend.database import init_db
-from backend.api.routes import usage, balance, prices, models, health, analytics
+from backend.api.routes import usage, balance, prices, models, health, analytics, benchmark
 
 settings = get_settings()
 
@@ -65,6 +65,7 @@ app.include_router(balance.router, prefix="/api", tags=["balance"])
 app.include_router(prices.router, prefix="/api", tags=["prices"])
 app.include_router(models.router, prefix="/api", tags=["models"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(benchmark.router, prefix="/api", tags=["benchmark"])
 
 
 @app.get("/")

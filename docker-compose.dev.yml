@@ -1,0 +1,23 @@
+# Local development: runs PostgreSQL only.
+# Backend and frontend run directly on your machine with hot-reload.
+# Usage: ./dev.sh
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: vvvwatch
+      POSTGRES_USER: vvvwatch
+      POSTGRES_PASSWORD: vvvwatch
+    ports:
+      - "5433:5432"
+    volumes:
+      - dev_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vvvwatch -d vvvwatch"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  dev_postgres_data:

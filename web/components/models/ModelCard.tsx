@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatNumber } from '@/lib/utils'
 import { ChevronDown, ChevronUp, Cpu, Zap, Clock, DollarSign } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, getTypeColor } from '@/lib/utils'
 
 interface ModelCardProps {
   model: Model
@@ -25,19 +25,6 @@ export function ModelCard({ model }: ModelCardProps) {
   
   const capabilities = modelSpec.capabilities || model.spec?.capabilities || {}
   const capabilityKeys = Object.keys(capabilities)
-
-  const getTypeColor = (type: string) => {
-    switch (type.toLowerCase()) {
-      case 'text':
-        return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
-      case 'image':
-        return 'bg-purple-500/10 text-purple-500 border-purple-500/20'
-      case 'audio':
-        return 'bg-orange-500/10 text-orange-500 border-orange-500/20'
-      default:
-        return 'bg-gray-500/10 text-gray-500 border-gray-500/20'
-    }
-  }
 
   return (
     <Card className="hover:border-primary/50 transition-colors">

@@ -70,13 +70,19 @@ class ProcessInfo:
 class AnimatedStatusIcon(QWidget):
     """Animated status icon with pulsing/spinning effects."""
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, theme=None):
         super().__init__(parent)
         self.setFixedSize(20, 20)
         self.current_status = ProcessStatus.IDLE
         self.animation_group = None
         self.pulse_value = 1.0
+        self._theme = theme
         self._setup_animations()
+    
+    def set_theme(self, theme):
+        """Set the theme for dynamic color updates."""
+        self._theme = theme
+        self.update()
     
     def _setup_animations(self):
         """Setup pulse animation for running status."""
@@ -106,20 +112,30 @@ class AnimatedStatusIcon(QWidget):
             self.pulse_value = 1.0
             self.update()
     
+    def _get_status_colors(self) -> dict:
+        """Get status colors from theme or use defaults."""
+        if self._theme:
+            return {
+                ProcessStatus.IDLE: QColor(self._theme.text_secondary),
+                ProcessStatus.RUNNING: QColor(self._theme.accent),
+                ProcessStatus.SUCCESS: QColor(self._theme.success),
+                ProcessStatus.ERROR: QColor(self._theme.error),
+                ProcessStatus.WARNING: QColor(self._theme.warning),
+            }
+        return {
+            ProcessStatus.IDLE: QColor(128, 128, 128),
+            ProcessStatus.RUNNING: QColor(59, 130, 246),
+            ProcessStatus.SUCCESS: QColor(34, 197, 94),
+            ProcessStatus.ERROR: QColor(239, 68, 68),
+            ProcessStatus.WARNING: QColor(234, 179, 8),
+        }
+    
     def paintEvent(self, event):
         """Paint the status icon."""
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
         
-        # Get colors based on status
-        colors = {
-            ProcessStatus.IDLE: QColor(128, 128, 128),
-            ProcessStatus.RUNNING: QColor(59, 130, 246),    # Blue
-            ProcessStatus.SUCCESS: QColor(34, 197, 94),     # Green
-            ProcessStatus.ERROR: QColor(239, 68, 68),       # Red
-            ProcessStatus.WARNING: QColor(234, 179, 8),     # Yellow
-        }
-        
+        colors = self._get_status_colors()
         color = colors.get(self.current_status, QColor(128, 128, 128))
         
         # Apply pulse effect for running status
@@ -177,7 +193,7 @@ class ProcessStatusWidget(QWidget):
         # Status message
         self.message_label = QLabel()
         self.message_label.setFont(QFont("Arial", 8))
-        self.message_label.setStyleSheet("color: #888888;")
+        self.message_label.setObjectName("message_label")
         layout.addWidget(self.message_label)
         
         # Progress bar (only shown when running)
@@ -249,10 +265,17 @@ class OperationHistoryWidget(QWidget):
     
     MAX_ITEMS = 10
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, theme=None):
         super().__init__(parent)
         self.history = deque(maxlen=self.MAX_ITEMS)
+        self._theme = theme
+        self._secondary_color = '#888888'  # Fallback
         self._setup_ui()
+    
+    def set_theme(self, theme):
+        """Set the theme and update styles."""
+        self._theme = theme
+        self._update_all_styles()
     
     def _setup_ui(self):
         """Setup the UI."""
@@ -261,10 +284,10 @@ class OperationHistoryWidget(QWidget):
         layout.setSpacing(2)
         
         # Header
-        header = QLabel("Recent Operations")
-        header.setFont(QFont("Arial", 9, QFont.Bold))
-        header.setStyleSheet("color: #AAAAAA;")
-        layout.addWidget(header)
+        self.header = QLabel("Recent Operations")
+        self.header.setFont(QFont("Arial", 9, QFont.Bold))
+        self.header.setObjectName("history_header")
+        layout.addWidget(self.header)
         
         # History list
         self.history_list = QVBoxLayout()
@@ -273,6 +296,9 @@ class OperationHistoryWidget(QWidget):
         
         # Add stretch
         layout.addStretch()
+        
+        # Apply initial styles
+        self._update_all_styles()
     
     def add_entry(self, process_info: ProcessInfo):
         """Add a new entry to the history, deduplicating similar entries."""
@@ -309,7 +335,7 @@ class OperationHistoryWidget(QWidget):
         layout.setSpacing(6)
         
         # Status icon
-        icon = AnimatedStatusIcon()
+        icon = AnimatedStatusIcon(theme=self._theme)
         icon.set_status(process_info.status)
         icon.setFixedSize(14, 14)
         layout.addWidget(icon)
@@ -321,16 +347,47 @@ class OperationHistoryWidget(QWidget):
         
         label = QLabel(text)
         label.setFont(QFont("Arial", 8))
-        label.setStyleSheet("color: #888888;")
+        label.setObjectName("history_entry_label")
         layout.addWidget(label)
         
         # Timestamp
         time_label = QLabel(process_info.timestamp.strftime('%H:%M:%S'))
         time_label.setFont(QFont("Arial", 7))
-        time_label.setStyleSheet("color: #666666;")
+        time_label.setObjectName("history_timestamp")
         layout.addWidget(time_label)
         
         return entry
+    
+    def _update_all_styles(self):
+        """Update all widget styles with theme colors."""
+        if self._theme:
+            self._secondary_color = self._theme.text_secondary
+        else:
+            self._secondary_color = '#888888'
+        
+        # Update header
+        if hasattr(self, 'header'):
+            self.header.setStyleSheet(f"color: {self._secondary_color};")
+        
+        # Update existing history entries
+        for i in range(self.history_list.count()):
+            item = self.history_list.itemAt(i)
+            if item.widget():
+                # Update entry label
+                entry_label = item.widget().findChild(QLabel, "history_entry_label")
+                if entry_label:
+                    entry_label.setStyleSheet(f"color: {self._secondary_color};")
+                
+                # Update timestamp label
+                timestamp_label = item.widget().findChild(QLabel, "history_timestamp")
+                if timestamp_label:
+                    from PySide6.QtGui import QColor
+                    if self._theme:
+                        base_color = QColor(self._theme.text_secondary)
+                        muted_color = base_color.darker(150).name()
+                        timestamp_label.setStyleSheet(f"color: {muted_color};")
+                    else:
+                        timestamp_label.setStyleSheet("color: #666666;")
     
     def clear(self):
         """Clear the history."""
@@ -439,17 +496,7 @@ class BackendStatusBar(QStatusBar):
         self.error_button = QPushButton("✓ 0")
         self.error_button.setFixedSize(45, 22)
         self.error_button.setFont(QFont("Arial", 8))
-        self.error_button.setStyleSheet("""
-            QPushButton {
-                background-color: #22C55E;
-                color: white;
-                border: none;
-                border-radius: 4px;
-            }
-            QPushButton:hover {
-                background-color: #16A34A;
-            }
-        """)
+        self.error_button.setObjectName("error_button")
         self.error_button.clicked.connect(self._on_error_button_clicked)
         top_row.addWidget(self.error_button)
         
@@ -478,17 +525,7 @@ class BackendStatusBar(QStatusBar):
         self.progress_bar.setRange(0, 100)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(False)
-        self.progress_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: rgba(255, 255, 255, 0.1);
-                border: none;
-                border-radius: 2px;
-            }
-            QProgressBar::chunk {
-                background-color: #3B82F6;
-                border-radius: 2px;
-            }
-        """)
+        self.progress_bar.setObjectName("progress_bar")
         main_layout.addWidget(self.progress_bar)
         
         # Details panel (expandable)
@@ -701,44 +738,60 @@ class BackendStatusBar(QStatusBar):
         
         total = error_count + warning_count
         
+        # Get theme colors if available
+        if hasattr(self, 'theme') and self.theme:
+            success_color = self.theme.success
+            success_hover = self._darken_color(self.theme.success)
+            error_color = self.theme.error
+            error_hover = self._darken_color(self.theme.error)
+            warning_color = self.theme.warning
+            warning_hover = self._darken_color(self.theme.warning)
+        else:
+            success_color = '#22C55E'
+            success_hover = '#16A34A'
+            error_color = '#EF4444'
+            error_hover = '#DC2626'
+            warning_color = '#EAB308'
+            warning_hover = '#CA8A04'
+        
         if total == 0:
             self.error_button.setText("✓ 0")
-            self.error_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #22C55E;
+            self.error_button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {success_color};
                     color: white;
                     border: none;
                     border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #16A34A;
-                }
+                }}
+                QPushButton:hover {{
+                    background-color: {success_hover};
+                }}
             """)
         elif error_count > 0:
             self.error_button.setText(f"✗ {error_count}")
-            self.error_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #EF4444;
+            self.error_button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {error_color};
                     color: white;
                     border: none;
                     border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #DC2626;
-                }
+                }}
+                QPushButton:hover {{
+                    background-color: {error_hover};
+                }}
             """)
         else:
             self.error_button.setText(f"⚠ {warning_count}")
-            self.error_button.setStyleSheet("""
-                QPushButton {
-                    background-color: #EAB308;
+            self.error_button.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {warning_color};
                     color: white;
                     border: none;
                     border-radius: 4px;
-                }
-                QPushButton:hover {
-                    background-color: #CA8A04;
-                }
+                }}
+                QPushButton:hover {{
+                    background-color: {warning_hover};
+                }}
             """)
     
     def _update_progress_bar(self):
@@ -838,6 +891,92 @@ class BackendStatusBar(QStatusBar):
                 border-top: 1px solid {theme.border};
             }}
         """)
+        
+        # Update message label
+        self._update_message_style()
+        # Update activity summary
+        self._update_activity_style()
+        # Update error button
+        self._update_error_count()
+        # Update progress bar
+        self._update_progress_bar_style()
+        
+        # Update history widget labels
+        if hasattr(self, 'history_widget'):
+            self.history_widget.set_theme(theme)
+        
+        # Update AnimatedStatusIcon instances
+        self._update_status_icons()
+    
+    def _update_status_icons(self):
+        """Update all AnimatedStatusIcon instances with theme."""
+        status_widgets = self.findChildren(ProcessStatusWidget)
+        for widget in status_widgets:
+            if hasattr(widget, 'status_icon'):
+                widget.status_icon.set_theme(self.theme)
+    
+    def _get_secondary_text_color(self) -> str:
+        """Get secondary text color from theme or fallback."""
+        if self.theme:
+            return self.theme.text_secondary
+        return '#888888'
+    
+    def _darken_color(self, hex_color: str) -> str:
+        """Darken a hex color by 20%."""
+        from PySide6.QtGui import QColor
+        color = QColor(hex_color)
+        color = color.darker(120)
+        return color.name()
+    
+    def _update_message_style(self):
+        """Update message label style."""
+        if hasattr(self, 'message_label'):
+            self.message_label.setStyleSheet(f"color: {self._get_secondary_text_color()};")
+    
+    def _update_activity_style(self):
+        """Update activity summary label style."""
+        if hasattr(self, 'activity_summary'):
+            self.activity_summary.setStyleSheet(f"color: {self._get_secondary_text_color()}; min-width: 120px;")
+    
+    def _update_progress_bar_style(self):
+        """Update progress bar style with theme colors."""
+        if hasattr(self, 'progress_bar'):
+            self.progress_bar.setStyleSheet(f"""
+                QProgressBar {{
+                    background-color: rgba(128, 128, 128, 0.2);
+                    border: none;
+                    border-radius: 2px;
+                }}
+                QProgressBar::chunk {{
+                    background-color: {self.theme.accent};
+                    border-radius: 2px;
+                }}
+            """)
+    
+    def _update_header_style(self, label: QLabel):
+        """Update header label style."""
+        if label and hasattr(self, 'theme') and self.theme:
+            label.setStyleSheet(f"color: {self.theme.text_secondary};")
+        elif label:
+            label.setStyleSheet("color: #AAAAAA;")
+    
+    def _update_label_style(self, label: QLabel):
+        """Update history entry label style."""
+        if label and hasattr(self, 'theme') and self.theme:
+            label.setStyleSheet(f"color: {self.theme.text_secondary};")
+        elif label:
+            label.setStyleSheet("color: #888888;")
+    
+    def _update_timestamp_style(self, label: QLabel):
+        """Update timestamp label style."""
+        if label and hasattr(self, 'theme') and self.theme:
+            # Timestamps should be even more muted
+            from PySide6.QtGui import QColor
+            base_color = QColor(self.theme.text_secondary)
+            muted_color = base_color.darker(150).name()
+            label.setStyleSheet(f"color: {muted_color};")
+        elif label:
+            label.setStyleSheet("color: #666666;")
     
     def reset_all(self):
         """Reset all processes to idle state."""

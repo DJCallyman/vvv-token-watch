@@ -3,6 +3,44 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
+// ---------------------------------------------------------------------------
+// Benchmark hooks
+// ---------------------------------------------------------------------------
+
+export function useBenchmarkRuns() {
+  return useQuery({
+    queryKey: ['benchmarkRuns'],
+    queryFn: api.getBenchmarkRuns,
+    refetchInterval: 10000,
+  })
+}
+
+export function useBenchmarkRun(runId: string | null) {
+  return useQuery({
+    queryKey: ['benchmarkRun', runId],
+    queryFn: () => api.getBenchmarkRun(runId!),
+    enabled: !!runId,
+    staleTime: 60000, // Results files don't change
+  })
+}
+
+export function useBenchmarkModels() {
+  return useQuery({
+    queryKey: ['benchmarkModels'],
+    queryFn: api.getBenchmarkModels,
+    staleTime: 120000,
+  })
+}
+
+export function useBenchmarkStatus(jobId: string | null, enabled: boolean) {
+  return useQuery({
+    queryKey: ['benchmarkStatus', jobId],
+    queryFn: () => api.getBenchmarkStatus(jobId!),
+    enabled: enabled && !!jobId,
+    refetchInterval: 3000,
+  })
+}
+
 export function useBalance() {
   return useQuery({
     queryKey: ['balance'],

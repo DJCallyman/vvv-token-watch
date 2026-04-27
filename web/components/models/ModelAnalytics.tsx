@@ -19,18 +19,20 @@ import {
   Legend,
 } from 'recharts'
 import { Activity, DollarSign, Clock, Zap, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, getSuccessRateColor, getPriorityStyles } from '@/lib/utils'
 
-const COLORS = [
-  '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-  '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'
+const CHART_COLORS = [
+  'hsl(var(--chart-1))',
+  'hsl(var(--chart-2))',
+  'hsl(var(--chart-3))',
+  'hsl(var(--chart-4))',
+  'hsl(var(--chart-5))',
+  'hsl(330 80% 60%)',
+  'hsl(188 78% 45%)',
+  'hsl(82 85% 45%)',
+  'hsl(24 95% 55%)',
+  'hsl(240 75% 65%)',
 ]
-
-const PRIORITY_COLORS = {
-  high: 'bg-red-500/10 text-red-600 border-red-500/20',
-  medium: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20',
-  low: 'bg-green-500/10 text-green-600 border-green-500/20',
-}
 
 const TYPE_ICONS = {
   efficiency: Zap,
@@ -115,7 +117,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
 
   const costBreakdown = modelData.slice(0, 8).map((m, i) => ({
     ...m,
-    color: COLORS[i % COLORS.length],
+    color: CHART_COLORS[i % CHART_COLORS.length],
   }))
 
   const dailyChartData = dailyData?.daily_usage.map((d) => ({
@@ -229,7 +231,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                       name,
                     ]}
                   />
-                  <Bar dataKey="tokens" fill="#3b82f6" name="Tokens" />
+                  <Bar dataKey="tokens" fill="hsl(var(--chart-1))" name="Tokens" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -314,7 +316,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                   yAxisId="left"
                   type="monotone"
                   dataKey="tokens"
-                  stroke="#3b82f6"
+                  stroke="hsl(var(--chart-1))"
                   name="Tokens (K)"
                   strokeWidth={2}
                   dot={false}
@@ -323,7 +325,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                   yAxisId="right"
                   type="monotone"
                   dataKey="cost"
-                  stroke="#10b981"
+                  stroke="hsl(var(--chart-2))"
                   name="Cost (DIEM)"
                   strokeWidth={2}
                   dot={false}
@@ -369,11 +371,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                       <span
                         className={cn(
                           "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs",
-                          model.successRate >= 99
-                            ? "bg-green-500/10 text-green-600"
-                            : model.successRate >= 95
-                            ? "bg-yellow-500/10 text-yellow-600"
-                            : "bg-red-500/10 text-red-600"
+                          getSuccessRateColor(model.successRate)
                         )}
                       >
                         {model.successRate.toFixed(1)}%
@@ -401,7 +399,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                     key={i}
                     className={cn(
                       "flex items-start gap-3 p-3 rounded-lg border",
-                      PRIORITY_COLORS[rec.priority as keyof typeof PRIORITY_COLORS] || PRIORITY_COLORS.medium
+                      getPriorityStyles(rec.priority as 'high' | 'medium' | 'low')
                     )}
                   >
                     <Icon className="w-5 h-5 mt-0.5 shrink-0" />

@@ -1327,6 +1327,10 @@ class CombinedViewerApp(QMainWindow):
             self.cost_optimizer_widget.theme = self.theme
             self.cost_optimizer_widget._apply_theme()
         
+        # Update cache tracking widget theme
+        if hasattr(self, 'cache_tracking_widget') and self.cache_tracking_widget:
+            self.cache_tracking_widget.set_theme(self.theme)
+        
         # Update all dynamically created API key widgets
         if hasattr(self, 'api_key_widgets'):
             for widget in self.api_key_widgets:
@@ -1934,7 +1938,7 @@ class CombinedViewerApp(QMainWindow):
         value_color = self.theme.text
         if isinstance(value, bool):
             value_text = "Yes" if value else "No"
-            value_color = "#00FF00" if value else "#FF0000"
+            value_color = self.theme.positive if value else self.theme.negative
         
         value_label = QLabel(value_text)
         value_label.setStyleSheet(f"color: {value_color};")
@@ -2563,7 +2567,7 @@ class CombinedViewerApp(QMainWindow):
         tab_layout.setContentsMargins(0, 0, 0, 0)
 
         # Create the cache tracking widget
-        self.cache_tracking_widget = CacheTrackingWidget(parent=self)
+        self.cache_tracking_widget = CacheTrackingWidget(theme=self.theme, parent=self)
         tab_layout.addWidget(self.cache_tracking_widget)
 
         # Add tab to main tabs

@@ -9,6 +9,7 @@ import {
   Wallet, 
   DollarSign,
   Cpu,
+  FlaskConical,
   Settings
 } from 'lucide-react'
 
@@ -18,6 +19,7 @@ const navigation = [
   { name: 'Usage', href: '/usage', icon: BarChart3 },
   { name: 'Balance', href: '/balance', icon: Wallet },
   { name: 'Prices', href: '/prices', icon: DollarSign },
+  { name: 'Benchmark', href: '/benchmark', icon: FlaskConical },
 ]
 
 export function Sidebar() {
