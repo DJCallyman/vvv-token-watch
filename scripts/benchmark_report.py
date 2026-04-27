@@ -106,8 +106,19 @@ def compute_composite_scores(all_model_results: list[dict]) -> None:
     Normalize T1 latency scores across all models, then compute composite scores.
     Called in-place after all models have been aggregated.
     T1 score = 1 - (latency_mean / max_latency_across_models)
+
+    Composite scoring uses reliability-weighted effective scores:
+    - For categories with partial errors: blend actual score with global category average,
+      weighted by (runs_success / runs_total). This applies Bayesian shrinkage — errored
+      runs are treated as "unknown, assume average" rather than zero.
+    - For categories where ALL runs errored: substitute the global category average.
+    - For skipped categories (model doesn't support the feature): excluded entirely.
+    - Genuine failures (model completed runs but scored 0%) remain at 0%.
+
+    This prevents models with sparse successful data (due to API errors) from appearing
+    at the top of rankings, while not penalising genuine capability failures.
     """
-    # Gather T1 latency means for normalization
+    # --- Step 1: Normalize T1 latency scores ---
     t1_latencies = [
         r["categories"]["T1"]["latency_mean_ms"]
         for r in all_model_results
@@ -117,8 +128,6 @@ def compute_composite_scores(all_model_results: list[dict]) -> None:
 
     for model_result in all_model_results:
         cats = model_result["categories"]
-
-        # Assign T1 score now that we have the max
         if "T1" in cats and max_latency:
             t1_lat = cats["T1"]["latency_mean_ms"]
             if t1_lat is not None and max_latency > 0:
@@ -126,18 +135,67 @@ def compute_composite_scores(all_model_results: list[dict]) -> None:
             else:
                 cats["T1"]["score_mean"] = None
 
-        # Composite = mean of category score_means (skip skipped categories)
-        contributing_scores = [
-            cats[tid]["score_mean"]
-            for tid in sorted(cats.keys())
-            if not cats[tid]["skipped"] and cats[tid]["score_mean"] is not None
+    # --- Step 2: Compute global average per test category (over models with actual data) ---
+    all_test_ids: set[str] = set()
+    for m in all_model_results:
+        all_test_ids.update(m["categories"].keys())
+
+    global_avgs: dict[str, float] = {}
+    for tid in all_test_ids:
+        valid_scores = [
+            m["categories"][tid]["score_mean"]
+            for m in all_model_results
+            if tid in m["categories"]
+            and not m["categories"][tid].get("skipped")
+            and m["categories"][tid].get("score_mean") is not None
+            and m["categories"][tid].get("runs_success", 0) > 0
         ]
-        if contributing_scores:
+        global_avgs[tid] = statistics.mean(valid_scores) if valid_scores else 0.5
+
+    # --- Step 3: Reliability-weighted composite per model ---
+    for model_result in all_model_results:
+        cats = model_result["categories"]
+        effective_scores: list[float] = []
+
+        for tid in sorted(cats.keys()):
+            cat = cats[tid]
+            if cat.get("skipped"):
+                continue
+
+            runs_success = cat.get("runs_success", 0)
+            runs_error = cat.get("runs_error", 0)
+            runs_total = runs_success + runs_error
+            if runs_total == 0:
+                continue
+
+            g_avg = global_avgs.get(tid, 0.5)
+
+            if runs_success > 0 and cat.get("score_mean") is not None:
+                # Blend actual score with global average, weighted by run reliability
+                effective = (cat["score_mean"] * runs_success + g_avg * runs_error) / runs_total
+            else:
+                # All runs errored — no data, assume global average
+                effective = g_avg
+
+            effective = round(effective, 4)
+            cat["score_effective"] = effective  # stored for transparency
+            effective_scores.append(effective)
+
+        if effective_scores:
             model_result["composite_score"] = round(
-                sum(contributing_scores) / len(contributing_scores) * 100, 2
+                sum(effective_scores) / len(effective_scores) * 100, 2
             )
+            cats_with_data = sum(
+                1 for cat in cats.values()
+                if not cat.get("skipped") and cat.get("runs_success", 0) > 0
+            )
+            cats_applicable = sum(1 for cat in cats.values() if not cat.get("skipped"))
+            model_result["data_coverage"] = round(
+                cats_with_data / cats_applicable, 3
+            ) if cats_applicable else None
         else:
             model_result["composite_score"] = None
+            model_result["data_coverage"] = None
 
 
 # ---------------------------------------------------------------------------

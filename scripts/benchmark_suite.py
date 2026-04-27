@@ -309,7 +309,10 @@ def test_tool_calling(client: "BenchmarkClient", model_id: str, caps: dict, iter
         "tools": _TRAVEL_TOOLS,
         "tool_choice": "auto",
         "max_completion_tokens": 300,
-        "venice_parameters": {"include_venice_system_prompt": False},
+        "venice_parameters": {
+            "include_venice_system_prompt": False,
+            "strip_thinking_response": True,
+        },
     }
 
     valid_tool_names = {t["function"]["name"] for t in _TRAVEL_TOOLS}
@@ -413,7 +416,10 @@ def test_structured_output(client: "BenchmarkClient", model_id: str, caps: dict,
         ],
         "response_format": _EXTRACT_SCHEMA,
         "max_completion_tokens": 200,
-        "venice_parameters": {"include_venice_system_prompt": False},
+        "venice_parameters": {
+            "include_venice_system_prompt": False,
+            "strip_thinking_response": True,
+        },
     }
 
     for _ in range(iterations):
@@ -462,6 +468,10 @@ def test_structured_output(client: "BenchmarkClient", model_id: str, caps: dict,
 
 def test_instruction_following(client: "BenchmarkClient", model_id: str, caps: dict, iterations: int) -> list[dict]:
     results = []
+    # Thinking models generate <think> blocks that consume the token budget before the
+    # actual answer, causing truncation at max_completion_tokens=10. Suppress reasoning
+    # for this test and give a larger budget so the answer can land after the think block.
+    _is_reasoning = caps.get("supportsReasoning") or caps.get("supportsReasoningEffort")
     payload = {
         "model": model_id,
         "messages": [
@@ -475,9 +485,14 @@ def test_instruction_following(client: "BenchmarkClient", model_id: str, caps: d
             },
             {"role": "user", "content": "How many days are in a week?"},
         ],
-        "max_completion_tokens": 10,
-        "venice_parameters": {"include_venice_system_prompt": False},
+        "max_completion_tokens": 300 if _is_reasoning else 10,
+        "venice_parameters": {
+            "include_venice_system_prompt": False,
+            "strip_thinking_response": True,
+        },
     }
+    if _is_reasoning:
+        payload["reasoning"] = {"effort": "low"}
 
     for _ in range(iterations):
         t_start = time.perf_counter()
@@ -619,7 +634,10 @@ def test_context_coherence(client: "BenchmarkClient", model_id: str, caps: dict,
         "model": model_id,
         "messages": _COHERENCE_MESSAGES_TEMPLATE,
         "max_completion_tokens": 100,
-        "venice_parameters": {"include_venice_system_prompt": False},
+        "venice_parameters": {
+            "include_venice_system_prompt": False,
+            "strip_thinking_response": True,
+        },
     }
 
     for _ in range(iterations):
@@ -668,6 +686,7 @@ def test_consistency(client: "BenchmarkClient", model_id: str, caps: dict, itera
     Reuses T4-style latency tracking; stores all responses for variance computation.
     """
     results = []
+    _is_reasoning = caps.get("supportsReasoning") or caps.get("supportsReasoningEffort")
     payload = {
         "model": model_id,
         "messages": [
@@ -677,9 +696,14 @@ def test_consistency(client: "BenchmarkClient", model_id: str, caps: dict, itera
             },
             {"role": "user", "content": _CONSISTENCY_PROMPT},
         ],
-        "max_completion_tokens": 10,
-        "venice_parameters": {"include_venice_system_prompt": False},
+        "max_completion_tokens": 300 if _is_reasoning else 10,
+        "venice_parameters": {
+            "include_venice_system_prompt": False,
+            "strip_thinking_response": True,
+        },
     }
+    if _is_reasoning:
+        payload["reasoning"] = {"effort": "low"}
 
     responses = []
 
@@ -739,6 +763,7 @@ def test_conciseness(client: "BenchmarkClient", model_id: str, caps: dict, itera
     Score = max(0, 1 - (word_count - 10) / 10)
     """
     results = []
+    _is_reasoning = caps.get("supportsReasoning") or caps.get("supportsReasoningEffort")
     payload = {
         "model": model_id,
         "messages": [
@@ -751,9 +776,14 @@ def test_conciseness(client: "BenchmarkClient", model_id: str, caps: dict, itera
             },
             {"role": "user", "content": "What is the capital of France?"},
         ],
-        "max_completion_tokens": 50,
-        "venice_parameters": {"include_venice_system_prompt": False},
+        "max_completion_tokens": 300 if _is_reasoning else 50,
+        "venice_parameters": {
+            "include_venice_system_prompt": False,
+            "strip_thinking_response": True,
+        },
     }
+    if _is_reasoning:
+        payload["reasoning"] = {"effort": "low"}
 
     for _ in range(iterations):
         t_start = time.perf_counter()

@@ -252,6 +252,8 @@ def parse_args() -> argparse.Namespace:
                         help="Comma-separated test IDs e.g. T1,T2,T4 (default: all)")
     parser.add_argument("--model", default="",
                         help="Benchmark a single model ID only")
+    parser.add_argument("--models", default="",
+                        help="Comma-separated model IDs to benchmark (overrides --model)")
     parser.add_argument("--privacy", choices=["both", "private", "anonymized"], default="both",
                         help="Privacy mode filter (default: both)")
     parser.add_argument("--dry-run", action="store_true",
@@ -311,7 +313,13 @@ def main() -> int:
     # --- Filter models ---
     filtered = filter_models(raw_models, args.privacy)
 
-    if args.model:
+    if args.models:
+        model_ids = {mid.strip() for mid in args.models.split(",") if mid.strip()}
+        filtered = [m for m in filtered if m.get("id") in model_ids]
+        if not filtered:
+            print(f"Error: None of the requested models were found or passed the privacy filter.", file=sys.stderr)
+            return 1
+    elif args.model:
         filtered = [m for m in filtered if m.get("id") == args.model]
         if not filtered:
             print(f"Error: Model '{args.model}' not found or excluded by privacy filter.", file=sys.stderr)
@@ -385,6 +393,8 @@ def main() -> int:
                 finally:
                     pbar.update(1)
                     pbar.set_postfix_str(f"last: {model_id}")
+                    completed_count = len(all_model_results)
+                    print(f"##PROGRESS## {completed_count}/{len(tasks)} {model_id}", flush=True)
 
     elapsed = time.time() - start_time
     print(f"\nBenchmark complete in {elapsed:.1f}s")

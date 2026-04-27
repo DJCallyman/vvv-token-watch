@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_FILE_PATH: str = "/data/logs/app.log"
     DATA_DIR: str = "/data"
+    BENCHMARK_RESULTS_DIR: str = "scripts/results"
     
     CACHE_TTL_SECONDS: int = 300
     
