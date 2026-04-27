@@ -104,6 +104,46 @@ class Theme(QObject):
         return '#606060' if self.mode == 'dark' else '#d0d0d0'
     
     @property
+    def accent_light(self):
+        """Lighter accent color for hover states"""
+        return '#4da6e8' if self.mode == 'dark' else '#3377bb'
+    
+    @property
+    def accent_dark(self):
+        """Darker accent color for pressed states"""
+        return '#0055a0' if self.mode == 'dark' else '#003d7a'
+    
+    @property
+    def accent_darker(self):
+        """Darkest accent color for active states"""
+        return '#003d7a' if self.mode == 'dark' else '#002266'
+    
+    @property
+    def text_muted(self):
+        """Muted text color for secondary information"""
+        return self.text_secondary
+    
+    @property
+    def widget_bg(self):
+        """Widget background (alias for card_background)"""
+        return self.card_background
+    
+    @property
+    def success_light(self):
+        """Lighter success color for backgrounds"""
+        return '#33d977' if self.mode == 'dark' else '#66cc66'
+    
+    @property
+    def success_dark(self):
+        """Darker success color for pressed states"""
+        return '#00994d' if self.mode == 'dark' else '#388e3c'
+    
+    @property
+    def card_background_light(self):
+        """Lighter card background for nested elements"""
+        return '#3a3a3a' if self.mode == 'dark' else '#ffffff'
+    
+    @property
     def chart_colors(self):
         """Theme-adapted colors for data visualization charts.
         
@@ -149,13 +189,21 @@ class Theme(QObject):
             'background': self.background,
             'text': self.text,
             'accent': self.accent,
+            'accent_light': self.accent_light,
+            'accent_dark': self.accent_dark,
+            'accent_darker': self.accent_darker,
             'input_background': self.input_background,
             'error': self.error,
             'warning': self.warning,
             'success': self.success,
+            'success_light': self.success_light,
+            'success_dark': self.success_dark,
             'border': self.border,
             'card_background': self.card_background,
+            'card_background_light': self.card_background_light,
             'text_secondary': self.text_secondary,
+            'text_muted': self.text_muted,
+            'widget_bg': self.widget_bg,
             'positive': self.positive,
             'negative': self.negative,
             'primary': self.primary,

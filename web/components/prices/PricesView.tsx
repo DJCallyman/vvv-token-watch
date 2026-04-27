@@ -176,11 +176,11 @@ export function PricesView() {
           <div className="space-y-6">
             <div className="h-4 bg-muted rounded-full overflow-hidden flex">
               <div 
-                className="h-full bg-blue-500 transition-all"
+                className="h-full bg-primary transition-all"
                 style={{ width: `${holdingsRatio}%` }}
               />
               <div 
-                className="h-full bg-emerald-500 transition-all"
+                className="h-full bg-success transition-all"
                 style={{ width: `${100 - holdingsRatio}%` }}
               />
             </div>
@@ -188,7 +188,7 @@ export function PricesView() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-blue-500" />
+                  <div className="w-3 h-3 rounded-full bg-primary" />
                   <span className="font-medium">VVV</span>
                 </div>
                 <div className="text-right">
@@ -199,7 +199,7 @@ export function PricesView() {
               
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                 <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500" />
+                  <div className="w-3 h-3 rounded-full bg-success" />
                   <span className="font-medium">DIEM</span>
                 </div>
                 <div className="text-right">

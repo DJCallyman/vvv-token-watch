@@ -24,6 +24,7 @@ from src.core.cache_models import (
 from src.core.cache_tracking_worker import CacheTrackingWorker
 from src.core.model_cache import ModelCacheManager
 from src.config.config import Config
+from src.config.theme import Theme
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +40,10 @@ class CacheTrackingWidget(QWidget):
     - Optimization recommendations
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, theme: Theme = None, parent=None):
         """Initialize the cache tracking widget."""
         super().__init__(parent)
+        self.theme = theme or Theme()
         self.cache_worker: Optional[CacheTrackingWorker] = None
         self.current_report: Optional[CachePerformanceReport] = None
         self.model_stats: Dict[str, ModelCacheStats] = {}
@@ -93,12 +95,21 @@ class CacheTrackingWidget(QWidget):
         """Create the summary statistics section."""
         frame = QFrame()
         frame.setFrameStyle(QFrame.StyledPanel)
-        frame.setStyleSheet("""
-            QFrame {
-                background-color: #1e1e2e;
+        self._update_summary_frame_style(frame)
+        return frame
+    
+    def _update_summary_frame_style(self, frame: QFrame = None):
+        """Update summary frame style with theme colors."""
+        if frame is None:
+            frame = self.findChild(QFrame, "", Qt.FindChildrenRecursively)
+            if not frame:
+                return
+        frame.setStyleSheet(f"""
+            QFrame {{
+                background-color: {self.theme.card_background};
                 border-radius: 8px;
                 padding: 16px;
-            }
+            }}
         """)
 
         layout = QGridLayout(frame)
@@ -127,7 +138,7 @@ class CacheTrackingWidget(QWidget):
 
             title_label = QLabel(title)
             title_label.setAlignment(Qt.AlignCenter)
-            title_label.setStyleSheet("color: #888; font-size: 12px;")
+            title_label.setStyleSheet(f"color: {self.theme.text_secondary}; font-size: 12px;")
 
             container.addWidget(label)
             container.addWidget(title_label)
@@ -140,14 +151,14 @@ class CacheTrackingWidget(QWidget):
         """Create the model performance tab."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("""
-            QScrollArea {
+        scroll.setStyleSheet(f"""
+            QScrollArea {{
                 background-color: transparent;
                 border: none;
-            }
-            QWidget {
+            }}
+            QWidget {{
                 background-color: transparent;
-            }
+            }}
         """)
 
         content = QWidget()
@@ -155,20 +166,7 @@ class CacheTrackingWidget(QWidget):
         layout.setSpacing(12)
 
         table_group = QGroupBox("Cache Performance by Model")
-        table_group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 1px solid #444;
-                border-radius: 6px;
-                margin-top: 12px;
-                padding-top: 12px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 8px;
-                padding: 0 4px;
-            }
-        """)
+        table_group.setStyleSheet(self._get_groupbox_style())
         table_layout = QVBoxLayout()
 
         self.model_table = QTableWidget(0, 8)
@@ -189,27 +187,7 @@ class CacheTrackingWidget(QWidget):
         for i in range(1, 8):
             self.model_table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
 
-        self.model_table.setStyleSheet("""
-            QTableWidget {
-                background-color: #2a2a3e;
-                border: 1px solid #3a3a4e;
-                border-radius: 4px;
-                gridline-color: #3a3a4e;
-            }
-            QTableWidget::item {
-                padding: 8px;
-                border-bottom: 1px solid #3a3a4e;
-            }
-            QTableWidget::item:selected {
-                background-color: #4a4a5e;
-            }
-            QHeaderView::section {
-                background-color: #1e1e2e;
-                color: #aaa;
-                padding: 8px;
-                border: 1px solid #3a3a4e;
-            }
-        """)
+        self.model_table.setStyleSheet(self._get_table_style())
 
         table_layout.addWidget(self.model_table)
         table_group.setLayout(table_layout)
@@ -222,11 +200,11 @@ class CacheTrackingWidget(QWidget):
         """Create the daily trends tab."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("""
-            QScrollArea {
+        scroll.setStyleSheet(f"""
+            QScrollArea {{
                 background-color: transparent;
                 border: none;
-            }
+            }}
         """)
 
         content = QWidget()
@@ -234,15 +212,7 @@ class CacheTrackingWidget(QWidget):
         layout.setSpacing(12)
 
         trends_group = QGroupBox("Daily Cache Performance")
-        trends_group.setStyleSheet("""
-            QGroupBox {
-                font-weight: bold;
-                border: 1px solid #444;
-                border-radius: 6px;
-                margin-top: 12px;
-                padding-top: 12px;
-            }
-        """)
+        trends_group.setStyleSheet(self._get_groupbox_style())
         trends_layout = QVBoxLayout()
 
         self.trends_table = QTableWidget(0, 6)
@@ -261,16 +231,7 @@ class CacheTrackingWidget(QWidget):
         for i in range(1, 6):
             self.trends_table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
 
-        self.trends_table.setStyleSheet("""
-            QTableWidget {
-                background-color: #2a2a3e;
-                border: 1px solid #3a3a4e;
-                border-radius: 4px;
-            }
-            QTableWidget::item {
-                padding: 8px;
-            }
-        """)
+        self.trends_table.setStyleSheet(self._get_table_style())
 
         trends_layout.addWidget(self.trends_table)
         trends_group.setLayout(trends_layout)
@@ -283,12 +244,37 @@ class CacheTrackingWidget(QWidget):
         """Create the optimization recommendations tab."""
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("""
-            QScrollArea {
+        scroll.setStyleSheet(f"""
+            QScrollArea {{
                 background-color: transparent;
                 border: none;
-            }
+            }}
         """)
+
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        layout.setSpacing(12)
+
+        recommendations_group = QGroupBox("Cache Optimization Recommendations")
+        recommendations_group.setStyleSheet(self._get_groupbox_style())
+        recs_layout = QVBoxLayout()
+
+        self.recommendations_table = QTableWidget(0, 5)
+        self.recommendations_table.setObjectName("recommendations_table")
+        self.recommendations_table.setHorizontalHeaderLabels([
+            "Priority",
+            "Model",
+            "Issue",
+            "Current",
+            "Savings Potential"
+        ])
+
+        self.recommendations_table.horizontalHeader().setStretchLastSection(False)
+        self.recommendations_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        for i in range(1, 5):
+            self.recommendations_table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
+
+        self.recommendations_table.setStyleSheet(self._get_table_style())
 
         content = QWidget()
         layout = QVBoxLayout(content)
@@ -321,13 +307,7 @@ class CacheTrackingWidget(QWidget):
         for i in range(1, 5):
             self.recommendations_table.horizontalHeader().setSectionResizeMode(i, QHeaderView.ResizeMode.ResizeToContents)
 
-        self.recommendations_table.setStyleSheet("""
-            QTableWidget {
-                background-color: #2a2a3e;
-                border: 1px solid #3a3a4e;
-                border-radius: 4px;
-            }
-        """)
+        self.recommendations_table.setObjectName("recommendations_table")
 
         recs_layout.addWidget(self.recommendations_table)
         recommendations_group.setLayout(recs_layout)
@@ -496,7 +476,12 @@ class CacheTrackingWidget(QWidget):
             self.recommendations_table.insertRow(row)
 
             priority_item = QTableWidgetItem(rec.priority.upper())
-            priority_item.setForeground(priority_colors.get(rec.priority, QColor("#888")))
+            priority_color_map = {
+                "high": QColor(self.theme.error),
+                "medium": QColor(self.theme.warning),
+                "low": QColor(self.theme.success)
+            }
+            priority_item.setForeground(priority_color_map.get(rec.priority, QColor("#888")))
             self.recommendations_table.setItem(row, 0, priority_item)
 
             self.recommendations_table.setItem(row, 1, QTableWidgetItem(rec.model_name))
@@ -521,3 +506,81 @@ class CacheTrackingWidget(QWidget):
             except (RuntimeError, Exception):
                 pass
             self.cache_worker = None
+
+    def set_theme(self, theme: Theme):
+        """Set theme and update all widget styles."""
+        self.theme = theme
+        self._apply_theme()
+    
+    def _apply_theme(self):
+        """Apply current theme to all styled elements."""
+        self._update_summary_frame_style()
+        self._update_tables()
+        self._update_groupboxes()
+        
+        # Update title label
+        for label in self.findChildren(QLabel):
+            if label.font().pointSize() == 16:
+                label.setStyleSheet(f"color: {self.theme.text};")
+                break
+    
+    def _update_tables(self):
+        """Update all table styles with theme colors."""
+        table_style = self._get_table_style()
+        for attr in ['model_table', 'trends_table', 'recommendations_table']:
+            table = getattr(self, attr, None)
+            if table:
+                table.setStyleSheet(table_style)
+    
+    def _update_groupboxes(self):
+        """Update all groupbox styles with theme colors."""
+        groupbox_style = self._get_groupbox_style()
+        for groupbox in self.findChildren(QGroupBox):
+            groupbox.setStyleSheet(groupbox_style)
+    
+    def _get_table_style(self) -> str:
+        """Get themed table stylesheet."""
+        return f"""
+            QTableWidget {{
+                background-color: {self.theme.background};
+                color: {self.theme.text};
+                border: 1px solid {self.theme.border};
+                border-radius: 4px;
+                gridline-color: {self.theme.border};
+            }}
+            QTableWidget::item {{
+                padding: 8px;
+                border-bottom: 1px solid {self.theme.border};
+            }}
+            QTableWidget::item:selected {{
+                background-color: {self.theme.accent};
+                color: {self.theme.text};
+            }}
+            QTableWidget::item:hover {{
+                background-color: {self.theme.card_background};
+            }}
+            QHeaderView::section {{
+                background-color: {self.theme.card_background};
+                color: {self.theme.text};
+                padding: 8px;
+                border: 1px solid {self.theme.border};
+            }}
+        """
+    
+    def _get_groupbox_style(self) -> str:
+        """Get themed groupbox stylesheet."""
+        return f"""
+            QGroupBox {{
+                font-weight: bold;
+                color: {self.theme.text};
+                border: 1px solid {self.theme.border};
+                border-radius: 6px;
+                margin-top: 12px;
+                padding-top: 12px;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 4px;
+            }}
+        """

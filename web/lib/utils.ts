@@ -49,8 +49,33 @@ export function getUsagePercentile(value: number, max: number): number {
 }
 
 export function getUsageBarColor(percentile: number): string {
-  if (percentile >= 75) return 'bg-red-500'
-  if (percentile >= 50) return 'bg-yellow-500'
-  if (percentile >= 25) return 'bg-emerald-400'
-  return 'bg-emerald-500'
+  if (percentile >= 75) return 'bg-destructive'
+  if (percentile >= 50) return 'bg-warning'
+  if (percentile >= 25) return 'bg-success/70'
+  return 'bg-success'
+}
+
+export function getSuccessRateColor(rate: number): string {
+  if (rate >= 99) return 'bg-success/10 text-success'
+  if (rate >= 95) return 'bg-warning/10 text-warning'
+  return 'bg-destructive/10 text-destructive'
+}
+
+export function getPriorityStyles(priority: 'high' | 'medium' | 'low'): string {
+  const styles = {
+    high: 'bg-destructive/10 text-destructive border-destructive/20',
+    medium: 'bg-warning/10 text-warning border-warning/20',
+    low: 'bg-success/10 text-success border-success/20',
+  }
+  return styles[priority]
+}
+
+export function getTypeColor(type: string): string {
+  const typeMap: Record<string, string> = {
+    text: 'bg-chart-1/10 text-chart-1 border-chart-1/20',
+    image: 'bg-chart-5/10 text-chart-5 border-chart-5/20',
+    audio: 'bg-chart-3/10 text-chart-3 border-chart-3/20',
+    video: 'bg-chart-2/10 text-chart-2 border-chart-2/20',
+  }
+  return typeMap[type.toLowerCase()] || 'bg-muted text-muted-foreground border-muted'
 }

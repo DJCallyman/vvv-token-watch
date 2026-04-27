@@ -154,7 +154,7 @@ class StatusIndicator(QWidget):
         }
         
         theme_key = color_key_mapping.get(status_type, 'text_secondary')
-        return self.theme_colors.get(theme_key, self.theme_colors.get('text_secondary', '#999999'))
+        return self.theme_colors.get(theme_key, self.theme_colors.get('text_secondary', '#bbbbbb'))
     
     def _get_default_message(self, status_type: str) -> str:
         """Get default message for a status type."""

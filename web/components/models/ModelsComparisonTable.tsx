@@ -608,8 +608,8 @@ export function ModelsComparisonTable({ models, modelType, onOpenColumnSelector 
                       <span className={cn(
                         "inline-flex items-center justify-center w-5 h-5 rounded text-xs font-medium",
                         sortValue === 1 
-                          ? "bg-green-500/10 text-green-600" 
-                          : "bg-red-500/10 text-red-600"
+                          ? "bg-success/10 text-success" 
+                          : "bg-destructive/10 text-destructive"
                       )}>
                         {display}
                       </span>
