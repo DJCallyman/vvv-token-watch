@@ -1,12 +1,16 @@
 'use client'
 
+import { useState } from 'react'
 import { usePrices } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatCurrency, formatNumber } from '@/lib/utils'
-import { Coins, TrendingUp, Wallet, BarChart3, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { Coins, Wallet } from 'lucide-react'
+
+type Currency = 'USD' | 'AUD'
 
 export function PricesView() {
   const { data: prices, isLoading, isError } = usePrices()
+  const [portfolioCurrency, setPortfolioCurrency] = useState<Currency>('USD')
 
   if (isLoading) {
     return (
@@ -32,11 +36,16 @@ export function PricesView() {
   const vvvHoldings = prices.holdings?.vvv || 0
   const diemHoldings = prices.holdings?.diem || 0
 
-  const vvvValue = prices.portfolio?.vvv_value_usd || (vvvPrice * vvvHoldings)
-  const diemValue = prices.portfolio?.diem_value_usd || (diemPrice * diemHoldings)
-  const totalValue = prices.portfolio?.total_usd || (vvvValue + diemValue)
+  const vvvValueUsd = prices.portfolio?.vvv_value_usd || (vvvPrice * vvvHoldings)
+  const diemValueUsd = prices.portfolio?.diem_value_usd || (diemPrice * diemHoldings)
 
-  const holdingsRatio = totalValue > 0 ? (vvvValue / totalValue) * 100 : 0
+  const vvvValueAud = vvvAud != null ? vvvAud * vvvHoldings : null
+  const diemValueAud = diemAud != null ? diemAud * diemHoldings : null
+
+  const portfolioVvvValue = portfolioCurrency === 'AUD' ? vvvValueAud : vvvValueUsd
+  const portfolioDiemValue = portfolioCurrency === 'AUD' ? diemValueAud : diemValueUsd
+  const portfolioVvvPrice = portfolioCurrency === 'AUD' ? vvvAud : vvvPrice
+  const portfolioDiemPrice = portfolioCurrency === 'AUD' ? diemAud : diemPrice
 
   return (
     <div className="space-y-6">
@@ -64,7 +73,7 @@ export function PricesView() {
                   {formatCurrency(vvvPrice)}
                 </p>
               </div>
-              {vvvAud && (
+              {vvvAud != null && (
                 <div>
                   <p className="text-sm text-muted-foreground">Price (AUD)</p>
                   <p className="text-3xl font-bold text-foreground">
@@ -79,8 +88,13 @@ export function PricesView() {
                 {formatNumber(vvvHoldings)} VVV
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                ≈ {formatCurrency(vvvValue)}
+                ≈ {formatCurrency(vvvValueUsd)}
               </p>
+              {vvvValueAud != null && (
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  ≈ {formatCurrency(vvvValueAud, 'AUD')}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -101,7 +115,7 @@ export function PricesView() {
                   {formatCurrency(diemPrice)}
                 </p>
               </div>
-              {diemAud && (
+              {diemAud != null && (
                 <div>
                   <p className="text-sm text-muted-foreground">Price (AUD)</p>
                   <p className="text-3xl font-bold text-foreground">
@@ -116,8 +130,13 @@ export function PricesView() {
                 {formatNumber(diemHoldings)} DIEM
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                ≈ {formatCurrency(diemValue)}
+                ≈ {formatCurrency(diemValueUsd)}
               </p>
+              {diemValueAud != null && (
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  ≈ {formatCurrency(diemValueAud, 'AUD')}
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -125,22 +144,39 @@ export function PricesView() {
       
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Wallet className="w-5 h-5" />
-            Portfolio Summary
-          </CardTitle>
-          <CardDescription>Your combined token holdings</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Wallet className="w-5 h-5" />
+                Portfolio Summary
+              </CardTitle>
+              <CardDescription>Your combined token holdings</CardDescription>
+            </div>
+            <select
+              value={portfolioCurrency}
+              onChange={(e) => setPortfolioCurrency(e.target.value as Currency)}
+              className="text-sm rounded-md border border-input bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="USD">USD</option>
+              <option value="AUD">AUD</option>
+            </select>
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="rounded-lg bg-muted/50 p-4">
               <div className="flex items-center gap-2 mb-2">
                 <Coins className="w-4 h-4 text-primary" />
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">VVV Value</p>
               </div>
-              <p className="text-2xl font-bold">{formatCurrency(vvvValue)}</p>
+              <p className="text-2xl font-bold">
+                {portfolioVvvValue != null
+                  ? formatCurrency(portfolioVvvValue, portfolioCurrency)
+                  : '—'}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {formatNumber(vvvHoldings)} tokens @ {formatCurrency(vvvPrice)}
+                {formatNumber(vvvHoldings)} tokens
+                {portfolioVvvPrice != null ? ` @ ${formatCurrency(portfolioVvvPrice, portfolioCurrency)}` : ''}
               </p>
             </div>
             <div className="rounded-lg bg-muted/50 p-4">
@@ -148,103 +184,19 @@ export function PricesView() {
                 <Coins className="w-4 h-4 text-primary" />
                 <p className="text-xs text-muted-foreground uppercase tracking-wide">DIEM Value</p>
               </div>
-              <p className="text-2xl font-bold">{formatCurrency(diemValue)}</p>
+              <p className="text-2xl font-bold">
+                {portfolioDiemValue != null
+                  ? formatCurrency(portfolioDiemValue, portfolioCurrency)
+                  : '—'}
+              </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {formatNumber(diemHoldings)} tokens @ {formatCurrency(diemPrice)}
+                {formatNumber(diemHoldings)} tokens
+                {portfolioDiemPrice != null ? ` @ ${formatCurrency(portfolioDiemPrice, portfolioCurrency)}` : ''}
               </p>
             </div>
-            <div className="rounded-lg bg-primary/10 border border-primary/20 p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <TrendingUp className="w-4 h-4 text-primary" />
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Total Value</p>
-              </div>
-              <p className="text-3xl font-bold text-primary">{formatCurrency(totalValue)}</p>
-            </div>
           </div>
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="w-5 h-5" />
-            Portfolio Allocation
-          </CardTitle>
-          <CardDescription>Distribution of your holdings</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-6">
-            <div className="h-4 bg-muted rounded-full overflow-hidden flex">
-              <div 
-                className="h-full bg-primary transition-all"
-                style={{ width: `${holdingsRatio}%` }}
-              />
-              <div 
-                className="h-full bg-success transition-all"
-                style={{ width: `${100 - holdingsRatio}%` }}
-              />
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-primary" />
-                  <span className="font-medium">VVV</span>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold">{holdingsRatio.toFixed(1)}%</p>
-                  <p className="text-sm text-muted-foreground">{formatCurrency(vvvValue)}</p>
-                </div>
-              </div>
-              
-              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-success" />
-                  <span className="font-medium">DIEM</span>
-                </div>
-                <div className="text-right">
-                  <p className="font-semibold">{(100 - holdingsRatio).toFixed(1)}%</p>
-                  <p className="text-sm text-muted-foreground">{formatCurrency(diemValue)}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {vvvPrice > 0 && diemPrice > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="w-5 h-5" />
-              Token Ratios
-            </CardTitle>
-            <CardDescription>Exchange relationships between tokens</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-4 rounded-lg bg-muted/50">
-                <p className="text-sm text-muted-foreground mb-2">VVV / DIEM Ratio</p>
-                <p className="text-2xl font-bold">
-                  {diemPrice > 0 ? formatNumber(vvvPrice / diemPrice, 4) : '—'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  1 VVV = {diemPrice > 0 ? formatNumber(vvvPrice / diemPrice, 4) : '—'} DIEM
-                </p>
-              </div>
-              <div className="p-4 rounded-lg bg-muted/50">
-                <p className="text-sm text-muted-foreground mb-2">DIEM / VVV Ratio</p>
-                <p className="text-2xl font-bold">
-                  {vvvPrice > 0 ? formatNumber(diemPrice / vvvPrice, 4) : '—'}
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  1 DIEM = {vvvPrice > 0 ? formatNumber(diemPrice / vvvPrice, 4) : '—'} VVV
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }
