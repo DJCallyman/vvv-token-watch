@@ -10,6 +10,10 @@ import requests
 import logging
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
+from backend.config import get_settings
+
+settings = get_settings()
+
 logger = logging.getLogger(__name__)
 
 
@@ -39,8 +43,6 @@ class VeniceAPIClient:
     reused across multiple worker threads and service classes.
     """
     
-    BASE_URL = "https://api.venice.ai/api/v1"
-    
     def __init__(self, api_key: str):
         """
         Initialize the Venice API client.
@@ -49,7 +51,7 @@ class VeniceAPIClient:
             api_key: Venice API key (regular or admin key depending on endpoints needed)
         """
         self.api_key = api_key
-        self.base_url = self.BASE_URL
+        self.base_url = settings.VENICE_API_BASE_URL
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"

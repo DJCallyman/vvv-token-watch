@@ -162,7 +162,7 @@ export function BalanceView() {
                 <div>
                   <p className="text-sm text-muted-foreground">Next Epoch Begins</p>
                   <p className="text-lg font-semibold">
-                    {formatDateTime(balance!.next_epoch_begins!)}
+                    {formatDateTime(balance?.next_epoch_begins ?? '')}
                   </p>
                 </div>
               </div>

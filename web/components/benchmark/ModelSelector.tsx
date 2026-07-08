@@ -14,7 +14,7 @@ export function ModelSelector({ onSelectionChange }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const { data, isLoading } = useBenchmarkModels()
-  const models = data?.models ?? []
+  const models = useMemo(() => data?.models ?? [], [data])
 
   const filtered = useMemo(() => {
     if (!filter) return models
@@ -106,6 +106,11 @@ export function ModelSelector({ onSelectionChange }: Props) {
                   <span className={`text-xs px-1 rounded shrink-0 ${m.privacy === 'private' ? 'bg-blue-900/50 text-blue-300' : 'bg-purple-900/50 text-purple-300'}`}>
                     {m.privacy}
                   </span>
+                  {m.deprecation?.removesAt && (
+                    <span className="text-xs px-1 rounded shrink-0 bg-yellow-900/50 text-yellow-300" title={`Retiring ${m.deprecation.removesAt}${m.deprecation.replacementModelId ? ` → ${m.deprecation.replacementModelId}` : ''}`}>
+                      retiring
+                    </span>
+                  )}
                   {m.pricing_input_usd != null && (
                     <span className="text-xs text-muted-foreground shrink-0">
                       ${m.pricing_input_usd.toFixed(2)}

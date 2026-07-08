@@ -84,7 +84,7 @@ export function useModels() {
 export function useModel(modelId: string) {
   return useQuery({
     queryKey: ['model', modelId],
-    queryFn: () => fetchAPI<Model>(`/api/models/${modelId}`),
+    queryFn: () => api.get<Model>(`/api/models/${modelId}`),
     enabled: !!modelId,
   })
 }
@@ -140,6 +140,13 @@ export interface ModelSpec {
     [key: string]: unknown
   }
   traits?: string[] | Record<string, unknown>
+  deprecation?: {
+    autoRemap?: boolean
+    removesAt?: string
+    replacementModelId?: string
+    startsAt?: string
+    date?: string
+  }
   constraints?: {
     steps?: { max?: number; default?: number }
     promptCharacterLimit?: number
@@ -155,18 +162,3 @@ export interface ModelSpec {
   }
 }
 
-async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(endpoint, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  })
-
-  if (!response.ok) {
-    throw new Error(`API Error: ${response.status} ${response.statusText}`)
-  }
-
-  return response.json()
-}

@@ -1,8 +1,10 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 import httpx
 from backend.config import get_settings, Settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -11,20 +13,22 @@ async def fetch_coin_gecko_price(
     currencies: list[str],
     api_key: Optional[str] = None
 ) -> dict:
-    url = "https://api.coingecko.com/api/v3/simple/price"
+    base_url = "https://api.coingecko.com/api/v3"
     params = {
         "ids": token_id,
         "vs_currencies": ",".join(currencies)
     }
     headers = {}
-    
+
     if api_key:
         if api_key.startswith("CG-"):
             headers["x-cg-demo-api-key"] = api_key
         else:
             headers["x-cg-pro-api-key"] = api_key
-            url = "https://pro-api.coingecko.com/api/v3/simple/price"
-    
+            base_url = "https://pro-api.coingecko.com/api/v3"
+
+    url = f"{base_url}/simple/price"
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.get(url, params=params, headers=headers)
         response.raise_for_status()
@@ -79,7 +83,8 @@ async def get_prices(settings: Settings = Depends(get_settings)):
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=f"CoinGecko API error: {e}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to fetch prices")
+        raise HTTPException(status_code=500, detail="Failed to fetch prices")
 
 
 @router.get("/prices/{token_id}")
@@ -106,4 +111,5 @@ async def get_token_price(
     except httpx.HTTPStatusError as e:
         raise HTTPException(status_code=e.response.status_code, detail=f"CoinGecko API error: {e}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to fetch token price")
+        raise HTTPException(status_code=500, detail="Failed to fetch token price")

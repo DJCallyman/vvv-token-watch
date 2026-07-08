@@ -11,6 +11,9 @@ import logging
 from datetime import datetime, timezone
 
 from backend.core.venice_api_client import VeniceAPIClient
+from backend.config import get_settings
+
+settings = get_settings()
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +66,8 @@ class UsageTracker:
             current_diem = float(balances.get("DIEM", 0))
             current_usd = float(balances.get("USD", 0))
             
-            daily_diem_limit = 100.0
-            daily_usd_limit = 25.0
+            daily_diem_limit = settings.DEFAULT_DAILY_DIEM_LIMIT
+            daily_usd_limit = settings.DEFAULT_DAILY_USD_LIMIT
             
             return BalanceInfo(
                 diem=current_diem,
@@ -120,8 +123,13 @@ class UsageTracker:
                         totals["diem"] -= amount  # charges are negative, refunds positive
                     elif currency == "USD":
                         totals["usd"] -= amount
+                    elif currency in ("BUNDLED_CREDITS", "VCU"):
+                        # Track bundled/legacy credits separately; for now accumulate
+                        # into diem so they are not silently dropped.
+                        totals["diem"] -= amount
 
-                total_pages = int(response.headers.get("x-pagination-total-pages", 1))
+                pagination = response.json().get("pagination", {})
+                total_pages = int(pagination.get("totalPages", response.headers.get("x-pagination-total-pages", 1)))
                 if page >= total_pages:
                     break
                 page += 1
@@ -163,8 +171,14 @@ class UsageTracker:
                     daily_totals['diem'] -= amount  # charges are negative, refunds positive
                 elif currency == 'USD':
                     daily_totals['usd'] -= amount
+                elif currency in ('BUNDLED_CREDITS', 'VCU'):
+                    daily_totals['diem'] -= amount
             
-            return daily_totals
+            return {
+                'diem': daily_totals['diem'],
+                'usd': daily_totals['usd'],
+                'date': target_date,
+            }
             
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to fetch daily usage: {str(e)}")

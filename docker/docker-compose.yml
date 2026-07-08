@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   vvv-token-watch:
     build:
@@ -10,12 +8,13 @@ services:
     environment:
       - VENICE_ADMIN_KEY=${VENICE_ADMIN_KEY}
       - COINGECKO_API_KEY=${COINGECKO_API_KEY:-}
-      - DATABASE_URL=${DATABASE_URL:-postgresql://vvvwatch:vvvwatch@postgres:5432/vvvwatch}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://vvvwatch:${DB_PASSWORD}@postgres:5432/vvvwatch}
       - COINGECKO_HOLDING_AMOUNT=${COINGECKO_HOLDING_AMOUNT:-2750}
       - DIEM_HOLDING_AMOUNT=${DIEM_HOLDING_AMOUNT:-0}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - BACKEND_URL=http://localhost:8000
     volumes:
-      - app_data:/data
+      - app_data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -28,7 +27,7 @@ services:
     environment:
       - POSTGRES_DB=vvvwatch
       - POSTGRES_USER=${DB_USER:-vvvwatch}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-vvvwatch}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

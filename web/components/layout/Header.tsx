@@ -11,9 +11,12 @@ export function Header() {
   return (
     <header className="h-16 border-b border-border bg-card px-6 flex items-center justify-between">
       <div className="flex items-center gap-4">
-        <Badge variant={isError ? "destructive" : "success"} className="gap-1">
+        <Badge
+          variant={isError ? 'destructive' : isLoading ? 'secondary' : 'success'}
+          className="gap-1"
+        >
           <Activity className="w-3 h-3" />
-          {isError ? 'Disconnected' : 'Connected'}
+          {isError ? 'Disconnected' : isLoading ? 'Connecting' : 'Connected'}
         </Badge>
       </div>
       

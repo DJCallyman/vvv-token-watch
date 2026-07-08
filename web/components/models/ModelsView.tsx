@@ -40,8 +40,8 @@ export function ModelsView() {
   const [maxPriceFilter, setMaxPriceFilter] = useState<string>('')
   const [columnSelectorOpen, setColumnSelectorOpen] = useState(false)
 
-  const models = data?.models || []
-  const types = data?.types || []
+  const models = useMemo(() => data?.models || [], [data])
+  const types = useMemo(() => data?.types || [], [data])
 
   const allTraits = useMemo(() => {
     const traits = new Set<string>()
@@ -49,9 +49,9 @@ export function ModelsView() {
       const modelSpec = model.model_spec || model.spec || {}
       const traitsRaw = modelSpec.traits || model.spec?.traits || {}
       if (Array.isArray(traitsRaw)) {
-        traitsRaw.forEach((trait) => traits.add(trait))
+        traitsRaw.forEach((trait) => { traits.add(trait) })
       } else {
-        Object.keys(traitsRaw).forEach((trait) => traits.add(trait))
+        Object.keys(traitsRaw).forEach((trait) => { traits.add(trait) })
       }
     })
     return Array.from(traits).sort()
@@ -114,7 +114,7 @@ export function ModelsView() {
 
     if (maxPriceFilter) {
       const maxPrice = parseFloat(maxPriceFilter)
-      if (!isNaN(maxPrice)) {
+      if (!Number.isNaN(maxPrice)) {
         result = result.filter((model: Model) => {
           const modelSpec = model.model_spec || model.spec || {}
           const pricing = modelSpec.pricing || model.spec?.pricing || {}
@@ -144,10 +144,13 @@ export function ModelsView() {
           return a.id.localeCompare(b.id)
         case 'type':
           return a.type.localeCompare(b.type) || a.id.localeCompare(b.id)
-        case 'context':
-          const aContext = a.spec?.context_length || 0
-          const bContext = b.spec?.context_length || 0
+        case 'context': {
+          const aSpec = a.model_spec || a.spec || {}
+          const bSpec = b.model_spec || b.spec || {}
+          const aContext = aSpec.availableContextTokens || aSpec.context_length || 0
+          const bContext = bSpec.availableContextTokens || bSpec.context_length || 0
           return bContext - aContext
+        }
         default:
           return 0
       }

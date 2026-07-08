@@ -2,7 +2,7 @@
 # Pin to linux/amd64 so Next.js SWC native binaries work correctly even when
 # building for linux/arm64 targets via QEMU. The build output is plain JS/CSS
 # and is platform-independent.
-FROM --platform=linux/amd64 node:20-alpine AS frontend-builder
+FROM node:20-alpine AS frontend-builder
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci
@@ -33,10 +33,18 @@ COPY --from=frontend-builder /app/web/.next/standalone ./web/
 COPY --from=frontend-builder /app/web/.next/static ./web/.next/static
 COPY --from=frontend-builder /app/web/public ./web/public
 
+# Create non-root user and ensure data directory is writable
+RUN useradd -m -u 1001 appuser && \
+    mkdir -p /app/data /app/data/logs /app/data/benchmark_results && \
+    chown -R appuser:appuser /app
+
 # Environment variables
 ENV PYTHONUNBUFFERED=1
 ENV BACKEND_PORT=8000
 ENV FRONTEND_PORT=3000
+ENV DATA_DIR=/app/data
+ENV LOG_FILE_PATH=/app/data/logs/app.log
+ENV BENCHMARK_RESULTS_DIR=/app/data/benchmark_results
 
 # Expose port
 EXPOSE 3000
@@ -48,5 +56,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Start script
 COPY docker/start.sh /start.sh
 RUN chmod +x /start.sh
+
+USER appuser
 
 CMD ["/start.sh"]

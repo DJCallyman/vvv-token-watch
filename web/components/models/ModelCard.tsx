@@ -5,7 +5,7 @@ import { Model } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { formatNumber } from '@/lib/utils'
-import { ChevronDown, ChevronUp, Cpu, Zap, Clock, DollarSign } from 'lucide-react'
+import { ChevronDown, ChevronUp, Cpu, Zap, Clock, DollarSign, AlertTriangle } from 'lucide-react'
 import { cn, getTypeColor } from '@/lib/utils'
 
 interface ModelCardProps {
@@ -25,6 +25,7 @@ export function ModelCard({ model }: ModelCardProps) {
   
   const capabilities = modelSpec.capabilities || model.spec?.capabilities || {}
   const capabilityKeys = Object.keys(capabilities)
+  const deprecation = modelSpec.deprecation || model.spec?.deprecation
 
   return (
     <Card className="hover:border-primary/50 transition-colors">
@@ -38,12 +39,20 @@ export function ModelCard({ model }: ModelCardProps) {
               <p className="text-xs text-muted-foreground mt-0.5">by {model.owned_by}</p>
             )}
           </div>
-          <Badge 
-            variant="outline" 
-            className={cn("shrink-0", getTypeColor(model.type))}
-          >
-            {model.type}
-          </Badge>
+          <div className="flex items-center gap-2 shrink-0">
+            {deprecation?.removesAt && (
+              <Badge variant="destructive" className="gap-1" title={`Retiring ${deprecation.removesAt}${deprecation.replacementModelId ? ` → ${deprecation.replacementModelId}` : ''}`}>
+                <AlertTriangle className="w-3 h-3" />
+                Retiring
+              </Badge>
+            )}
+            <Badge
+              variant="outline"
+              className={cn(getTypeColor(model.type))}
+            >
+              {model.type}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent>

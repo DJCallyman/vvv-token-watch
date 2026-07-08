@@ -13,8 +13,10 @@ from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
 
-from src.core.venice_api_client import VeniceAPIClient
-from src.config.config import Config
+from backend.core.venice_api_client import VeniceAPIClient
+from backend.config import get_settings
+
+settings = get_settings()
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,8 @@ class CachedModel:
     capabilities: List[str] = None
     is_beta: bool = False
     context_window: Optional[int] = None
-    
+    deprecation: Optional[Dict] = None              # Venice deprecation metadata
+
     def __post_init__(self):
         if self.capabilities is None:
             self.capabilities = []
@@ -67,9 +70,11 @@ class ModelCacheManager:
         Args:
             api_client: Optional VeniceAPIClient. If None, creates one with admin API key (required for reliable model fetching)
         """
-        # Use VENICE_ADMIN_KEY for model fetching - it's always set and more reliable
-        # VENICE_API_KEY may be empty or unavailable, causing incomplete model lists
-        self.api_client = api_client or VeniceAPIClient(Config.VENICE_ADMIN_KEY)
+        # /models is a public endpoint; prefer the regular API key to avoid
+        # exposing the admin key unnecessarily. Fall back to admin key only if
+        # no regular key is configured.
+        api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
+        self.api_client = api_client or VeniceAPIClient(api_key)
         self.models: Dict[str, CachedModel] = {}
         self.raw_api_data: Optional[Dict] = None  # Store raw API response for full details
         self.cache_timestamp: Optional[str] = None  # ISO format timestamp
@@ -181,7 +186,8 @@ class ModelCacheManager:
                     cache_write_price_diem=cache_write_price_diem,
                     capabilities=capabilities,
                     is_beta=model_spec.get('beta', False),
-                    context_window=model_spec.get('availableContextTokens')
+                    context_window=model_spec.get('availableContextTokens'),
+                    deprecation=model_spec.get('deprecation'),
                 )
                 
                 self.models[model_id] = cached_model
@@ -215,6 +221,7 @@ class ModelCacheManager:
                         'capabilities': m.capabilities,
                         'is_beta': m.is_beta,
                         'context_window': m.context_window,
+                        'deprecation': m.deprecation,
                     }
                     for model_id, m in self.models.items()
                 },
@@ -264,7 +271,8 @@ class ModelCacheManager:
                     cache_write_price_diem=model_dict.get('cache_write_price_diem'),
                     capabilities=model_dict.get('capabilities', []),
                     is_beta=model_dict.get('is_beta', False),
-                    context_window=model_dict.get('context_window')
+                    context_window=model_dict.get('context_window'),
+                    deprecation=model_dict.get('deprecation'),
                 )
             
             self.raw_api_data = cache_data.get('raw_api_data')
@@ -489,6 +497,7 @@ class ModelCacheManager:
             'cache_write_per_1m_usd': model.cache_write_price_usd,
             'cache_discount_percent': self.get_cache_discount_percent(model_id),
             'supports_cache': model.supports_cache,
+            'deprecation': model.deprecation,
         }
 
         return summary

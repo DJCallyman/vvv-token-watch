@@ -24,6 +24,9 @@ export interface BalanceData {
   next_epoch_begins: string | null
   diem_usage_percent: number
   usd_usage_percent: number
+  consumption_currency?: string
+  can_consume?: boolean
+  diem_epoch_allocation?: number | null
 }
 
 export interface DailyUsage {
@@ -147,6 +150,13 @@ export interface BenchmarkModel {
   capabilities: BenchmarkCapabilities
   pricing_input_usd: number | null
   pricing_output_usd: number | null
+  deprecation?: {
+    autoRemap?: boolean
+    removesAt?: string
+    replacementModelId?: string
+    startsAt?: string
+    date?: string
+  } | null
 }
 
 export interface BenchmarkModelsResponse {
@@ -191,7 +201,7 @@ export const api = {
   },
 
   async getHealth(): Promise<{ status: string; timestamp: string }> {
-    return fetchAPI('/api/health')
+    return fetchAPI<{ status: string; timestamp: string }>('/api/health')
   },
 
   async get<T>(endpoint: string): Promise<T> {

@@ -7,7 +7,7 @@ from functools import lru_cache
 class Settings(BaseSettings):
     VENICE_ADMIN_KEY: str
     VENICE_API_KEY: Optional[str] = None
-    DATABASE_URL: str
+    DATABASE_URL: Optional[str] = "postgresql+asyncpg://postgres:postgres@localhost:5432/vvv_token_watch"
     
     COINGECKO_API_KEY: Optional[str] = None
     COINGECKO_TOKEN_ID: str = "venice-token"
@@ -22,10 +22,14 @@ class Settings(BaseSettings):
     DEFAULT_DAILY_DIEM_LIMIT: float = 100.0
     DEFAULT_DAILY_USD_LIMIT: float = 25.0
     
+    VENICE_API_BASE_URL: str = "https://api.venice.ai/api/v1"
+    COINGECKO_API_BASE_URL: str = "https://api.coingecko.com/api/v3"
+    
     LOG_LEVEL: str = "INFO"
-    LOG_FILE_PATH: str = "/data/logs/app.log"
-    DATA_DIR: str = "/data"
-    BENCHMARK_RESULTS_DIR: str = "scripts/results"
+    LOG_FILE_PATH: str = "./data/logs/app.log"
+    DATA_DIR: str = "./data"
+    BENCHMARK_RESULTS_DIR: str = "./data/benchmark_results"
+    SQL_ECHO: bool = False
     
     CACHE_TTL_SECONDS: int = 300
     

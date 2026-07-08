@@ -20,6 +20,14 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const esRef = useRef<EventSource | null>(null)
 
+  const onCompleteRef = useRef(onComplete)
+  const onErrorRef = useRef(onError)
+
+  useEffect(() => {
+    onCompleteRef.current = onComplete
+    onErrorRef.current = onError
+  }, [onComplete, onError])
+
   useEffect(() => {
     const es = new EventSource(`/api/benchmark/stream/${encodeURIComponent(jobId)}`)
     esRef.current = es
@@ -43,12 +51,12 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
           setStatus('done')
           setLines((prev) => [...prev, { text: `Benchmark complete. Run ID: ${data.run_id}`, type: 'done' }])
           es.close()
-          onComplete(data.run_id)
+          onCompleteRef.current(data.run_id)
         } else if (data.type === 'error') {
           setStatus('error')
           setLines((prev) => [...prev, { text: `Process exited with code ${data.exit_code}`, type: 'error' }])
           es.close()
-          onError?.()
+          onErrorRef.current?.()
         }
       } catch {
         setLines((prev) => [...prev, { text: event.data, type: 'log' }])
@@ -56,9 +64,12 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
     }
 
     es.onerror = () => {
-      if (status === 'running') {
-        setLines((prev) => [...prev, { text: 'Stream disconnected.', type: 'error' }])
-      }
+      setStatus((current) => {
+        if (current === 'running') {
+          setLines((prev) => [...prev, { text: 'Stream disconnected.', type: 'error' }])
+        }
+        return current
+      })
       es.close()
     }
 
@@ -66,7 +77,6 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
       es.close()
       esRef.current = null
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId])
 
   // Auto-scroll to bottom
@@ -114,7 +124,7 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
               ? 'text-muted-foreground'
               : 'text-gray-300'
           return (
-            <div key={i} className={cls}>
+            <div key={`${i}-${line.text.slice(0, 32)}`} className={cls}>
               {line.text}
             </div>
           )

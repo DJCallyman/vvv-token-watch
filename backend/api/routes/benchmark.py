@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Optional
 
 import requests
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 
@@ -40,11 +40,13 @@ router = APIRouter()
 # backend/api/routes/benchmark.py → repo root is 4 levels up
 _REPO_ROOT = Path(__file__).parent.parent.parent.parent
 _BENCHMARK_SCRIPT = _REPO_ROOT / "scripts" / "benchmark_models.py"
-_VENICE_BASE = "https://api.venice.ai/api/v1"
+_VENICE_BASE = settings.VENICE_API_BASE_URL
 
 
 def _results_dir() -> Path:
-    d = _REPO_ROOT / settings.BENCHMARK_RESULTS_DIR
+    d = Path(settings.BENCHMARK_RESULTS_DIR)
+    if not d.is_absolute():
+        d = _REPO_ROOT / d
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -56,6 +58,36 @@ def _results_dir() -> Path:
 _jobs: dict[str, dict] = {}
 # {job_id: {"proc": asyncio.subprocess.Process, "status": str,
 #            "run_id": str | None, "started_at": float}}
+
+_MAX_CONCURRENT_JOBS = 1
+_JOB_TTL_SECONDS = 3600
+
+
+async def terminate_all_jobs():
+    """Terminate all running benchmark jobs. Called during application shutdown."""
+    for job_id, job in list(_jobs.items()):
+        proc = job.get("proc")
+        if proc is not None and proc.returncode is None:
+            try:
+                proc.terminate()
+                await asyncio.wait_for(proc.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+            except Exception as exc:
+                logger.error("Error terminating benchmark job %s: %s", job_id, exc)
+
+
+def _cleanup_stale_jobs():
+    """Evict completed jobs older than the TTL to prevent unbounded growth."""
+    now = time.time()
+    stale = [
+        job_id for job_id, job in _jobs.items()
+        if job.get("status") in ("done", "failed")
+        and now - job.get("started_at", now) > _JOB_TTL_SECONDS
+    ]
+    for job_id in stale:
+        _jobs.pop(job_id, None)
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +153,7 @@ def _model_to_summary(m: dict) -> dict:
         },
         "pricing_input_usd": (pricing.get("input") or {}).get("usd"),
         "pricing_output_usd": (pricing.get("output") or {}).get("usd"),
+        "deprecation": spec.get("deprecation"),
     }
 
 
@@ -204,11 +237,29 @@ async def list_benchmark_models():
 
 
 @router.post("/benchmark/start")
-async def start_benchmark(params: BenchmarkStartParams):
+async def start_benchmark(request: Request, params: BenchmarkStartParams):
     """Start a benchmark subprocess. Returns a job_id for streaming/status."""
+    limiter = request.app.state.limiter
+    await limiter.shared_limit("1/hour", scope="benchmark_start")(request)
+
     api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
     if not api_key:
         raise HTTPException(400, "No Venice API key configured in settings")
+
+    _cleanup_stale_jobs()
+
+    running = sum(1 for j in _jobs.values() if j.get("status") == "running")
+    if running >= _MAX_CONCURRENT_JOBS:
+        raise HTTPException(
+            429,
+            f"Only {_MAX_CONCURRENT_JOBS} concurrent benchmark job(s) allowed. Please wait for the current run to finish."
+        )
+
+    if not _BENCHMARK_SCRIPT.exists():
+        raise HTTPException(
+            503,
+            "Benchmark runner is not available in this deployment"
+        )
 
     results_abs = str(_results_dir().resolve())
 
@@ -397,7 +448,7 @@ def _build_infographic_prompt(models: list[dict]) -> str:
 def _call_venice_image(api_key: str, prompt: str) -> str:
     """Synchronous Venice image call — run via asyncio.to_thread."""
     payload = {
-        "model": "nano-banana-2",
+        "model": "flux-2-pro",  # stable, generally available image model
         "prompt": prompt,
         "resolution": "4K",
         "aspect_ratio": "16:9",
