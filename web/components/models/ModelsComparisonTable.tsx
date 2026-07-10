@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Model } from '@/lib/hooks'
 import {
   ColumnDefinition,
@@ -17,6 +17,8 @@ interface ModelsComparisonTableProps {
   models: Model[]
   modelType: ModelType
   onOpenColumnSelector: () => void
+  /** Optional external hidden-column set (kept in sync with ColumnSelector) */
+  hiddenColumnsOverride?: Set<string>
 }
 
 const typeIcons: Record<string, string> = {
@@ -31,7 +33,7 @@ const typeIcons: Record<string, string> = {
 }
 
 function getModelType(model: Model): ModelType {
-  const type = model.type?.toLowerCase()
+  const type = (model.type || model.model_type)?.toLowerCase()
   if (type === 'text' || type === 'image' || type === 'video' || 
       type === 'tts' || type === 'asr' || type === 'embedding' || 
       type === 'upscale' || type === 'inpaint') {
@@ -40,20 +42,55 @@ function getModelType(model: Model): ModelType {
   return 'all'
 }
 
+const CAPABILITY_ALIASES: Record<string, string[]> = {
+  vision: ['supportsVision', 'vision'],
+  functions: ['supportsFunctionCalling', 'function_calling', 'functions'],
+  web_search: ['supportsWebSearch', 'web_search'],
+  reasoning: ['supportsReasoning', 'reasoning'],
+  logprobs: ['supportsLogProbs', 'logprobs'],
+  response_schema: ['supportsResponseSchema', 'response_schema'],
+  optimized_for_code: ['optimizedForCode', 'optimized_for_code'],
+  audio_input: ['supportsAudioInput', 'audio_input'],
+  video_input: ['supportsVideoInput', 'video_input'],
+}
+
+function hasCapability(capabilities: Record<string, unknown>, columnKey: string): boolean {
+  const aliases = CAPABILITY_ALIASES[columnKey] || [columnKey]
+  return aliases.some((key) => Boolean(capabilities[key]))
+}
+
 function getCellValue(model: Model, columnKey: string): { display: string; sortValue: unknown } {
   const modelSpec = model.model_spec || model.spec || {}
-  const capabilities = modelSpec.capabilities || model.spec?.capabilities || {}
-  const traits = modelSpec.traits || model.spec?.traits || {}
-  const constraints = modelSpec.constraints || model.spec?.constraints || {}
-  const pricing = modelSpec.pricing || model.spec?.pricing || {}
+  const flatModel = model as unknown as Record<string, unknown>
+  // Support both full Venice model_spec and flat CachedModel list payloads
+  const flatCapabilities: Record<string, boolean> = {}
+  const rawCapabilities = flatModel.capabilities
+  if (Array.isArray(rawCapabilities)) {
+    rawCapabilities.forEach((cap: string) => { flatCapabilities[cap] = true })
+  } else if (rawCapabilities && typeof rawCapabilities === 'object') {
+    Object.entries(rawCapabilities as Record<string, unknown>).forEach(([key, value]) => {
+      flatCapabilities[key] = Boolean(value)
+    })
+  }
+  const capabilities = {
+    ...flatCapabilities,
+    ...(modelSpec.capabilities || {}),
+  } as Record<string, unknown>
+  const traits = modelSpec.traits || {}
+  const constraints = modelSpec.constraints || {}
+  const pricing = modelSpec.pricing || {}
   const modelType = getModelType(model)
 
   let display = '—'
   let sortValue: unknown = 0
 
-  const getContextLength = () => modelSpec.availableContextTokens || model.spec?.context_length
+  const getContextLength = () =>
+    modelSpec.availableContextTokens ||
+    modelSpec.context_length ||
+    (flatModel.context_window as number | undefined) ||
+    (flatModel.context_length as number | undefined)
   const getMaxTokens = () => modelSpec.maxCompletionTokens || model.spec?.max_output_tokens
-  const getPrivacy = () => modelSpec.privacy || model.spec?.privacy
+  const getPrivacy = () => modelSpec.privacy || model.spec?.privacy || flatModel.privacy
 
   switch (columnKey) {
     case 'model':
@@ -97,7 +134,7 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
       break
 
     case 'quantization':
-      const quant = capabilities.quantization || ''
+      const quant = String(capabilities.quantization || '')
       display = quant && quant !== 'not-available' ? quant : '—'
       sortValue = quant || ''
       break
@@ -111,98 +148,18 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
       break
 
     case 'vision':
-      if (modelType === 'text') {
-        const hasVision = capabilities.supportsVision
-        display = hasVision ? '✓' : '✗'
-        sortValue = hasVision ? 1 : 0
-      } else {
-        display = '—'
-        sortValue = 0
-      }
-      break
-
     case 'functions':
-      if (modelType === 'text') {
-        const hasFunc = capabilities.supportsFunctionCalling
-        display = hasFunc ? '✓' : '✗'
-        sortValue = hasFunc ? 1 : 0
-      } else {
-        display = '—'
-        sortValue = 0
-      }
-      break
-
     case 'web_search':
-      if (modelType === 'text') {
-        const hasWeb = capabilities.supportsWebSearch
-        display = hasWeb ? '✓' : '✗'
-        sortValue = hasWeb ? 1 : 0
-      } else {
-        display = '—'
-        sortValue = 0
-      }
-      break
-
     case 'reasoning':
-      if (modelType === 'text') {
-        const hasReason = capabilities.supportsReasoning
-        display = hasReason ? '✓' : '✗'
-        sortValue = hasReason ? 1 : 0
-      } else {
-        display = '—'
-        sortValue = 0
-      }
-      break
-
     case 'logprobs':
-      if (modelType === 'text') {
-        const hasLogprobs = capabilities.supportsLogProbs
-        display = hasLogprobs ? '✓' : '✗'
-        sortValue = hasLogprobs ? 1 : 0
-      } else {
-        display = '—'
-        sortValue = 0
-      }
-      break
-
     case 'response_schema':
-      if (modelType === 'text') {
-        const hasSchema = capabilities.supportsResponseSchema
-        display = hasSchema ? '✓' : '✗'
-        sortValue = hasSchema ? 1 : 0
-      } else {
-        display = '—'
-        sortValue = 0
-      }
-      break
-
     case 'optimized_for_code':
-      if (modelType === 'text') {
-        const isCodeOpt = capabilities.optimizedForCode
-        display = isCodeOpt ? '✓' : '✗'
-        sortValue = isCodeOpt ? 1 : 0
-      } else {
-        display = '—'
-        sortValue = 0
-      }
-      break
-
     case 'audio_input':
-      if (modelType === 'text') {
-        const hasAudio = capabilities.supportsAudioInput
-        display = hasAudio ? '✓' : '✗'
-        sortValue = hasAudio ? 1 : 0
-      } else {
-        display = '—'
-        sortValue = 0
-      }
-      break
-
     case 'video_input':
       if (modelType === 'text') {
-        const hasVideo = capabilities.supportsVideoInput
-        display = hasVideo ? '✓' : '✗'
-        sortValue = hasVideo ? 1 : 0
+        const enabled = hasCapability(capabilities, columnKey)
+        display = enabled ? '✓' : '✗'
+        sortValue = enabled ? 1 : 0
       } else {
         display = '—'
         sortValue = 0
@@ -212,10 +169,10 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
     case 'input_price':
     case 'price':
       if (modelType === 'text' || modelType === 'embedding') {
-        const inputValue = pricing.input
+        const inputValue = pricing.input ?? (model as unknown as Record<string, unknown>).input_price_usd
         let inputCost: number | null = null
         if (typeof inputValue === 'object' && inputValue !== null && 'usd' in inputValue && inputValue.usd !== undefined) {
-          inputCost = inputValue.usd
+          inputCost = inputValue.usd as number
         } else if (typeof inputValue === 'number') {
           inputCost = inputValue
         }
@@ -261,10 +218,10 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
 
     case 'output_price':
       if (modelType === 'text') {
-        const outputValue = pricing.output
+        const outputValue = pricing.output ?? (model as unknown as Record<string, unknown>).output_price_usd
         let outputCost: number | null = null
         if (typeof outputValue === 'object' && outputValue !== null && 'usd' in outputValue && outputValue.usd !== undefined) {
-          outputCost = outputValue.usd
+          outputCost = outputValue.usd as number
         } else if (typeof outputValue === 'number') {
           outputCost = outputValue
         }
@@ -279,10 +236,10 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
       break
 
     case 'cache_input':
-      const cacheInputValue = pricing.cache_input
+      const cacheInputValue = pricing.cache_input ?? (model as unknown as Record<string, unknown>).cache_input_price_usd
       let cacheInput: number | null = null
       if (typeof cacheInputValue === 'object' && cacheInputValue !== null && 'usd' in cacheInputValue && cacheInputValue.usd !== undefined) {
-        cacheInput = cacheInputValue.usd
+        cacheInput = cacheInputValue.usd as number
       } else if (typeof cacheInputValue === 'number') {
         cacheInput = cacheInputValue
       }
@@ -296,10 +253,10 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
       break
 
     case 'cache_write':
-      const cacheWriteValue = pricing.cache_write
+      const cacheWriteValue = pricing.cache_write ?? (model as unknown as Record<string, unknown>).cache_write_price_usd
       let cacheWrite: number | null = null
       if (typeof cacheWriteValue === 'object' && cacheWriteValue !== null && 'usd' in cacheWriteValue && cacheWriteValue.usd !== undefined) {
-        cacheWrite = cacheWriteValue.usd
+        cacheWrite = cacheWriteValue.usd as number
       } else if (typeof cacheWriteValue === 'number') {
         cacheWrite = cacheWriteValue
       }
@@ -347,7 +304,7 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
       break
 
     case 'generation_price':
-      const genPrice = pricing.generation?.usd || pricing.perImage?.usd
+      const genPrice = pricing.generation?.usd || pricing.perImage?.usd || (model as unknown as Record<string, unknown>).generation_price_usd
       const resPricing = pricing.resolutions || {}
       if (genPrice && typeof genPrice === 'number' && genPrice > 0) {
         const suffix = modelType === 'video' ? '/video' : '/img'
@@ -383,7 +340,7 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
         display = 'text→vid'
         sortValue = 'text-to-video'
       } else {
-        const modelId = model.id.toLowerCase()
+        const modelId = model.id?.toLowerCase()
         if (modelId.includes('image') || modelId.includes('img') || modelId.includes('i2v')) {
           display = 'img→vid'
           sortValue = 'image-to-video'
@@ -454,7 +411,7 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
 
     case 'upscale_price':
     case 'inpaint_price':
-      const upPrice = pricing.upscale?.usd || pricing.inpaint?.usd || pricing.generation?.usd
+      const upPrice = pricing.upscale?.usd || pricing.inpaint?.usd || pricing.generation?.usd || (model as unknown as Record<string, unknown>).generation_price_usd
       if (upPrice && typeof upPrice === 'number') {
         display = `$${upPrice.toFixed(4)}`
         sortValue = upPrice
@@ -481,11 +438,28 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
   return { display, sortValue }
 }
 
-export function ModelsComparisonTable({ models, modelType, onOpenColumnSelector }: ModelsComparisonTableProps) {
+export function ModelsComparisonTable({
+  models,
+  modelType,
+  onOpenColumnSelector,
+  hiddenColumnsOverride,
+}: ModelsComparisonTableProps) {
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'model', direction: 'asc' })
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => 
     loadColumnPreferences(modelType)
   )
+
+  // Reload per-type column preferences when the selected model type changes
+  useEffect(() => {
+    setHiddenColumns(loadColumnPreferences(modelType))
+  }, [modelType])
+
+  // Stay in sync when ColumnSelector updates preferences
+  useEffect(() => {
+    if (hiddenColumnsOverride) {
+      setHiddenColumns(new Set(hiddenColumnsOverride))
+    }
+  }, [hiddenColumnsOverride])
 
   const allColumns = useMemo(() => getColumnsForType(modelType), [modelType])
 

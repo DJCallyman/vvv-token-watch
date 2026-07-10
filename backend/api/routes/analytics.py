@@ -358,12 +358,12 @@ async def get_model_analytics(
                 model_usage[name] = ModelAnalytics(
                     requests=0,  # usage-analytics does not expose request counts
                     tokens=units,
-                    prompt_tokens=sum(b.units for b in breakdown if b.type.lower() == 'input'),
-                    completion_tokens=sum(b.units for b in breakdown if b.type.lower() == 'output'),
+                    prompt_tokens=sum(b.units for b in breakdown if (b.type or '').lower() == 'input'),
+                    completion_tokens=sum(b.units for b in breakdown if (b.type or '').lower() == 'output'),
                     cost=cost,
                     avg_response_time_ms=0.0,
                     success_rate=100.0,
-                    model_type=model.get('modelType', 'other').lower(),
+                    model_type=(model.get('modelType') or 'other').lower(),
                     breakdown=breakdown,
                 )
                 total_tokens += units

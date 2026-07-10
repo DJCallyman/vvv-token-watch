@@ -21,16 +21,29 @@ async def get_models(
     try:
         cache = ModelCacheManager(client)
         await asyncio.to_thread(cache.fetch_models)
-        models = cache.get_all_models()
 
-        model_types = set()
-        for model in models.values():
-            model_types.add(model.model_type)
+        # Prefer full Venice model objects so the UI can render type-specific
+        # table columns (capabilities, privacy, quantization, constraints, etc.).
+        raw_models = cache.get_all_raw_models()
+        if raw_models:
+            model_types = {
+                model.get("type")
+                for model in raw_models
+                if model.get("type")
+            }
+            return {
+                "models": raw_models,
+                "count": len(raw_models),
+                "types": sorted(model_types),
+            }
+
+        models = cache.get_all_models()
+        model_types = {model.model_type for model in models.values() if model.model_type}
 
         return {
             "models": list(models.values()),
             "count": len(models),
-            "types": list(model_types)
+            "types": sorted(model_types),
         }
     except Exception as e:
         logger.exception("Failed to fetch models")

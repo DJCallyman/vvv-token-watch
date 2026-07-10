@@ -16,16 +16,26 @@ export function ModelCard({ model }: ModelCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   const modelSpec = model.model_spec || model.spec || {}
-  const contextLength = modelSpec.availableContextTokens || model.spec?.context_length
+  const flatModel = model as unknown as Record<string, unknown>
+  const contextLength = modelSpec.availableContextTokens || flatModel.context_window as number | undefined
   const maxTokens = modelSpec.maxCompletionTokens || model.spec?.max_output_tokens
-  const pricing = modelSpec.pricing || model.spec?.pricing || {}
-  
+  const pricing = modelSpec.pricing || {
+    input: flatModel.input_price_usd != null ? { usd: flatModel.input_price_usd } : undefined,
+    output: flatModel.output_price_usd != null ? { usd: flatModel.output_price_usd } : undefined,
+    cache_input: flatModel.cache_input_price_usd != null ? { usd: flatModel.cache_input_price_usd } : undefined,
+    cache_write: flatModel.cache_write_price_usd != null ? { usd: flatModel.cache_write_price_usd } : undefined,
+    generation: flatModel.generation_price_usd != null ? { usd: flatModel.generation_price_usd } : undefined,
+  }
+
   const traitsRaw = modelSpec.traits || model.spec?.traits || {}
   const traits = Array.isArray(traitsRaw) ? traitsRaw : Object.keys(traitsRaw)
-  
-  const capabilities = modelSpec.capabilities || model.spec?.capabilities || {}
+
+  const rawCapabilities = flatModel.capabilities
+  const capabilities = modelSpec.capabilities || (Array.isArray(rawCapabilities)
+    ? Object.fromEntries(rawCapabilities.map((cap: string) => [cap, true]))
+    : {})
   const capabilityKeys = Object.keys(capabilities)
-  const deprecation = modelSpec.deprecation || model.spec?.deprecation
+  const deprecation = (modelSpec.deprecation || flatModel.deprecation) as { removesAt?: string; replacementModelId?: string } | undefined | null
 
   return (
     <Card className="hover:border-primary/50 transition-colors">
@@ -48,9 +58,9 @@ export function ModelCard({ model }: ModelCardProps) {
             )}
             <Badge
               variant="outline"
-              className={cn(getTypeColor(model.type))}
+              className={cn(getTypeColor(model.type || model.model_type || 'unknown'))}
             >
-              {model.type}
+              {model.type || model.model_type || 'unknown'}
             </Badge>
           </div>
         </div>
@@ -117,9 +127,9 @@ export function ModelCard({ model }: ModelCardProps) {
                   <div className="rounded-lg bg-muted/50 p-2">
                     <p className="text-xs text-muted-foreground">Input</p>
                     <p className="font-medium">
-                      {pricing.input
+                      {pricing.input != null
                         ? typeof pricing.input === 'object' && 'usd' in pricing.input
-                          ? `$${(pricing.input.usd ?? 0).toFixed(2)}`
+                          ? `$${Number(pricing.input.usd ?? 0).toFixed(2)}`
                           : String(pricing.input)
                         : '—'}
                     </p>
@@ -127,9 +137,9 @@ export function ModelCard({ model }: ModelCardProps) {
                   <div className="rounded-lg bg-muted/50 p-2">
                     <p className="text-xs text-muted-foreground">Output</p>
                     <p className="font-medium">
-                      {pricing.output
+                      {pricing.output != null
                         ? typeof pricing.output === 'object' && 'usd' in pricing.output
-                          ? `$${(pricing.output.usd ?? 0).toFixed(2)}`
+                          ? `$${Number(pricing.output.usd ?? 0).toFixed(2)}`
                           : String(pricing.output)
                         : '—'}
                     </p>

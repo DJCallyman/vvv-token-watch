@@ -19,7 +19,7 @@ export function ModelSelector({ onSelectionChange }: Props) {
   const filtered = useMemo(() => {
     if (!filter) return models
     const q = filter.toLowerCase()
-    return models.filter((m) => m.id.toLowerCase().includes(q))
+    return models.filter((m) => m.id?.toLowerCase().includes(q))
   }, [models, filter])
 
   const toggleAll = (checked: boolean) => {

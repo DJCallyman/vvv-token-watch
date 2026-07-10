@@ -65,7 +65,32 @@ export interface PricesData {
 
 export interface ModelData {
   id: string
-  type: string
+  name?: string
+  type?: string
+  model_type?: string
+  object?: string
+  created?: number
+  owned_by?: string
+  model_spec?: Record<string, unknown>
+  spec?: Record<string, unknown>
+  input_price_usd?: number | null
+  output_price_usd?: number | null
+  generation_price_usd?: number | null
+  cache_input_price_usd?: number | null
+  cache_input_price_diem?: number | null
+  cache_write_price_usd?: number | null
+  cache_write_price_diem?: number | null
+  supports_cache?: boolean
+  capabilities?: string[] | Record<string, unknown>
+  is_beta?: boolean
+  context_window?: number | null
+  deprecation?: {
+    autoRemap?: boolean
+    removesAt?: string
+    replacementModelId?: string
+    startsAt?: string
+    date?: string
+  } | null
   [key: string]: unknown
 }
 

@@ -77,5 +77,5 @@ export function getTypeColor(type: string): string {
     audio: 'bg-chart-3/10 text-chart-3 border-chart-3/20',
     video: 'bg-chart-2/10 text-chart-2 border-chart-2/20',
   }
-  return typeMap[type.toLowerCase()] || 'bg-muted text-muted-foreground border-muted'
+  return typeMap[type?.toLowerCase()] || 'bg-muted text-muted-foreground border-muted'
 }

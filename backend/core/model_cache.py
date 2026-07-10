@@ -154,24 +154,25 @@ class ModelCacheManager:
                     input_price = pricing.get('input', {}).get('usd')
                     output_price = pricing.get('output', {}).get('usd')
                 
-                # Extract capabilities
+                # Extract capabilities (store both short keys and Venice supports* names)
                 capabilities_spec = model_spec.get('capabilities', {})
                 capabilities = []
                 
                 if isinstance(capabilities_spec, dict):
-                    if capabilities_spec.get('supportsVision'):
-                        capabilities.append('vision')
-                    if capabilities_spec.get('supportsFunctionCalling'):
-                        capabilities.append('function_calling')
-                    if capabilities_spec.get('supportsReasoning'):
-                        capabilities.append('reasoning')
-                    if capabilities_spec.get('supportsResponseSchema'):
-                        capabilities.append('response_schema')
-                    if capabilities_spec.get('optimizedForCode'):
-                        capabilities.append('optimized_for_code')
-                
-                # Get traits
-                traits = model_data.get('model_spec', {}).get('traits', [])
+                    capability_map = {
+                        'supportsVision': 'vision',
+                        'supportsFunctionCalling': 'function_calling',
+                        'supportsWebSearch': 'web_search',
+                        'supportsReasoning': 'reasoning',
+                        'supportsLogProbs': 'logprobs',
+                        'supportsResponseSchema': 'response_schema',
+                        'optimizedForCode': 'optimized_for_code',
+                        'supportsAudioInput': 'audio_input',
+                        'supportsVideoInput': 'video_input',
+                    }
+                    for venice_key, short_key in capability_map.items():
+                        if capabilities_spec.get(venice_key):
+                            capabilities.append(short_key)
                 
                 cached_model = CachedModel(
                     id=model_id,
@@ -185,7 +186,7 @@ class ModelCacheManager:
                     cache_write_price_usd=cache_write_price_usd,
                     cache_write_price_diem=cache_write_price_diem,
                     capabilities=capabilities,
-                    is_beta=model_spec.get('beta', False),
+                    is_beta=model_spec.get('beta', False) or model_spec.get('betaModel', False),
                     context_window=model_spec.get('availableContextTokens'),
                     deprecation=model_spec.get('deprecation'),
                 )
@@ -529,6 +530,17 @@ class ModelCacheManager:
                 return model_data
         
         return None
+
+    def get_all_raw_models(self) -> List[Dict]:
+        """
+        Return the full Venice /models payload entries when available.
+
+        These include model_spec (capabilities, pricing, privacy, constraints),
+        which the frontend table view needs for type-specific columns.
+        """
+        if not self.raw_api_data or not self.raw_api_data.get('data'):
+            return []
+        return list(self.raw_api_data['data'])
     
     def get_cache_timestamp(self) -> Optional[str]:
         """

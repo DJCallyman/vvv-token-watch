@@ -91,7 +91,8 @@ export function useModel(modelId: string) {
 
 export interface Model {
   id: string
-  type: string
+  type?: string
+  model_type?: string
   object?: string
   created?: number
   owned_by?: string
@@ -146,7 +147,7 @@ export interface ModelSpec {
     replacementModelId?: string
     startsAt?: string
     date?: string
-  }
+  } | null
   constraints?: {
     steps?: { max?: number; default?: number }
     promptCharacterLimit?: number
