@@ -2,16 +2,22 @@
 Analytics API routes for model usage and performance metrics.
 """
 
-import asyncio
 import logging
 import re
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
 
 from backend.core.venice_api_client import VeniceAPIClient
 from backend.config import get_settings, Settings
+from backend.models.schemas import (
+    AnalyticsResponse,
+    DailyAnalyticsResponse,
+    DailyUsage,
+    ModelAnalytics,
+    ModelBreakdown,
+    ModelRecommendation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,54 +26,6 @@ router = APIRouter()
 
 def get_venice_client(settings: Settings = Depends(get_settings)) -> VeniceAPIClient:
     return VeniceAPIClient(settings.VENICE_ADMIN_KEY)
-
-
-class ModelBreakdown(BaseModel):
-    type: str
-    usd: float
-    diem: float
-    units: int
-
-
-class ModelAnalytics(BaseModel):
-    requests: int
-    tokens: int
-    prompt_tokens: int
-    completion_tokens: int
-    cost: float
-    avg_response_time_ms: float
-    success_rate: float
-    model_type: str = "other"
-    breakdown: List[ModelBreakdown] = []
-
-
-class ModelRecommendation(BaseModel):
-    type: str
-    message: str
-    priority: str
-
-
-class AnalyticsResponse(BaseModel):
-    model_usage: Dict[str, ModelAnalytics]
-    total_requests: int
-    total_tokens: int
-    total_cost: float
-    period_days: int
-    recommendations: List[ModelRecommendation]
-    source: str = "billing/usage"
-
-
-class DailyUsage(BaseModel):
-    date: str
-    requests: int
-    tokens: int
-    cost: float
-
-
-class DailyAnalyticsResponse(BaseModel):
-    daily_usage: List[DailyUsage]
-    period_days: int
-    source: str = "billing/usage"
 
 
 def detect_model_type(sku: str) -> str:
@@ -204,17 +162,13 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
                 'completion_tokens': 0,
                 'cost': 0.0,
                 'response_times': [],
-                'success_count': 0,
-                'total_count': 0,
                 'model_type': model_type,
             }
             request_tracker[model_name] = set()
 
         request_id = None
         if isinstance(inference, dict):
-            request_id = inference.get('requestId')
-            if not request_id:
-                request_id = None
+            request_id = inference.get('requestId') or None
 
         is_new_request = request_id and request_id not in request_tracker[model_name]
         if is_new_request:
@@ -231,8 +185,6 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
             model_data[model_name]['tokens'] += prompt_tokens + completion_tokens
 
             if is_new_request:
-                model_data[model_name]['total_count'] += 1
-                model_data[model_name]['success_count'] += 1
                 exec_time = inference.get('inferenceExecutionTime')
                 if exec_time:
                     model_data[model_name]['response_times'].append(exec_time)
@@ -244,13 +196,7 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     for model_name, data in model_data.items():
         times = data['response_times']
         data['avg_response_time_ms'] = sum(times) / len(times) if times else 0.0
-        data['success_rate'] = (
-            (data['success_count'] / data['total_count']) * 100
-            if data['total_count'] > 0 else 100.0
-        )
         del data['response_times']
-        del data['success_count']
-        del data['total_count']
 
     return model_data
 
@@ -311,7 +257,7 @@ async def _fetch_usage_analytics(
             'startDate': start_date.strftime('%Y-%m-%d'),
             'endDate': end_date.strftime('%Y-%m-%d'),
         }
-        response = await asyncio.to_thread(client.get, '/billing/usage-analytics', params)
+        response = await client.get('/billing/usage-analytics', params=params)
         if response.status_code == 200:
             return response.json()
     except Exception as exc:
@@ -362,7 +308,6 @@ async def get_model_analytics(
                     completion_tokens=sum(b.units for b in breakdown if (b.type or '').lower() == 'output'),
                     cost=cost,
                     avg_response_time_ms=0.0,
-                    success_rate=100.0,
                     model_type=(model.get('modelType') or 'other').lower(),
                     breakdown=breakdown,
                 )
@@ -400,7 +345,9 @@ async def get_model_analytics(
                 'sortOrder': 'desc',
                 'page': page,
             }
-            response = await asyncio.to_thread(client.get, '/billing/usage', params)
+            response = await client.get('/billing/usage', params=params)
+            if response.status_code >= 400:
+                response.raise_for_status()
             data = response.json()
             page_entries = data.get('data', [])
             usage_entries.extend(page_entries)
@@ -432,7 +379,6 @@ async def get_model_analytics(
                 completion_tokens=mdata['completion_tokens'],
                 cost=mdata['cost'],
                 avg_response_time_ms=mdata['avg_response_time_ms'],
-                success_rate=mdata['success_rate'],
                 model_type=mdata.get('model_type', 'other'),
             )
         
@@ -503,7 +449,9 @@ async def get_daily_analytics(
                 'sortOrder': 'asc',
                 'page': page,
             }
-            response = await asyncio.to_thread(client.get, '/billing/usage', params)
+            response = await client.get('/billing/usage', params=params)
+            if response.status_code >= 400:
+                response.raise_for_status()
             data = response.json()
             page_entries = data.get('data', [])
             usage_entries.extend(page_entries)

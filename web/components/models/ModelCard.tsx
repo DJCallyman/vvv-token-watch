@@ -35,7 +35,15 @@ export function ModelCard({ model }: ModelCardProps) {
     ? Object.fromEntries(rawCapabilities.map((cap: string) => [cap, true]))
     : {})
   const capabilityKeys = Object.keys(capabilities)
-  const deprecation = (modelSpec.deprecation || flatModel.deprecation) as { removesAt?: string; replacementModelId?: string } | undefined | null
+  const deprecation = (modelSpec.deprecation || flatModel.deprecation) as {
+    removesAt?: string
+    replacementModelId?: string
+    autoRemap?: boolean
+    startsAt?: string
+    date?: string
+  } | undefined | null
+  const retirementDate = deprecation?.removesAt || deprecation?.date || deprecation?.startsAt
+  const isRetiring = Boolean(retirementDate || deprecation?.replacementModelId)
 
   return (
     <Card className="hover:border-primary/50 transition-colors">
@@ -50,8 +58,16 @@ export function ModelCard({ model }: ModelCardProps) {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {deprecation?.removesAt && (
-              <Badge variant="destructive" className="gap-1" title={`Retiring ${deprecation.removesAt}${deprecation.replacementModelId ? ` → ${deprecation.replacementModelId}` : ''}`}>
+            {isRetiring && (
+              <Badge
+                variant="destructive"
+                className="gap-1"
+                title={
+                  retirementDate
+                    ? `Retiring ${retirementDate}${deprecation?.replacementModelId ? ` → ${deprecation.replacementModelId}` : ''}`
+                    : 'Model is being retired'
+                }
+              >
                 <AlertTriangle className="w-3 h-3" />
                 Retiring
               </Badge>
@@ -64,6 +80,23 @@ export function ModelCard({ model }: ModelCardProps) {
             </Badge>
           </div>
         </div>
+        {isRetiring && (
+          <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {retirementDate && <p>Retirement date: {retirementDate}</p>}
+            {deprecation?.replacementModelId && (
+              <p className="mt-1">
+                Replacement model:{' '}
+                <span className="font-medium text-foreground">{deprecation.replacementModelId}</span>
+              </p>
+            )}
+            {deprecation?.autoRemap && deprecation?.replacementModelId && (
+              <p className="mt-1 text-muted-foreground">
+                Will auto-switch to {deprecation.replacementModelId}
+                {retirementDate ? ` on ${retirementDate}` : ''}.
+              </p>
+            )}
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-3 text-sm">

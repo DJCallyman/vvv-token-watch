@@ -55,12 +55,6 @@ export function getUsageBarColor(percentile: number): string {
   return 'bg-success'
 }
 
-export function getSuccessRateColor(rate: number): string {
-  if (rate >= 99) return 'bg-success/10 text-success'
-  if (rate >= 95) return 'bg-warning/10 text-warning'
-  return 'bg-destructive/10 text-destructive'
-}
-
 export function getPriorityStyles(priority: 'high' | 'medium' | 'low'): string {
   const styles = {
     high: 'bg-destructive/10 text-destructive border-destructive/20',

@@ -10,7 +10,6 @@ export interface ModelAnalytics {
   completion_tokens: number
   cost: number
   avg_response_time_ms: number
-  success_rate: number
   model_type: string
 }
 

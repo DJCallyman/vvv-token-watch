@@ -19,7 +19,7 @@ import {
   Legend,
 } from 'recharts'
 import { Activity, DollarSign, Clock, Zap, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react'
-import { cn, getSuccessRateColor, getPriorityStyles } from '@/lib/utils'
+import { cn, getPriorityStyles } from '@/lib/utils'
 
 const CHART_COLORS = [
   'hsl(var(--chart-1))',
@@ -110,7 +110,6 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
       tokens: data.tokens,
       cost: data.cost,
       avgResponseTime: data.avg_response_time_ms,
-      successRate: data.success_rate,
     }))
     .sort((a, b) => b.cost - a.cost)
     .slice(0, 10)
@@ -350,7 +349,6 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                   <th className="text-right py-2 px-3 font-medium">Tokens</th>
                   <th className="text-right py-2 px-3 font-medium">Cost</th>
                   <th className="text-right py-2 px-3 font-medium">Avg Latency</th>
-                  <th className="text-right py-2 px-3 font-medium">Success Rate</th>
                 </tr>
               </thead>
               <tbody>
@@ -366,16 +364,6 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                       {model.avgResponseTime > 0
                         ? `${(model.avgResponseTime / 1000).toFixed(2)}s`
                         : '—'}
-                    </td>
-                    <td className="text-right py-2 px-3">
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs",
-                          getSuccessRateColor(model.successRate)
-                        )}
-                      >
-                        {model.successRate.toFixed(1)}%
-                      </span>
                     </td>
                   </tr>
                 ))}

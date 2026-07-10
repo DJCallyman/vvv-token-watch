@@ -1,12 +1,18 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
+const APP_PASSWORD = process.env.NEXT_PUBLIC_APP_PASSWORD || ''
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options?.headers as Record<string, string> | undefined),
+  }
+  if (APP_PASSWORD) {
+    headers.Authorization = `Bearer ${APP_PASSWORD}`
+  }
+
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   })
 
   if (!response.ok) {
@@ -203,6 +209,101 @@ export interface BenchmarkJobStatus {
   error: string | null
 }
 
+// ---------------------------------------------------------------------------
+// History / on-chain / alerts types
+// ---------------------------------------------------------------------------
+
+export interface PriceHistoryPoint {
+  timestamp: string | null
+  token_id: string
+  price_usd: number | null
+  price_aud: number | null
+  market_cap: number | null
+  change_24h: number | null
+}
+
+export interface PriceHistoryResponse {
+  token: string
+  range: string
+  count: number
+  data: PriceHistoryPoint[]
+}
+
+export interface UsageTrendPoint {
+  timestamp: string | null
+  diem: number
+  usd: number
+  bundled_credits: number
+  epoch_start?: string | null
+  next_epoch?: string | null
+  target_date?: string | null
+  scope: string
+}
+
+export interface UsageTrendsResponse {
+  scope: string
+  count: number
+  data: UsageTrendPoint[]
+}
+
+export interface OnchainSupply {
+  network: string
+  token_address: string
+  staking_contract: string
+  decimals: number
+  total_supply: number
+  staked_in_contract: number
+  circulating_estimate: number
+}
+
+export interface OnchainStaking {
+  network: string
+  token_address: string
+  staking_contract: string
+  staked_vvv: number
+  total_supply: number
+  staked_percent: number
+  note?: string
+}
+
+export interface OnchainBalance {
+  network: string
+  address: string
+  token_address: string
+  vvv_balance: number
+  decimals: number
+}
+
+export interface AlertConfig {
+  id: number
+  name: string
+  alert_type: string
+  metric: string
+  threshold: number
+  comparison: string
+  enabled: boolean
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface AlertEvent {
+  id: number
+  alert_config_id: number
+  triggered_at: string | null
+  message: string
+  value: number
+  acknowledged: boolean
+}
+
+export interface AlertConfigCreate {
+  name: string
+  alert_type: 'usage_percent' | 'balance_threshold' | 'price_threshold'
+  metric: string
+  threshold: number
+  comparison?: 'gte' | 'lte'
+  enabled?: boolean
+}
+
 export const api = {
   async getBalance(): Promise<BalanceData> {
     return fetchAPI<BalanceData>('/api/balance')
@@ -225,12 +326,87 @@ export const api = {
     return fetchAPI<ModelsResponse>('/api/models')
   },
 
+  async getModelTraits(): Promise<Record<string, unknown>> {
+    return fetchAPI<Record<string, unknown>>('/api/models/traits')
+  },
+
   async getHealth(): Promise<{ status: string; timestamp: string }> {
     return fetchAPI<{ status: string; timestamp: string }>('/api/health')
   },
 
   async get<T>(endpoint: string): Promise<T> {
     return fetchAPI<T>(endpoint)
+  },
+
+  async getPriceHistory(token: 'vvv' | 'diem' = 'vvv', range: string = '7d'): Promise<PriceHistoryResponse> {
+    return fetchAPI<PriceHistoryResponse>(`/api/prices/history?token=${token}&range=${range}`)
+  },
+
+  async getUsageTrends(scope: 'epoch' | 'daily' = 'epoch', limit = 500): Promise<UsageTrendsResponse> {
+    return fetchAPI<UsageTrendsResponse>(`/api/usage/history/trends?scope=${scope}&limit=${limit}`)
+  },
+
+  async getOnchainSupply(): Promise<OnchainSupply> {
+    return fetchAPI<OnchainSupply>('/api/onchain/supply')
+  },
+
+  async getOnchainStaking(): Promise<OnchainStaking> {
+    return fetchAPI<OnchainStaking>('/api/onchain/staking')
+  },
+
+  async getOnchainBalance(address: string): Promise<OnchainBalance> {
+    return fetchAPI<OnchainBalance>(`/api/onchain/balance/${encodeURIComponent(address)}`)
+  },
+
+  async getRateLimitsLog(): Promise<unknown> {
+    return fetchAPI<unknown>('/api/rate-limits/log')
+  },
+
+  async getAlerts(enabledOnly = false): Promise<{ alerts: AlertConfig[]; count: number }> {
+    const q = enabledOnly ? '?enabled_only=true' : ''
+    return fetchAPI<{ alerts: AlertConfig[]; count: number }>(`/api/alerts${q}`)
+  },
+
+  async createAlert(body: AlertConfigCreate): Promise<AlertConfig> {
+    return fetchAPI<AlertConfig>('/api/alerts', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async updateAlert(id: number, body: Partial<AlertConfigCreate>): Promise<AlertConfig> {
+    return fetchAPI<AlertConfig>(`/api/alerts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async deleteAlert(id: number): Promise<{ deleted: boolean; id: number }> {
+    return fetchAPI<{ deleted: boolean; id: number }>(`/api/alerts/${id}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async getAlertEvents(unacknowledgedOnly = false): Promise<{ events: AlertEvent[]; count: number }> {
+    const q = unacknowledgedOnly ? '?unacknowledged_only=true' : ''
+    return fetchAPI<{ events: AlertEvent[]; count: number }>(`/api/alerts/events${q}`)
+  },
+
+  async getUnacknowledgedAlertEvents(): Promise<{ events: AlertEvent[]; count: number }> {
+    return fetchAPI<{ events: AlertEvent[]; count: number }>('/api/alerts/events/unacknowledged')
+  },
+
+  async acknowledgeAlertEvent(id: number): Promise<AlertEvent> {
+    return fetchAPI<AlertEvent>(`/api/alerts/events/${id}/acknowledge`, {
+      method: 'POST',
+    })
+  },
+
+  async evaluateAlerts(metrics: Record<string, number>): Promise<{ created: number; events: AlertEvent[] }> {
+    return fetchAPI<{ created: number; events: AlertEvent[] }>('/api/alerts/evaluate', {
+      method: 'POST',
+      body: JSON.stringify({ metrics }),
+    })
   },
 
   // Benchmark endpoints

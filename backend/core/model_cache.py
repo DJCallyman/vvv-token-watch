@@ -61,8 +61,6 @@ class ModelCacheManager:
     - Exposes clean interfaces for getting pricing and model info
     """
     
-    CACHE_FILE = Path("data/model_cache.json")
-    
     def __init__(self, api_client: Optional[VeniceAPIClient] = None):
         """
         Initialize the model cache manager.
@@ -75,12 +73,24 @@ class ModelCacheManager:
         # no regular key is configured.
         api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
         self.api_client = api_client or VeniceAPIClient(api_key)
+        self.cache_file = Path(settings.DATA_DIR) / "model_cache.json"
         self.models: Dict[str, CachedModel] = {}
         self.raw_api_data: Optional[Dict] = None  # Store raw API response for full details
         self.cache_timestamp: Optional[str] = None  # ISO format timestamp
         self._load_cache()
+
+    def _is_cache_fresh(self) -> bool:
+        """Return True if in-memory/file cache is within CACHE_TTL_SECONDS."""
+        if not self.cache_timestamp or not self.models:
+            return False
+        try:
+            ts = datetime.fromisoformat(self.cache_timestamp)
+            age = (datetime.now() - ts).total_seconds()
+            return age < settings.CACHE_TTL_SECONDS
+        except (TypeError, ValueError):
+            return False
     
-    def fetch_models(self, force_refresh: bool = False) -> bool:
+    async def fetch_models(self, force_refresh: bool = False) -> bool:
         """
         Fetch models from Venice API and update cache.
         
@@ -90,9 +100,16 @@ class ModelCacheManager:
         Returns:
             True if fetch successful, False if failed (may have fallen back to cache)
         """
+        if not force_refresh and self._is_cache_fresh():
+            logger.debug(
+                "Using fresh model cache (age within %ss)",
+                settings.CACHE_TTL_SECONDS,
+            )
+            return True
+
         try:
             logger.info("Fetching models from Venice API...")
-            response = self.api_client.get("/models", params={"type": "all"})
+            response = await self.api_client.get("/models", params={"type": "all"})
             
             if response.status_code != 200:
                 logger.warning(f"Failed to fetch models: {response.status_code}")
@@ -201,7 +218,7 @@ class ModelCacheManager:
     def _save_cache(self) -> None:
         """Save models to local cache file with secure permissions."""
         try:
-            self.CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
             
             self.cache_timestamp = datetime.now().isoformat()
             
@@ -230,16 +247,16 @@ class ModelCacheManager:
             }
             
             # Write with secure permissions
-            with open(self.CACHE_FILE, 'w', encoding='utf-8') as f:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, indent=2)
             
             # Set restrictive file permissions (owner read/write only)
             try:
-                os.chmod(self.CACHE_FILE, SENSITIVE_FILE_MODE)
+                os.chmod(self.cache_file, SENSITIVE_FILE_MODE)
             except OSError as e:
                 logger.warning(f"Could not set file permissions on cache: {e}")
             
-            logger.debug(f"Saved model cache to {self.CACHE_FILE} (timestamp: {self.cache_timestamp})")
+            logger.debug(f"Saved model cache to {self.cache_file} (timestamp: {self.cache_timestamp})")
             
         except Exception as e:
             logger.warning(f"Failed to save model cache: {e}")
@@ -247,11 +264,11 @@ class ModelCacheManager:
     def _load_cache(self) -> None:
         """Load models from local cache file if it exists."""
         try:
-            if not self.CACHE_FILE.exists():
-                logger.debug(f"No cache file found at {self.CACHE_FILE}")
+            if not self.cache_file.exists():
+                logger.debug(f"No cache file found at {self.cache_file}")
                 return
             
-            with open(self.CACHE_FILE, 'r', encoding='utf-8') as f:
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
                 cache_data = json.load(f)
             
             # Load timestamp if present

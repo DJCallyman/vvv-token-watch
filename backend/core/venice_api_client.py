@@ -1,33 +1,30 @@
 """
 Venice API Client helper for shared API request functionality.
 
-This module provides a reusable base class for making requests to the Venice API,
-eliminating code duplication across worker threads and service classes.
+Async httpx-based client with automatic retry on transient failures.
 """
 
-from typing import Dict, Optional
-import requests
+from __future__ import annotations
+
+from typing import Any, Dict, Optional
 import logging
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+import httpx
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
 from backend.config import get_settings
 
 settings = get_settings()
-
 logger = logging.getLogger(__name__)
 
 
 def mask_api_key(api_key: str, visible_chars: int = 4) -> str:
-    """
-    Mask API key for safe logging.
-    
-    Args:
-        api_key: The API key to mask
-        visible_chars: Number of characters to show at start and end
-        
-    Returns:
-        Masked key like "sk-xxxx...xxxx"
-    """
+    """Mask API key for safe logging."""
     if not api_key:
         return "<empty>"
     if len(api_key) <= visible_chars * 2:
@@ -37,137 +34,176 @@ def mask_api_key(api_key: str, visible_chars: int = 4) -> str:
 
 class VeniceAPIClient:
     """
-    Base client for Venice API requests with shared configuration.
-    
-    Provides common setup for API URL, headers, and authentication that is
-    reused across multiple worker threads and service classes.
+    Async Venice API client with shared configuration and retry logic.
+
+    Uses httpx.AsyncClient. Prefer get_json/post_json helpers which check
+    status codes before parsing.
     """
-    
+
     def __init__(self, api_key: str):
-        """
-        Initialize the Venice API client.
-        
-        Args:
-            api_key: Venice API key (regular or admin key depending on endpoints needed)
-        """
         self.api_key = api_key
         self.base_url = settings.VENICE_API_BASE_URL
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
-        logger.debug(f"VeniceAPIClient initialized with key: {mask_api_key(api_key)}")
-    
-    def get(self, endpoint: str, params: Optional[Dict] = None, timeout: int = 30) -> requests.Response:
-        """
-        Make a GET request to the Venice API with automatic retry on transient failures.
-        
-        Args:
-            endpoint: API endpoint path (e.g., "/billing/usage")
-            params: Optional query parameters
-            timeout: Request timeout in seconds (default 30)
-            
-        Returns:
-            Response object from requests library
-            
-        Raises:
-            requests.exceptions.RequestException: On API request failure after retries
-        """
-        return self._get_with_retry(endpoint, params, timeout)
-    
+        logger.debug("VeniceAPIClient initialized with key: %s", mask_api_key(api_key))
+
+    def _url(self, endpoint: str) -> str:
+        return f"{self.base_url}{endpoint}"
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type((requests.exceptions.ConnectionError, 
-                                       requests.exceptions.Timeout,
-                                       requests.exceptions.HTTPError)),
+        retry=retry_if_exception_type((
+            httpx.ConnectError,
+            httpx.TimeoutException,
+            httpx.NetworkError,
+            httpx.HTTPStatusError,
+        )),
         before_sleep=lambda retry_state: logger.warning(
-            f"Venice API request failed, retrying in {retry_state.next_action.sleep}s... "
-            f"(attempt {retry_state.attempt_number}/3)"
+            "Venice API request failed, retrying in %ss... (attempt %s/3)",
+            retry_state.next_action.sleep,
+            retry_state.attempt_number,
         ),
-        reraise=True
+        reraise=True,
     )
-    def _get_with_retry(self, endpoint: str, params: Optional[Dict] = None, timeout: int = 30) -> requests.Response:
-        """Internal GET method with retry logic."""
-        url = f"{self.base_url}{endpoint}"
-        response = requests.get(url, headers=self.headers, params=params, timeout=timeout)
-        # Only retry on 5xx errors, not 4xx client errors
-        if response.status_code >= 500:
-            response.raise_for_status()
-        return response
-    
-    def post(self, endpoint: str, data: Optional[Dict] = None, timeout: int = 30) -> requests.Response:
-        """
-        Make a POST request to the Venice API with automatic retry on transient failures.
-        
-        Args:
-            endpoint: API endpoint path (e.g., "/api_keys")
-            data: Optional JSON payload
-            timeout: Request timeout in seconds (default 30)
-            
-        Returns:
-            Response object from requests library
-            
-        Raises:
-            requests.exceptions.RequestException: On API request failure after retries
-        """
-        return self._post_with_retry(endpoint, data, timeout)
-    
+    async def get(
+        self,
+        endpoint: str,
+        params: Optional[Dict] = None,
+        timeout: float = 30.0,
+    ) -> httpx.Response:
+        """GET with retry on transient failures. Retries 5xx only."""
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(
+                self._url(endpoint),
+                headers=self.headers,
+                params=params,
+            )
+            if response.status_code >= 500:
+                response.raise_for_status()
+            return response
+
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=1, max=10),
-        retry=retry_if_exception_type((requests.exceptions.ConnectionError, 
-                                       requests.exceptions.Timeout,
-                                       requests.exceptions.HTTPError)),
+        retry=retry_if_exception_type((
+            httpx.ConnectError,
+            httpx.TimeoutException,
+            httpx.NetworkError,
+            httpx.HTTPStatusError,
+        )),
         before_sleep=lambda retry_state: logger.warning(
-            f"Venice API POST request failed, retrying in {retry_state.next_action.sleep}s... "
-            f"(attempt {retry_state.attempt_number}/3)"
+            "Venice API POST failed, retrying in %ss... (attempt %s/3)",
+            retry_state.next_action.sleep,
+            retry_state.attempt_number,
         ),
-        reraise=True
+        reraise=True,
     )
-    def _post_with_retry(self, endpoint: str, data: Optional[Dict] = None, timeout: int = 30) -> requests.Response:
-        """Internal POST method with retry logic."""
-        url = f"{self.base_url}{endpoint}"
-        response = requests.post(url, headers=self.headers, json=data, timeout=timeout)
-        if response.status_code >= 500:
+    async def post(
+        self,
+        endpoint: str,
+        data: Optional[Dict] = None,
+        timeout: float = 30.0,
+    ) -> httpx.Response:
+        """POST with retry on transient failures. Retries 5xx only."""
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                self._url(endpoint),
+                headers=self.headers,
+                json=data,
+            )
+            if response.status_code >= 500:
+                response.raise_for_status()
+            return response
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type((
+            httpx.ConnectError,
+            httpx.TimeoutException,
+            httpx.NetworkError,
+            httpx.HTTPStatusError,
+        )),
+        before_sleep=lambda retry_state: logger.warning(
+            "Venice API PUT failed, retrying in %ss... (attempt %s/3)",
+            retry_state.next_action.sleep,
+            retry_state.attempt_number,
+        ),
+        reraise=True,
+    )
+    async def put(
+        self,
+        endpoint: str,
+        data: Optional[Dict] = None,
+        timeout: float = 30.0,
+    ) -> httpx.Response:
+        """PUT with retry on transient failures. Retries 5xx only."""
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.put(
+                self._url(endpoint),
+                headers=self.headers,
+                json=data,
+            )
+            if response.status_code >= 500:
+                response.raise_for_status()
+            return response
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception_type((
+            httpx.ConnectError,
+            httpx.TimeoutException,
+            httpx.NetworkError,
+            httpx.HTTPStatusError,
+        )),
+        before_sleep=lambda retry_state: logger.warning(
+            "Venice API DELETE failed, retrying in %ss... (attempt %s/3)",
+            retry_state.next_action.sleep,
+            retry_state.attempt_number,
+        ),
+        reraise=True,
+    )
+    async def delete(
+        self,
+        endpoint: str,
+        timeout: float = 30.0,
+    ) -> httpx.Response:
+        """DELETE with retry on transient failures. Retries 5xx only."""
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.delete(
+                self._url(endpoint),
+                headers=self.headers,
+            )
+            if response.status_code >= 500:
+                response.raise_for_status()
+            return response
+
+    async def get_json(
+        self,
+        endpoint: str,
+        params: Optional[Dict] = None,
+        timeout: float = 30.0,
+        raise_for_status: bool = True,
+    ) -> Any:
+        """GET and return parsed JSON. Raises on non-2xx when raise_for_status=True."""
+        response = await self.get(endpoint, params=params, timeout=timeout)
+        if raise_for_status and response.status_code >= 400:
             response.raise_for_status()
-        return response
-    
-    def put(self, endpoint: str, data: Optional[Dict] = None, timeout: int = 30) -> requests.Response:
-        """
-        Make a PUT request to the Venice API.
-        
-        Args:
-            endpoint: API endpoint path
-            data: Optional JSON payload
-            timeout: Request timeout in seconds (default 30)
-            
-        Returns:
-            Response object from requests library
-            
-        Raises:
-            requests.exceptions.RequestException: On API request failure
-        """
-        url = f"{self.base_url}{endpoint}"
-        response = requests.put(url, headers=self.headers, json=data, timeout=timeout)
-        response.raise_for_status()
-        return response
-    
-    def delete(self, endpoint: str, timeout: int = 30) -> requests.Response:
-        """
-        Make a DELETE request to the Venice API.
-        
-        Args:
-            endpoint: API endpoint path
-            timeout: Request timeout in seconds (default 30)
-            
-        Returns:
-            Response object from requests library
-            
-        Raises:
-            requests.exceptions.RequestException: On API request failure
-        """
-        url = f"{self.base_url}{endpoint}"
-        response = requests.delete(url, headers=self.headers, timeout=timeout)
-        response.raise_for_status()
-        return response
+        return response.json()
+
+    async def post_json(
+        self,
+        endpoint: str,
+        data: Optional[Dict] = None,
+        timeout: float = 30.0,
+        raise_for_status: bool = True,
+    ) -> Any:
+        """POST and return parsed JSON. Raises on non-2xx when raise_for_status=True."""
+        response = await self.post(endpoint, data=data, timeout=timeout)
+        if raise_for_status and response.status_code >= 400:
+            response.raise_for_status()
+        return response.json()

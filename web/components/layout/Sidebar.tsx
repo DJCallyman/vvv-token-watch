@@ -9,7 +9,9 @@ import {
   Wallet, 
   DollarSign,
   Cpu,
-  FlaskConical
+  FlaskConical,
+  Blocks,
+  Bell,
 } from 'lucide-react'
 
 const navigation = [
@@ -18,6 +20,8 @@ const navigation = [
   { name: 'Usage', href: '/usage', icon: BarChart3 },
   { name: 'Balance', href: '/balance', icon: Wallet },
   { name: 'Prices', href: '/prices', icon: DollarSign },
+  { name: 'On-Chain', href: '/onchain', icon: Blocks },
+  { name: 'Alerts', href: '/alerts', icon: Bell },
   { name: 'Benchmark', href: '/benchmark', icon: FlaskConical },
 ]
 
@@ -43,6 +47,7 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              aria-current={isActive ? 'page' : undefined}
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
                 isActive

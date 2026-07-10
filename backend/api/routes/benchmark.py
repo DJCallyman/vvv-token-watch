@@ -22,9 +22,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-import requests
+import httpx
+from backend.core.venice_api_client import VeniceAPIClient
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from backend.models.schemas import BenchmarkStartParams
 from sse_starlette.sse import EventSourceResponse
 
 from backend.config import get_settings
@@ -94,13 +95,6 @@ def _cleanup_stale_jobs():
 # Pydantic request models
 # ---------------------------------------------------------------------------
 
-class BenchmarkStartParams(BaseModel):
-    models: Optional[list[str]] = None   # None = all qualifying
-    tests: Optional[list[str]] = None    # None = all 8 tests
-    iterations: int = 10
-    workers: int = 4
-    privacy: str = "both"               # "both" | "private" | "anonymized"
-
 
 # ---------------------------------------------------------------------------
 # Model-listing helpers (mirrors filter logic in scripts/benchmark_models.py)
@@ -115,15 +109,10 @@ def _is_e2ee_or_tee(model: dict) -> bool:
     )
 
 
-def _fetch_and_filter_text_models(api_key: str) -> list[dict]:
-    resp = requests.get(
-        f"{_VENICE_BASE}/models",
-        headers={"Authorization": f"Bearer {api_key}"},
-        params={"type": "text"},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    raw = resp.json().get("data", [])
+async def _fetch_and_filter_text_models(api_key: str) -> list[dict]:
+    client = VeniceAPIClient(api_key)
+    data = await client.get_json("/models", params={"type": "text"})
+    raw = data.get("data", [])
     result = []
     for m in raw:
         spec = m.get("model_spec") or {}
@@ -226,8 +215,8 @@ async def list_benchmark_models():
         raise HTTPException(400, "No Venice API key configured in settings")
 
     try:
-        raw = await asyncio.to_thread(_fetch_and_filter_text_models, api_key)
-    except requests.HTTPError as exc:
+        raw = await _fetch_and_filter_text_models(api_key)
+    except httpx.HTTPStatusError as exc:
         raise HTTPException(502, f"Venice API error: {exc}") from exc
     except Exception as exc:
         raise HTTPException(500, f"Failed to fetch models: {exc}") from exc
@@ -445,10 +434,32 @@ def _build_infographic_prompt(models: list[dict]) -> str:
     )
 
 
-def _call_venice_image(api_key: str, prompt: str) -> str:
-    """Synchronous Venice image call — run via asyncio.to_thread."""
+async def _resolve_image_model(api_key: str) -> str:
+    """Discover a current image model via /models/traits; fall back to flux-2-pro."""
+    client = VeniceAPIClient(api_key)
+    try:
+        traits = await client.get_json("/models/traits")
+        # Traits payload may be {data: {...}} or a flat mapping.
+        mapping = traits.get("data", traits) if isinstance(traits, dict) else {}
+        for key in ("image:fast", "image:default", "image"):
+            model_id = mapping.get(key)
+            if isinstance(model_id, str) and model_id:
+                return model_id
+            if isinstance(model_id, dict):
+                mid = model_id.get("id") or model_id.get("model")
+                if mid:
+                    return mid
+    except Exception as exc:
+        logger.warning("Could not resolve image model from traits: %s", exc)
+    return "flux-2-pro"
+
+
+async def _call_venice_image(api_key: str, prompt: str) -> str:
+    """Async Venice image call using discovered model trait when available."""
+    model_id = await _resolve_image_model(api_key)
+    client = VeniceAPIClient(api_key)
     payload = {
-        "model": "flux-2-pro",  # stable, generally available image model
+        "model": model_id,
         "prompt": prompt,
         "resolution": "4K",
         "aspect_ratio": "16:9",
@@ -456,17 +467,7 @@ def _call_venice_image(api_key: str, prompt: str) -> str:
         "safe_mode": True,
         "return_binary": False,
     }
-    resp = requests.post(
-        f"{_VENICE_BASE}/image/generate",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=120,
-    )
-    resp.raise_for_status()
-    data = resp.json()
+    data = await client.post_json("/image/generate", data=payload, timeout=120.0)
     images = data.get("images", [])
     if not images:
         raise ValueError("Venice image API returned no images")
@@ -498,9 +499,10 @@ async def generate_infographic(run_id: str):
     prompt = _build_infographic_prompt(models)
 
     try:
-        image_b64 = await asyncio.to_thread(_call_venice_image, api_key, prompt)
-    except requests.HTTPError as exc:
-        raise HTTPException(502, f"Venice image API error: {exc.response.text if exc.response else str(exc)}") from exc
+        image_b64 = await _call_venice_image(api_key, prompt)
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text if exc.response is not None else str(exc)
+        raise HTTPException(502, f"Venice image API error: {detail}") from exc
     except ValueError as exc:
         raise HTTPException(502, str(exc)) from exc
     except Exception as exc:

@@ -1,7 +1,7 @@
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -9,7 +9,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from backend.config import get_settings
 from backend.database import init_db, engine
-from backend.api.routes import usage, balance, prices, models, health, analytics, benchmark
+from backend.api.routes import usage, balance, prices, models, health, analytics, benchmark, onchain, alerts
+from backend.api.deps import verify_auth
 
 settings = get_settings()
 
@@ -69,9 +70,10 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+_cors_origins = settings.cors_origins_list
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -87,12 +89,14 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 app.include_router(health.router, prefix="/api", tags=["health"])
-app.include_router(usage.router, prefix="/api/usage", tags=["usage"])
-app.include_router(balance.router, prefix="/api", tags=["balance"])
-app.include_router(prices.router, prefix="/api", tags=["prices"])
-app.include_router(models.router, prefix="/api", tags=["models"])
-app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
-app.include_router(benchmark.router, prefix="/api", tags=["benchmark"])
+app.include_router(usage.router, prefix="/api/usage", tags=["usage"], dependencies=[Depends(verify_auth)])
+app.include_router(balance.router, prefix="/api", tags=["balance"], dependencies=[Depends(verify_auth)])
+app.include_router(prices.router, prefix="/api", tags=["prices"], dependencies=[Depends(verify_auth)])
+app.include_router(models.router, prefix="/api", tags=["models"], dependencies=[Depends(verify_auth)])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"], dependencies=[Depends(verify_auth)])
+app.include_router(benchmark.router, prefix="/api", tags=["benchmark"], dependencies=[Depends(verify_auth)])
+app.include_router(onchain.router, prefix="/api", tags=["onchain"], dependencies=[Depends(verify_auth)])
+app.include_router(alerts.router, prefix="/api", tags=["alerts"], dependencies=[Depends(verify_auth)])
 
 
 @app.get("/")

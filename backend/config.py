@@ -7,7 +7,8 @@ from functools import lru_cache
 class Settings(BaseSettings):
     VENICE_ADMIN_KEY: str
     VENICE_API_KEY: Optional[str] = None
-    DATABASE_URL: Optional[str] = "postgresql+asyncpg://postgres:postgres@localhost:5432/vvv_token_watch"
+    # Matches docker-compose.dev.yml (host port 5433, user/db/password: vvvwatch).
+    DATABASE_URL: Optional[str] = "postgresql+asyncpg://vvvwatch:vvvwatch@localhost:5433/vvvwatch"
     
     COINGECKO_API_KEY: Optional[str] = None
     COINGECKO_TOKEN_ID: str = "venice-token"
@@ -32,6 +33,12 @@ class Settings(BaseSettings):
     SQL_ECHO: bool = False
     
     CACHE_TTL_SECONDS: int = 300
+
+    # Optional shared app password for personal/self-hosted auth.
+    # When unset, API remains open (suitable for local/VPN-only use).
+    APP_PASSWORD: Optional[str] = None
+    # Comma-separated CORS origins. Use * for open (default).
+    CORS_ORIGINS: str = "*"
     
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -42,6 +49,11 @@ class Settings(BaseSettings):
     @property
     def coingecko_currencies_list(self) -> list[str]:
         return [c.strip() for c in self.COINGECKO_CURRENCIES.split(",")]
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        raw = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        return raw or ["*"]
 
 
 @lru_cache()

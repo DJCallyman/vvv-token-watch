@@ -1,7 +1,5 @@
-import asyncio
 import logging
 from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional
 from backend.config import get_settings, Settings
 from backend.core.venice_api_client import VeniceAPIClient
 from backend.core.model_cache import ModelCacheManager
@@ -11,7 +9,9 @@ router = APIRouter()
 
 
 def get_venice_client(settings: Settings = Depends(get_settings)) -> VeniceAPIClient:
-    return VeniceAPIClient(settings.VENICE_ADMIN_KEY)
+    # Prefer regular key for public /models; fall back to admin.
+    api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
+    return VeniceAPIClient(api_key)
 
 
 @router.get("/models")
@@ -20,7 +20,7 @@ async def get_models(
 ):
     try:
         cache = ModelCacheManager(client)
-        await asyncio.to_thread(cache.fetch_models)
+        await cache.fetch_models()
 
         # Prefer full Venice model objects so the UI can render type-specific
         # table columns (capabilities, privacy, quantization, constraints, etc.).
@@ -45,9 +45,21 @@ async def get_models(
             "count": len(models),
             "types": sorted(model_types),
         }
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to fetch models")
         raise HTTPException(status_code=500, detail="Failed to fetch models")
+
+
+@router.get("/models/traits")
+async def get_model_traits(
+    client: VeniceAPIClient = Depends(get_venice_client)
+):
+    """Passthrough of Venice GET /models/traits (trait → model ID mappings)."""
+    try:
+        return await client.get_json("/models/traits")
+    except Exception:
+        logger.exception("Failed to fetch model traits")
+        raise HTTPException(status_code=500, detail="Failed to fetch model traits")
 
 
 @router.get("/models/{model_id}")
@@ -57,7 +69,7 @@ async def get_model(
 ):
     try:
         cache = ModelCacheManager(client)
-        await asyncio.to_thread(cache.fetch_models)
+        await cache.fetch_models()
         model = cache.get_model(model_id)
 
         if model is None:
@@ -67,6 +79,6 @@ async def get_model(
         return raw if raw is not None else model
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to fetch model")
         raise HTTPException(status_code=500, detail="Failed to fetch model")

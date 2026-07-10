@@ -5,6 +5,7 @@ import { usePrices } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { Coins, Wallet } from 'lucide-react'
+import { PriceChart } from '@/components/prices/PriceChart'
 
 type Currency = 'USD' | 'AUD'
 
@@ -199,6 +200,8 @@ export function PricesView() {
           </div>
         </CardContent>
       </Card>
+
+      <PriceChart />
     </div>
   )
 }

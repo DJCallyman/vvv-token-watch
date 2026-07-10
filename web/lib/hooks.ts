@@ -89,6 +89,78 @@ export function useModel(modelId: string) {
   })
 }
 
+export function useModelTraits() {
+  return useQuery({
+    queryKey: ['modelTraits'],
+    queryFn: api.getModelTraits,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function usePriceHistory(token: 'vvv' | 'diem' = 'vvv', range: string = '7d') {
+  return useQuery({
+    queryKey: ['priceHistory', token, range],
+    queryFn: () => api.getPriceHistory(token, range),
+    refetchInterval: 60_000,
+  })
+}
+
+export function useUsageTrends(scope: 'epoch' | 'daily' = 'epoch') {
+  return useQuery({
+    queryKey: ['usageTrends', scope],
+    queryFn: () => api.getUsageTrends(scope),
+    refetchInterval: 60_000,
+  })
+}
+
+export function useOnchainSupply() {
+  return useQuery({
+    queryKey: ['onchainSupply'],
+    queryFn: api.getOnchainSupply,
+    refetchInterval: 60_000,
+  })
+}
+
+export function useOnchainStaking() {
+  return useQuery({
+    queryKey: ['onchainStaking'],
+    queryFn: api.getOnchainStaking,
+    refetchInterval: 60_000,
+  })
+}
+
+export function useOnchainBalance(address: string | null) {
+  return useQuery({
+    queryKey: ['onchainBalance', address],
+    queryFn: () => api.getOnchainBalance(address!),
+    enabled: !!address,
+  })
+}
+
+export function useAlerts(enabledOnly = false) {
+  return useQuery({
+    queryKey: ['alerts', enabledOnly],
+    queryFn: () => api.getAlerts(enabledOnly),
+    refetchInterval: 30_000,
+  })
+}
+
+export function useUnacknowledgedAlertEvents() {
+  return useQuery({
+    queryKey: ['alertEvents', 'unacknowledged'],
+    queryFn: api.getUnacknowledgedAlertEvents,
+    refetchInterval: 15_000,
+  })
+}
+
+export function useAlertEvents(unacknowledgedOnly = false) {
+  return useQuery({
+    queryKey: ['alertEvents', unacknowledgedOnly],
+    queryFn: () => api.getAlertEvents(unacknowledgedOnly),
+    refetchInterval: 15_000,
+  })
+}
+
 export interface Model {
   id: string
   type?: string
