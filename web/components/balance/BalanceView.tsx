@@ -6,15 +6,24 @@ import { formatNumber, formatCurrency, formatDateTime } from '@/lib/utils'
 import { Wallet, TrendingUp, Clock, PieChart, Activity, AlertCircle } from 'lucide-react'
 
 export function BalanceView() {
-  const { data: balance, isLoading: balanceLoading } = useBalance()
-  const { data: usage, isLoading: usageLoading } = useDailyUsage()
+  const { data: balance, isLoading: balanceLoading, isError: balanceError } = useBalance()
+  const { data: usage, isLoading: usageLoading, isError: usageError } = useDailyUsage()
 
   const isLoading = balanceLoading || usageLoading
+  const isError = balanceError || usageError
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-pulse text-muted-foreground">Loading...</div>
+      </div>
+    )
+  }
+
+  if (isError && !balance && !usage) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-destructive">Failed to load balance data</div>
       </div>
     )
   }
@@ -162,7 +171,7 @@ export function BalanceView() {
                 <div>
                   <p className="text-sm text-muted-foreground">Next Epoch Begins</p>
                   <p className="text-lg font-semibold">
-                    {formatDateTime(balance!.next_epoch_begins!)}
+                    {formatDateTime(balance?.next_epoch_begins ?? '')}
                   </p>
                 </div>
               </div>
@@ -186,7 +195,7 @@ export function BalanceView() {
                       <p className="text-sm text-muted-foreground">Usage Alert Threshold</p>
                     </div>
                     <p className="text-lg font-semibold">
-                      DIEM: {balance.diem_usage_percent.toFixed(1)}% |USD: {balance.usd_usage_percent?.toFixed(1) || '—'}%
+                      DIEM: {balance.diem_usage_percent.toFixed(1)}% | USD: {balance.usd_usage_percent?.toFixed(1) || '—'}%
                     </p>
                   </div>
                 )}

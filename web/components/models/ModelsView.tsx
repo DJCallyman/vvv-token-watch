@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useModels, Model } from '@/lib/hooks'
 import { Card, CardContent } from '@/components/ui/card'
 import { ModelCard } from './ModelCard'
@@ -9,7 +9,7 @@ import { ColumnSelector } from './ColumnSelector'
 import { ModelAnalytics } from './ModelAnalytics'
 import { Search, Filter, X, LayoutGrid, List, Table, ChevronDown, ChevronUp, DollarSign, BarChart3, ListX } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ModelType } from './columnConfig'
+import { ModelType, loadColumnPreferences } from './columnConfig'
 
 type ViewMode = 'grid' | 'list' | 'table'
 type SortMode = 'name' | 'type' | 'context'
@@ -39,9 +39,10 @@ export function ModelsView() {
   })
   const [maxPriceFilter, setMaxPriceFilter] = useState<string>('')
   const [columnSelectorOpen, setColumnSelectorOpen] = useState(false)
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set())
 
-  const models = data?.models || []
-  const types = data?.types || []
+  const models = useMemo(() => data?.models || [], [data])
+  const types = useMemo(() => data?.types || [], [data])
 
   const allTraits = useMemo(() => {
     const traits = new Set<string>()
@@ -49,9 +50,9 @@ export function ModelsView() {
       const modelSpec = model.model_spec || model.spec || {}
       const traitsRaw = modelSpec.traits || model.spec?.traits || {}
       if (Array.isArray(traitsRaw)) {
-        traitsRaw.forEach((trait) => traits.add(trait))
+        traitsRaw.forEach((trait) => { traits.add(trait) })
       } else {
-        Object.keys(traitsRaw).forEach((trait) => traits.add(trait))
+        Object.keys(traitsRaw).forEach((trait) => { traits.add(trait) })
       }
     })
     return Array.from(traits).sort()
@@ -63,7 +64,7 @@ export function ModelsView() {
     if (search) {
       const searchLower = search.toLowerCase()
       result = result.filter((model: Model) => {
-        const modelId = model.id.toLowerCase()
+        const modelId = model.id?.toLowerCase()
         const ownedBy = model.owned_by?.toLowerCase() || ''
         const modelSpec = model.model_spec || model.spec || {}
         const traitsRaw = modelSpec.traits || model.spec?.traits || {}
@@ -80,7 +81,7 @@ export function ModelsView() {
     }
 
     if (typeFilter !== 'all') {
-      result = result.filter((model: Model) => model.type === typeFilter)
+      result = result.filter((model: Model) => (model.type || model.model_type) === typeFilter)
     }
 
     if (traitFilter !== 'all') {
@@ -101,31 +102,40 @@ export function ModelsView() {
     if (activeCapabilities.length > 0) {
       result = result.filter((model: Model) => {
         const modelSpec = model.model_spec || model.spec || {}
-        const capabilities = modelSpec.capabilities || model.spec?.capabilities || {}
+        const flatCaps = (model as unknown as Record<string, unknown>).capabilities
+        const capabilities: Record<string, unknown> = {
+          ...(Array.isArray(flatCaps)
+            ? Object.fromEntries(flatCaps.map((cap: string) => [cap, true]))
+            : (flatCaps as Record<string, unknown>) || {}),
+          ...(modelSpec.capabilities || model.spec?.capabilities || {}),
+        }
         return activeCapabilities.every(cap => {
-          const capKey = cap === 'web_search' ? 'supportsWebSearch' : 
-                         cap === 'vision' ? 'supportsVision' :
-                         cap === 'functions' ? 'supportsFunctionCalling' :
-                         cap === 'reasoning' ? 'supportsReasoning' : cap
-          return capabilities[capKey as keyof typeof capabilities]
+          const aliases =
+            cap === 'web_search' ? ['supportsWebSearch', 'web_search'] :
+            cap === 'vision' ? ['supportsVision', 'vision'] :
+            cap === 'functions' ? ['supportsFunctionCalling', 'function_calling', 'functions'] :
+            cap === 'reasoning' ? ['supportsReasoning', 'reasoning'] :
+            [cap]
+          return aliases.some((key) => Boolean(capabilities[key]))
         })
       })
     }
 
     if (maxPriceFilter) {
       const maxPrice = parseFloat(maxPriceFilter)
-      if (!isNaN(maxPrice)) {
+      if (!Number.isNaN(maxPrice)) {
         result = result.filter((model: Model) => {
           const modelSpec = model.model_spec || model.spec || {}
           const pricing = modelSpec.pricing || model.spec?.pricing || {}
-          const inputValue = pricing.input
+          const flatModel = model as unknown as Record<string, unknown>
+          const inputValue = pricing.input ?? flatModel.input_price_usd
           let inputPrice: number | null = null
           if (typeof inputValue === 'object' && inputValue !== null && 'usd' in inputValue && inputValue.usd !== undefined) {
-            inputPrice = inputValue.usd
+            inputPrice = inputValue.usd as number
           } else if (typeof inputValue === 'number') {
             inputPrice = inputValue
           }
-          const genPrice = pricing.generation?.usd ?? pricing.perImage?.usd ?? null
+          const genPrice = pricing.generation?.usd ?? pricing.perImage?.usd ?? (flatModel.generation_price_usd as number | null) ?? null
           
           if (inputPrice !== null && inputPrice > 0) {
             return inputPrice <= maxPrice
@@ -143,11 +153,16 @@ export function ModelsView() {
         case 'name':
           return a.id.localeCompare(b.id)
         case 'type':
-          return a.type.localeCompare(b.type) || a.id.localeCompare(b.id)
-        case 'context':
-          const aContext = a.spec?.context_length || 0
-          const bContext = b.spec?.context_length || 0
+          return (a.type || a.model_type || '').localeCompare(b.type || b.model_type || '') || a.id.localeCompare(b.id)
+        case 'context': {
+          const aSpec = a.model_spec || a.spec || {}
+          const bSpec = b.model_spec || b.spec || {}
+          const aFlat = a as unknown as Record<string, unknown>
+          const bFlat = b as unknown as Record<string, unknown>
+          const aContext = aSpec.availableContextTokens || aSpec.context_length || (aFlat.context_window as number) || 0
+          const bContext = bSpec.availableContextTokens || bSpec.context_length || (bFlat.context_window as number) || 0
           return bContext - aContext
+        }
         default:
           return 0
       }
@@ -178,8 +193,20 @@ export function ModelsView() {
     if (typeFilter !== 'all' && ['text', 'image', 'video', 'tts', 'asr', 'embedding', 'upscale', 'inpaint'].includes(typeFilter)) {
       return typeFilter as ModelType
     }
+    // If only one type is present in the filtered results, use it for table columns
+    const resultTypes = new Set(filteredModels.map((m) => m.type || m.model_type).filter(Boolean) as string[])
+    if (resultTypes.size === 1) {
+      const onlyType = Array.from(resultTypes)[0]
+      if (['text', 'image', 'video', 'tts', 'asr', 'embedding', 'upscale', 'inpaint'].includes(onlyType)) {
+        return onlyType as ModelType
+      }
+    }
     return 'all'
-  }, [typeFilter])
+  }, [typeFilter, filteredModels])
+
+  useEffect(() => {
+    setHiddenColumns(loadColumnPreferences(modelTypeForTable))
+  }, [modelTypeForTable])
 
   if (isLoading) {
     return (
@@ -449,6 +476,7 @@ export function ModelsView() {
           models={filteredModels}
           modelType={modelTypeForTable}
           onOpenColumnSelector={() => setColumnSelectorOpen(true)}
+          hiddenColumnsOverride={hiddenColumns}
         />
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -467,6 +495,7 @@ export function ModelsView() {
 <ColumnSelector
         isOpen={columnSelectorOpen}
         onClose={() => setColumnSelectorOpen(false)}
+        onColumnsChange={setHiddenColumns}
         modelType={modelTypeForTable}
       />
       </div>
@@ -477,12 +506,15 @@ export function ModelsView() {
 
 function ModelListItem({ model }: { model: Model }) {
   const modelSpec = model.model_spec || model.spec || {}
-  const contextLength = modelSpec.availableContextTokens || model.spec?.context_length
+  const flatModel = model as unknown as Record<string, unknown>
+  const contextLength = modelSpec.availableContextTokens || flatModel.context_window as number | undefined
   const maxTokens = modelSpec.maxCompletionTokens || model.spec?.max_output_tokens
-  const pricing = modelSpec.pricing || model.spec?.pricing || {}
+  const pricing = modelSpec.pricing || {
+    input: flatModel.input_price_usd != null ? { usd: flatModel.input_price_usd } : undefined,
+  }
 
   const getTypeColor = (type: string) => {
-    switch (type.toLowerCase()) {
+    switch (type?.toLowerCase()) {
       case 'text':
         return 'bg-blue-500/10 text-blue-500 border-blue-500/20'
       case 'image':
@@ -500,8 +532,8 @@ function ModelListItem({ model }: { model: Model }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <span className="font-medium truncate">{model.id}</span>
-            <span className={cn("text-xs px-2 py-0.5 rounded border", getTypeColor(model.type))}>
-              {model.type}
+            <span className={cn("text-xs px-2 py-0.5 rounded border", getTypeColor(model.type || model.model_type || 'unknown'))}>
+              {model.type || model.model_type || 'unknown'}
             </span>
           </div>
           {model.owned_by && (
@@ -525,9 +557,9 @@ function ModelListItem({ model }: { model: Model }) {
             <div className="hidden lg:block">
               <span>Input: </span>
               <span className="font-medium text-foreground">
-                {pricing.input
+                {pricing.input != null
                   ? typeof pricing.input === 'object' && 'usd' in pricing.input
-                    ? `$${(pricing.input.usd ?? 0).toFixed(2)}`
+                    ? `$${Number(pricing.input.usd ?? 0).toFixed(2)}`
                     : String(pricing.input)
                   : '—'}
               </span>

@@ -40,16 +40,6 @@ export function UsageLeaderboardCard() {
     return Math.max(...usage.keys.map(k => k.diem_usage))
   }, [usage?.keys])
 
-  const getSortIcon = (mode: SortMode) => {
-    if (sortMode === mode) {
-      return <ArrowUp className="w-3 h-3" />
-    }
-    if (sortMode === `${mode}_desc` as SortMode || sortMode === `${mode}_low` as SortMode) {
-      return <ArrowDown className="w-3 h-3" />
-    }
-    return <ArrowUpDown className="w-3 h-3 opacity-50" />
-  }
-
   if (isLoading) {
     return (
       <Card>

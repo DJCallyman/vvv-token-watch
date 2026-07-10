@@ -1,1 +1,1 @@
-from backend.api.routes import health, usage, balance, prices, models, analytics
+from backend.api.routes import health, usage, balance, prices, models, analytics, benchmark, onchain, alerts

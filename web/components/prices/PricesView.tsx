@@ -5,6 +5,7 @@ import { usePrices } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { Coins, Wallet } from 'lucide-react'
+import { PriceChart } from '@/components/prices/PriceChart'
 
 type Currency = 'USD' | 'AUD'
 
@@ -152,7 +153,9 @@ export function PricesView() {
               </CardTitle>
               <CardDescription>Your combined token holdings</CardDescription>
             </div>
+            <label htmlFor="portfolio-currency" className="sr-only">Portfolio currency</label>
             <select
+              id="portfolio-currency"
               value={portfolioCurrency}
               onChange={(e) => setPortfolioCurrency(e.target.value as Currency)}
               className="text-sm rounded-md border border-input bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -197,6 +200,8 @@ export function PricesView() {
           </div>
         </CardContent>
       </Card>
+
+      <PriceChart />
     </div>
   )
 }

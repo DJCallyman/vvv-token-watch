@@ -10,7 +10,8 @@ import {
   DollarSign,
   Cpu,
   FlaskConical,
-  Settings
+  Blocks,
+  Bell,
 } from 'lucide-react'
 
 const navigation = [
@@ -19,6 +20,8 @@ const navigation = [
   { name: 'Usage', href: '/usage', icon: BarChart3 },
   { name: 'Balance', href: '/balance', icon: Wallet },
   { name: 'Prices', href: '/prices', icon: DollarSign },
+  { name: 'On-Chain', href: '/onchain', icon: Blocks },
+  { name: 'Alerts', href: '/alerts', icon: Bell },
   { name: 'Benchmark', href: '/benchmark', icon: FlaskConical },
 ]
 
@@ -44,6 +47,7 @@ export function Sidebar() {
             <Link
               key={item.name}
               href={item.href}
+              aria-current={isActive ? 'page' : undefined}
               className={cn(
                 'flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors',
                 isActive
@@ -58,15 +62,7 @@ export function Sidebar() {
         })}
       </nav>
       
-      <div className="px-3 py-4 border-t border-border">
-        <Link
-          href="/settings"
-          className="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
-        >
-          <Settings className="w-5 h-5" />
-          Settings
-        </Link>
-      </div>
+
     </aside>
   )
 }

@@ -13,8 +13,10 @@ from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
 
-from src.core.venice_api_client import VeniceAPIClient
-from src.config.config import Config
+from backend.core.venice_api_client import VeniceAPIClient
+from backend.config import get_settings
+
+settings = get_settings()
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +41,8 @@ class CachedModel:
     capabilities: List[str] = None
     is_beta: bool = False
     context_window: Optional[int] = None
-    
+    deprecation: Optional[Dict] = None              # Venice deprecation metadata
+
     def __post_init__(self):
         if self.capabilities is None:
             self.capabilities = []
@@ -58,8 +61,6 @@ class ModelCacheManager:
     - Exposes clean interfaces for getting pricing and model info
     """
     
-    CACHE_FILE = Path("data/model_cache.json")
-    
     def __init__(self, api_client: Optional[VeniceAPIClient] = None):
         """
         Initialize the model cache manager.
@@ -67,15 +68,29 @@ class ModelCacheManager:
         Args:
             api_client: Optional VeniceAPIClient. If None, creates one with admin API key (required for reliable model fetching)
         """
-        # Use VENICE_ADMIN_KEY for model fetching - it's always set and more reliable
-        # VENICE_API_KEY may be empty or unavailable, causing incomplete model lists
-        self.api_client = api_client or VeniceAPIClient(Config.VENICE_ADMIN_KEY)
+        # /models is a public endpoint; prefer the regular API key to avoid
+        # exposing the admin key unnecessarily. Fall back to admin key only if
+        # no regular key is configured.
+        api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
+        self.api_client = api_client or VeniceAPIClient(api_key)
+        self.cache_file = Path(settings.DATA_DIR) / "model_cache.json"
         self.models: Dict[str, CachedModel] = {}
         self.raw_api_data: Optional[Dict] = None  # Store raw API response for full details
         self.cache_timestamp: Optional[str] = None  # ISO format timestamp
         self._load_cache()
+
+    def _is_cache_fresh(self) -> bool:
+        """Return True if in-memory/file cache is within CACHE_TTL_SECONDS."""
+        if not self.cache_timestamp or not self.models:
+            return False
+        try:
+            ts = datetime.fromisoformat(self.cache_timestamp)
+            age = (datetime.now() - ts).total_seconds()
+            return age < settings.CACHE_TTL_SECONDS
+        except (TypeError, ValueError):
+            return False
     
-    def fetch_models(self, force_refresh: bool = False) -> bool:
+    async def fetch_models(self, force_refresh: bool = False) -> bool:
         """
         Fetch models from Venice API and update cache.
         
@@ -85,9 +100,16 @@ class ModelCacheManager:
         Returns:
             True if fetch successful, False if failed (may have fallen back to cache)
         """
+        if not force_refresh and self._is_cache_fresh():
+            logger.debug(
+                "Using fresh model cache (age within %ss)",
+                settings.CACHE_TTL_SECONDS,
+            )
+            return True
+
         try:
             logger.info("Fetching models from Venice API...")
-            response = self.api_client.get("/models", params={"type": "all"})
+            response = await self.api_client.get("/models", params={"type": "all"})
             
             if response.status_code != 200:
                 logger.warning(f"Failed to fetch models: {response.status_code}")
@@ -149,24 +171,25 @@ class ModelCacheManager:
                     input_price = pricing.get('input', {}).get('usd')
                     output_price = pricing.get('output', {}).get('usd')
                 
-                # Extract capabilities
+                # Extract capabilities (store both short keys and Venice supports* names)
                 capabilities_spec = model_spec.get('capabilities', {})
                 capabilities = []
                 
                 if isinstance(capabilities_spec, dict):
-                    if capabilities_spec.get('supportsVision'):
-                        capabilities.append('vision')
-                    if capabilities_spec.get('supportsFunctionCalling'):
-                        capabilities.append('function_calling')
-                    if capabilities_spec.get('supportsReasoning'):
-                        capabilities.append('reasoning')
-                    if capabilities_spec.get('supportsResponseSchema'):
-                        capabilities.append('response_schema')
-                    if capabilities_spec.get('optimizedForCode'):
-                        capabilities.append('optimized_for_code')
-                
-                # Get traits
-                traits = model_data.get('model_spec', {}).get('traits', [])
+                    capability_map = {
+                        'supportsVision': 'vision',
+                        'supportsFunctionCalling': 'function_calling',
+                        'supportsWebSearch': 'web_search',
+                        'supportsReasoning': 'reasoning',
+                        'supportsLogProbs': 'logprobs',
+                        'supportsResponseSchema': 'response_schema',
+                        'optimizedForCode': 'optimized_for_code',
+                        'supportsAudioInput': 'audio_input',
+                        'supportsVideoInput': 'video_input',
+                    }
+                    for venice_key, short_key in capability_map.items():
+                        if capabilities_spec.get(venice_key):
+                            capabilities.append(short_key)
                 
                 cached_model = CachedModel(
                     id=model_id,
@@ -180,8 +203,9 @@ class ModelCacheManager:
                     cache_write_price_usd=cache_write_price_usd,
                     cache_write_price_diem=cache_write_price_diem,
                     capabilities=capabilities,
-                    is_beta=model_spec.get('beta', False),
-                    context_window=model_spec.get('availableContextTokens')
+                    is_beta=model_spec.get('beta', False) or model_spec.get('betaModel', False),
+                    context_window=model_spec.get('availableContextTokens'),
+                    deprecation=model_spec.get('deprecation'),
                 )
                 
                 self.models[model_id] = cached_model
@@ -194,7 +218,7 @@ class ModelCacheManager:
     def _save_cache(self) -> None:
         """Save models to local cache file with secure permissions."""
         try:
-            self.CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            self.cache_file.parent.mkdir(parents=True, exist_ok=True)
             
             self.cache_timestamp = datetime.now().isoformat()
             
@@ -215,6 +239,7 @@ class ModelCacheManager:
                         'capabilities': m.capabilities,
                         'is_beta': m.is_beta,
                         'context_window': m.context_window,
+                        'deprecation': m.deprecation,
                     }
                     for model_id, m in self.models.items()
                 },
@@ -222,16 +247,16 @@ class ModelCacheManager:
             }
             
             # Write with secure permissions
-            with open(self.CACHE_FILE, 'w', encoding='utf-8') as f:
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(cache_data, f, indent=2)
             
             # Set restrictive file permissions (owner read/write only)
             try:
-                os.chmod(self.CACHE_FILE, SENSITIVE_FILE_MODE)
+                os.chmod(self.cache_file, SENSITIVE_FILE_MODE)
             except OSError as e:
                 logger.warning(f"Could not set file permissions on cache: {e}")
             
-            logger.debug(f"Saved model cache to {self.CACHE_FILE} (timestamp: {self.cache_timestamp})")
+            logger.debug(f"Saved model cache to {self.cache_file} (timestamp: {self.cache_timestamp})")
             
         except Exception as e:
             logger.warning(f"Failed to save model cache: {e}")
@@ -239,11 +264,11 @@ class ModelCacheManager:
     def _load_cache(self) -> None:
         """Load models from local cache file if it exists."""
         try:
-            if not self.CACHE_FILE.exists():
-                logger.debug(f"No cache file found at {self.CACHE_FILE}")
+            if not self.cache_file.exists():
+                logger.debug(f"No cache file found at {self.cache_file}")
                 return
             
-            with open(self.CACHE_FILE, 'r', encoding='utf-8') as f:
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
                 cache_data = json.load(f)
             
             # Load timestamp if present
@@ -264,7 +289,8 @@ class ModelCacheManager:
                     cache_write_price_diem=model_dict.get('cache_write_price_diem'),
                     capabilities=model_dict.get('capabilities', []),
                     is_beta=model_dict.get('is_beta', False),
-                    context_window=model_dict.get('context_window')
+                    context_window=model_dict.get('context_window'),
+                    deprecation=model_dict.get('deprecation'),
                 )
             
             self.raw_api_data = cache_data.get('raw_api_data')
@@ -489,6 +515,7 @@ class ModelCacheManager:
             'cache_write_per_1m_usd': model.cache_write_price_usd,
             'cache_discount_percent': self.get_cache_discount_percent(model_id),
             'supports_cache': model.supports_cache,
+            'deprecation': model.deprecation,
         }
 
         return summary
@@ -520,6 +547,17 @@ class ModelCacheManager:
                 return model_data
         
         return None
+
+    def get_all_raw_models(self) -> List[Dict]:
+        """
+        Return the full Venice /models payload entries when available.
+
+        These include model_spec (capabilities, pricing, privacy, constraints),
+        which the frontend table view needs for type-specific columns.
+        """
+        if not self.raw_api_data or not self.raw_api_data.get('data'):
+            return []
+        return list(self.raw_api_data['data'])
     
     def get_cache_timestamp(self) -> Optional[str]:
         """

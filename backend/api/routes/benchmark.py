@@ -22,9 +22,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-import requests
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+import httpx
+from backend.core.venice_api_client import VeniceAPIClient
+from fastapi import APIRouter, HTTPException, Request
+from backend.models.schemas import BenchmarkStartParams
 from sse_starlette.sse import EventSourceResponse
 
 from backend.config import get_settings
@@ -40,11 +41,13 @@ router = APIRouter()
 # backend/api/routes/benchmark.py → repo root is 4 levels up
 _REPO_ROOT = Path(__file__).parent.parent.parent.parent
 _BENCHMARK_SCRIPT = _REPO_ROOT / "scripts" / "benchmark_models.py"
-_VENICE_BASE = "https://api.venice.ai/api/v1"
+_VENICE_BASE = settings.VENICE_API_BASE_URL
 
 
 def _results_dir() -> Path:
-    d = _REPO_ROOT / settings.BENCHMARK_RESULTS_DIR
+    d = Path(settings.BENCHMARK_RESULTS_DIR)
+    if not d.is_absolute():
+        d = _REPO_ROOT / d
     d.mkdir(parents=True, exist_ok=True)
     return d
 
@@ -57,17 +60,40 @@ _jobs: dict[str, dict] = {}
 # {job_id: {"proc": asyncio.subprocess.Process, "status": str,
 #            "run_id": str | None, "started_at": float}}
 
+_MAX_CONCURRENT_JOBS = 1
+_JOB_TTL_SECONDS = 3600
+
+
+async def terminate_all_jobs():
+    """Terminate all running benchmark jobs. Called during application shutdown."""
+    for job_id, job in list(_jobs.items()):
+        proc = job.get("proc")
+        if proc is not None and proc.returncode is None:
+            try:
+                proc.terminate()
+                await asyncio.wait_for(proc.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+            except Exception as exc:
+                logger.error("Error terminating benchmark job %s: %s", job_id, exc)
+
+
+def _cleanup_stale_jobs():
+    """Evict completed jobs older than the TTL to prevent unbounded growth."""
+    now = time.time()
+    stale = [
+        job_id for job_id, job in _jobs.items()
+        if job.get("status") in ("done", "failed")
+        and now - job.get("started_at", now) > _JOB_TTL_SECONDS
+    ]
+    for job_id in stale:
+        _jobs.pop(job_id, None)
+
 
 # ---------------------------------------------------------------------------
 # Pydantic request models
 # ---------------------------------------------------------------------------
-
-class BenchmarkStartParams(BaseModel):
-    models: Optional[list[str]] = None   # None = all qualifying
-    tests: Optional[list[str]] = None    # None = all 8 tests
-    iterations: int = 10
-    workers: int = 4
-    privacy: str = "both"               # "both" | "private" | "anonymized"
 
 
 # ---------------------------------------------------------------------------
@@ -83,15 +109,10 @@ def _is_e2ee_or_tee(model: dict) -> bool:
     )
 
 
-def _fetch_and_filter_text_models(api_key: str) -> list[dict]:
-    resp = requests.get(
-        f"{_VENICE_BASE}/models",
-        headers={"Authorization": f"Bearer {api_key}"},
-        params={"type": "text"},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    raw = resp.json().get("data", [])
+async def _fetch_and_filter_text_models(api_key: str) -> list[dict]:
+    client = VeniceAPIClient(api_key)
+    data = await client.get_json("/models", params={"type": "text"})
+    raw = data.get("data", [])
     result = []
     for m in raw:
         spec = m.get("model_spec") or {}
@@ -121,6 +142,7 @@ def _model_to_summary(m: dict) -> dict:
         },
         "pricing_input_usd": (pricing.get("input") or {}).get("usd"),
         "pricing_output_usd": (pricing.get("output") or {}).get("usd"),
+        "deprecation": spec.get("deprecation"),
     }
 
 
@@ -193,8 +215,8 @@ async def list_benchmark_models():
         raise HTTPException(400, "No Venice API key configured in settings")
 
     try:
-        raw = await asyncio.to_thread(_fetch_and_filter_text_models, api_key)
-    except requests.HTTPError as exc:
+        raw = await _fetch_and_filter_text_models(api_key)
+    except httpx.HTTPStatusError as exc:
         raise HTTPException(502, f"Venice API error: {exc}") from exc
     except Exception as exc:
         raise HTTPException(500, f"Failed to fetch models: {exc}") from exc
@@ -204,11 +226,29 @@ async def list_benchmark_models():
 
 
 @router.post("/benchmark/start")
-async def start_benchmark(params: BenchmarkStartParams):
+async def start_benchmark(request: Request, params: BenchmarkStartParams):
     """Start a benchmark subprocess. Returns a job_id for streaming/status."""
+    limiter = request.app.state.limiter
+    await limiter.shared_limit("1/hour", scope="benchmark_start")(request)
+
     api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
     if not api_key:
         raise HTTPException(400, "No Venice API key configured in settings")
+
+    _cleanup_stale_jobs()
+
+    running = sum(1 for j in _jobs.values() if j.get("status") == "running")
+    if running >= _MAX_CONCURRENT_JOBS:
+        raise HTTPException(
+            429,
+            f"Only {_MAX_CONCURRENT_JOBS} concurrent benchmark job(s) allowed. Please wait for the current run to finish."
+        )
+
+    if not _BENCHMARK_SCRIPT.exists():
+        raise HTTPException(
+            503,
+            "Benchmark runner is not available in this deployment"
+        )
 
     results_abs = str(_results_dir().resolve())
 
@@ -394,10 +434,32 @@ def _build_infographic_prompt(models: list[dict]) -> str:
     )
 
 
-def _call_venice_image(api_key: str, prompt: str) -> str:
-    """Synchronous Venice image call — run via asyncio.to_thread."""
+async def _resolve_image_model(api_key: str) -> str:
+    """Discover a current image model via /models/traits; fall back to flux-2-pro."""
+    client = VeniceAPIClient(api_key)
+    try:
+        traits = await client.get_json("/models/traits")
+        # Traits payload may be {data: {...}} or a flat mapping.
+        mapping = traits.get("data", traits) if isinstance(traits, dict) else {}
+        for key in ("image:fast", "image:default", "image"):
+            model_id = mapping.get(key)
+            if isinstance(model_id, str) and model_id:
+                return model_id
+            if isinstance(model_id, dict):
+                mid = model_id.get("id") or model_id.get("model")
+                if mid:
+                    return mid
+    except Exception as exc:
+        logger.warning("Could not resolve image model from traits: %s", exc)
+    return "flux-2-pro"
+
+
+async def _call_venice_image(api_key: str, prompt: str) -> str:
+    """Async Venice image call using discovered model trait when available."""
+    model_id = await _resolve_image_model(api_key)
+    client = VeniceAPIClient(api_key)
     payload = {
-        "model": "nano-banana-2",
+        "model": model_id,
         "prompt": prompt,
         "resolution": "4K",
         "aspect_ratio": "16:9",
@@ -405,17 +467,7 @@ def _call_venice_image(api_key: str, prompt: str) -> str:
         "safe_mode": True,
         "return_binary": False,
     }
-    resp = requests.post(
-        f"{_VENICE_BASE}/image/generate",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=120,
-    )
-    resp.raise_for_status()
-    data = resp.json()
+    data = await client.post_json("/image/generate", data=payload, timeout=120.0)
     images = data.get("images", [])
     if not images:
         raise ValueError("Venice image API returned no images")
@@ -447,9 +499,10 @@ async def generate_infographic(run_id: str):
     prompt = _build_infographic_prompt(models)
 
     try:
-        image_b64 = await asyncio.to_thread(_call_venice_image, api_key, prompt)
-    except requests.HTTPError as exc:
-        raise HTTPException(502, f"Venice image API error: {exc.response.text if exc.response else str(exc)}") from exc
+        image_b64 = await _call_venice_image(api_key, prompt)
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text if exc.response is not None else str(exc)
+        raise HTTPException(502, f"Venice image API error: {detail}") from exc
     except ValueError as exc:
         raise HTTPException(502, str(exc)) from exc
     except Exception as exc:

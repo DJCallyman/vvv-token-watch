@@ -52,7 +52,7 @@ VENICE_KEY=$(grep -E '^VENICE_ADMIN_KEY=' .env | cut -d'=' -f2 | tr -d '"' | tr 
 [[ -n "$VENICE_KEY" ]] || error "VENICE_ADMIN_KEY is empty in .env — edit .env and add it."
 
 # ── local overrides (don't clobber .env, just set in environment) ─────────────
-export DATABASE_URL="postgresql://vvvwatch:vvvwatch@localhost:5433/vvvwatch"
+export DATABASE_URL="postgresql+asyncpg://vvvwatch:vvvwatch@localhost:5433/vvvwatch"
 export LOG_FILE_PATH="$REPO_ROOT/data/logs/app.log"
 export DATA_DIR="$REPO_ROOT/data"
 export BACKEND_URL="http://localhost:8000"

@@ -6,7 +6,7 @@ settings = get_settings()
 
 engine = create_async_engine(
     settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-    echo=settings.LOG_LEVEL == "DEBUG",
+    echo=settings.SQL_ECHO,
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10
@@ -32,5 +32,22 @@ async def get_db() -> AsyncSession:
 
 
 async def init_db():
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    """Create tables if they do not exist.
+
+    Best-effort: logs and continues if the database is unreachable so the
+    rest of the API (Venice/CoinGecko proxies) can still serve traffic.
+    """
+    import logging
+
+    # Import models so they register on Base.metadata before create_all.
+    import backend.models.db  # noqa: F401
+
+    logger = logging.getLogger(__name__)
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database tables ready")
+    except Exception:
+        logger.exception(
+            "Failed to initialize database (history/alerts features will be unavailable)"
+        )
