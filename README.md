@@ -67,6 +67,8 @@ Stop with **Ctrl+C** — all processes and the Postgres container are cleaned up
 | Variable | Required | Description |
 |---|---|---|
 | `VENICE_ADMIN_KEY` | ✅ | Venice Admin API key (not Inference Only) |
+| `APP_PASSWORD` | ✅ | Shared password protecting the web UI and API. Generate with `openssl rand -hex 24`. The app refuses to start without it unless `ALLOW_INSECURE_NO_AUTH=true`. |
+| `ALLOW_INSECURE_NO_AUTH` | — | Explicit opt-in to run without authentication (default: `false`). Not recommended. |
 | `DATABASE_URL` | ✅ | PostgreSQL connection string |
 | `COINGECKO_API_KEY` | — | CoinGecko API key (free tier if omitted) |
 | `COINGECKO_HOLDING_AMOUNT` | — | Your VVV holdings (default: 2750) |
@@ -75,8 +77,10 @@ Stop with **Ctrl+C** — all processes and the Postgres container are cleaned up
 | `DIEM_TOKEN_ID` | — | CoinGecko ID for DIEM (default: `diem`) |
 | `COINGECKO_CURRENCIES` | — | Currencies to fetch (default: `usd,aud`) |
 | `LOG_LEVEL` | — | `INFO` or `DEBUG` (default: `INFO`) |
+| `DEBUG` | — | Enables `/docs`, `/redoc`, `/openapi.json` (default: `false`) |
 
 > **Admin key required:** Regular inference keys return 401 on `/billing/usage`. Create an Admin key at https://venice.ai/settings/api.
+> **Use a separate inference key:** Set `VENICE_API_KEY` to a distinct inference-only key rather than reusing `VENICE_ADMIN_KEY`, so public endpoints never expose admin-level credentials.
 
 ---
 

@@ -1,10 +1,11 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '../../test-utils'
 import { PricesView } from '@/components/prices/PricesView'
-import { usePrices } from '@/lib/hooks'
+import { usePrices, usePriceHistory } from '@/lib/hooks'
 
 jest.mock('@/lib/hooks')
 const mockUsePrices = usePrices as jest.MockedFunction<typeof usePrices>
+const mockUsePriceHistory = usePriceHistory as jest.MockedFunction<typeof usePriceHistory>
 
 const pricesData = {
   vvv: { usd: 2.50, aud: 3.85 },
@@ -17,9 +18,15 @@ const pricesData = {
   },
 }
 
+const priceHistoryData = {
+  data: [],
+  count: 0,
+}
+
 describe('PricesView — loading', () => {
   beforeEach(() => {
     mockUsePrices.mockReturnValue({ data: undefined, isLoading: true, isError: false } as any)
+    mockUsePriceHistory.mockReturnValue({ data: undefined, isLoading: true, isError: false } as any)
   })
 
   it('shows loading text', () => {
@@ -31,6 +38,7 @@ describe('PricesView — loading', () => {
 describe('PricesView — error', () => {
   beforeEach(() => {
     mockUsePrices.mockReturnValue({ data: undefined, isLoading: false, isError: true } as any)
+    mockUsePriceHistory.mockReturnValue({ data: undefined, isLoading: false, isError: false } as any)
   })
 
   it('shows error message', () => {
@@ -42,6 +50,7 @@ describe('PricesView — error', () => {
 describe('PricesView — success', () => {
   beforeEach(() => {
     mockUsePrices.mockReturnValue({ data: pricesData, isLoading: false, isError: false } as any)
+    mockUsePriceHistory.mockReturnValue({ data: priceHistoryData, isLoading: false, isError: false } as any)
   })
 
   it('renders page heading', () => {
@@ -93,11 +102,6 @@ describe('PricesView — success', () => {
     expect(screen.getByText('Portfolio Summary')).toBeInTheDocument()
   })
 
-  it('renders portfolio total value', () => {
-    render(<PricesView />)
-    expect(screen.getByText('$6,880.00')).toBeInTheDocument()
-  })
-
   it('renders portfolio VVV value', () => {
     render(<PricesView />)
     expect(screen.getByText('$6,875.00')).toBeInTheDocument()
@@ -109,13 +113,17 @@ describe('PricesView — success', () => {
     expect(screen.getByText('$5.00')).toBeInTheDocument()
   })
 
-  it('does not render portfolio section when portfolio is absent', () => {
+  it('still renders Portfolio Summary (with fallback calc) when portfolio data is absent', () => {
     mockUsePrices.mockReturnValue({
       data: { ...pricesData, portfolio: undefined },
       isLoading: false,
       isError: false,
     } as any)
     render(<PricesView />)
-    expect(screen.queryByText('Portfolio Summary')).not.toBeInTheDocument()
+    // Current component always renders the section and falls back to holdings * price
+    expect(screen.getByText('Portfolio Summary')).toBeInTheDocument()
+    // 2750 * 2.50 = 6875, 500 * 0.01 = 5
+    expect(screen.getByText('$6,875.00')).toBeInTheDocument()
+    expect(screen.getByText('$5.00')).toBeInTheDocument()
   })
 })

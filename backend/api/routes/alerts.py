@@ -5,11 +5,12 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
+from backend.limiter import limiter
 from backend.services import alert_engine
 
 logger = logging.getLogger(__name__)
@@ -185,7 +186,9 @@ async def acknowledge_event(
 
 
 @router.post("/alerts/evaluate")
+@limiter.limit("30/minute")
 async def evaluate_alerts(
+    request: Request,
     body: EvaluateRequest,
     db: AsyncSession = Depends(get_db),
 ):

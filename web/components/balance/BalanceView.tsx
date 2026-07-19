@@ -1,16 +1,16 @@
 'use client'
 
-import { useBalance, useDailyUsage } from '@/lib/hooks'
+import { useBalance, useEpochUsage } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatNumber, formatCurrency, formatDateTime } from '@/lib/utils'
 import { Wallet, TrendingUp, Clock, PieChart, Activity, AlertCircle } from 'lucide-react'
 
 export function BalanceView() {
   const { data: balance, isLoading: balanceLoading, isError: balanceError } = useBalance()
-  const { data: usage, isLoading: usageLoading, isError: usageError } = useDailyUsage()
+  const { data: epochUsage, isLoading: epochLoading, isError: epochError } = useEpochUsage()
 
-  const isLoading = balanceLoading || usageLoading
-  const isError = balanceError || usageError
+  const isLoading = balanceLoading || epochLoading
+  const isError = balanceError || epochError
 
   if (isLoading) {
     return (
@@ -20,7 +20,7 @@ export function BalanceView() {
     )
   }
 
-  if (isError && !balance && !usage) {
+  if (isError && !balance && !epochUsage) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="text-destructive">Failed to load balance data</div>
@@ -28,7 +28,7 @@ export function BalanceView() {
     )
   }
 
-  const epochStart = usage?.epoch_start ? new Date(usage.epoch_start) : null
+  const epochStart = epochUsage?.epoch_start ? new Date(epochUsage.epoch_start) : null
   const nextEpoch = balance?.next_epoch_begins ? new Date(balance.next_epoch_begins) : null
   
   let epochProgress = 0
@@ -39,11 +39,11 @@ export function BalanceView() {
   }
 
   const remainingDiem = balance?.diem || 0
-  const consumedDiem = usage?.diem || 0
+  const consumedDiem = epochUsage?.diem || 0
   const totalDiemLimit = remainingDiem + consumedDiem
   const consumptionRate = totalDiemLimit > 0 ? (consumedDiem / totalDiemLimit) * 100 : 0
 
-  const diemPerUsd = usage && usage.usd > 0 ? usage.diem / usage.usd : 0
+  const diemPerUsd = epochUsage && epochUsage.usd > 0 ? epochUsage.diem / epochUsage.usd : 0
 
   return (
     <div className="space-y-6">
@@ -103,13 +103,13 @@ export function BalanceView() {
             <div>
               <p className="text-sm text-muted-foreground">DIEM Consumed</p>
               <p className="text-4xl font-bold text-foreground">
-                {usage ? formatNumber(usage.diem, 4) : '—'}
+                {epochUsage ? formatNumber(epochUsage.diem, 4) : '—'}
               </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">USD Consumed</p>
               <p className="text-4xl font-bold text-foreground">
-                {usage ? formatCurrency(usage.usd) : '—'}
+                {epochUsage ? formatCurrency(epochUsage.usd) : '—'}
               </p>
             </div>
             {diemPerUsd > 0 && (
@@ -188,15 +188,16 @@ export function BalanceView() {
                     {epochProgress.toFixed(1)}% complete
                   </p>
                 </div>
-                {balance?.diem_usage_percent !== undefined && (
+                {(balance?.diem_consumed_percent !== undefined || balance?.usd_consumed_percent !== undefined) && (
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <AlertCircle className="w-4 h-4 text-yellow-500" />
-                      <p className="text-sm text-muted-foreground">Usage Alert Threshold</p>
+                      <p className="text-sm text-muted-foreground">Usage (Consumed % of limit/allocation)</p>
                     </div>
                     <p className="text-lg font-semibold">
-                      DIEM: {balance.diem_usage_percent.toFixed(1)}% | USD: {balance.usd_usage_percent?.toFixed(1) || '—'}%
+                      DIEM: {balance.diem_consumed_percent != null ? balance.diem_consumed_percent.toFixed(1) + '%' : '—'} | USD: {balance.usd_consumed_percent != null ? balance.usd_consumed_percent.toFixed(1) + '%' : '—'}
                     </p>
+                    <p className="text-[10px] text-muted-foreground mt-1">Same rule (e.g. gte 80) now means the same thing for both currencies.</p>
                   </div>
                 )}
               </div>
@@ -229,7 +230,7 @@ export function BalanceView() {
             </div>
             <div className="rounded-lg bg-muted/50 p-4">
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Consumed USD</p>
-              <p className="text-xl font-bold">{formatCurrency(usage?.usd || 0)}</p>
+              <p className="text-xl font-bold">{formatCurrency(epochUsage?.usd || 0)}</p>
             </div>
           </div>
         </CardContent>

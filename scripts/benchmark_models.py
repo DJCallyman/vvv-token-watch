@@ -1640,11 +1640,17 @@ def write_results(output_dir: Path, models_results: list[dict]) -> Path:
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Venice text model benchmark (T1–T8)")
-    p.add_argument("--api-key", required=True, help="Venice API key")
+    p.add_argument(
+        "--api-key",
+        default=None,
+        help="Venice API key (falls back to the VENICE_API_KEY env var; "
+        "prefer the env var so the key is not visible in `ps`/argv)",
+    )
     p.add_argument(
         "--admin-key",
         default=None,
-        help="Venice admin key (required for /billing/usage reconciliation)",
+        help="Venice admin key, required only for /billing/usage reconciliation "
+        "(falls back to the VENICE_ADMIN_KEY env var)",
     )
     p.add_argument("--iterations", type=int, default=10)
     p.add_argument("--workers", type=int, default=4)
@@ -1678,6 +1684,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
 
 async def async_main(args: argparse.Namespace) -> int:
+    args.api_key = args.api_key or os.environ.get("VENICE_API_KEY")
+    args.admin_key = args.admin_key or os.environ.get("VENICE_ADMIN_KEY")
+    if not args.api_key:
+        log("ERROR: --api-key or VENICE_API_KEY env var is required")
+        return 1
+
     tests = ALL_TESTS
     if args.tests:
         tests = [t.strip().upper() for t in args.tests.split(",") if t.strip()]
@@ -1774,18 +1786,19 @@ async def async_main(args: argparse.Namespace) -> int:
         # Reconcile actual billed costs if admin key provided
         if args.admin_key:
             run_end = datetime.now(timezone.utc)
-            await reconcile_billed_costs(
-                client=httpx.AsyncClient(
-                    headers={
-                        "Authorization": f"Bearer {args.admin_key}",
-                        "Content-Type": "application/json",
-                    },
-                    timeout=REQUEST_TIMEOUT_S,
-                ),
-                models_results=results,
-                run_start=run_start,
-                run_end=run_end,
-            )
+            async with httpx.AsyncClient(
+                headers={
+                    "Authorization": f"Bearer {args.admin_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=REQUEST_TIMEOUT_S,
+            ) as reconcile_client:
+                await reconcile_billed_costs(
+                    client=reconcile_client,
+                    models_results=results,
+                    run_start=run_start,
+                    run_end=run_end,
+                )
             # Re-write results with actual_billed fields
             out_path = write_results(Path(args.output), results)
         else:

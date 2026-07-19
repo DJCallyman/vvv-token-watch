@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '../../test-utils'
 import { HeroBalanceCard } from '@/components/dashboard/HeroBalanceCard'
 import { useBalance } from '@/lib/hooks'
 
@@ -60,54 +60,36 @@ describe('HeroBalanceCard — success', () => {
     expect(screen.getByText('Account Balance')).toBeInTheDocument()
   })
 
-  it('renders DIEM balance label', () => {
+  it('renders DIEM label', () => {
     render(<HeroBalanceCard />)
-    expect(screen.getByText('DIEM Balance')).toBeInTheDocument()
+    // Current implementation shows just "DIEM" (not "DIEM Balance")
+    expect(screen.getByText('DIEM')).toBeInTheDocument()
   })
 
-  it('renders DIEM numeric value', () => {
+  it('renders DIEM numeric value with 4 decimals', () => {
     render(<HeroBalanceCard />)
-    // formatNumber(45.5, 2) → "45.50"
-    expect(screen.getByText('45.50')).toBeInTheDocument()
+    // formatNumber(45.5, 4) → "45.5000"
+    expect(screen.getByText('45.5000')).toBeInTheDocument()
   })
 
-  it('renders USD balance label', () => {
+  it('renders USD label', () => {
     render(<HeroBalanceCard />)
-    expect(screen.getByText('USD Balance')).toBeInTheDocument()
+    expect(screen.getByText('USD')).toBeInTheDocument()
   })
 
   it('renders USD currency value', () => {
     render(<HeroBalanceCard />)
-    // formatCurrency(11.25) → "$11.25"
     expect(screen.getByText('$11.25')).toBeInTheDocument()
   })
 
-  it('renders usage percentage for DIEM', () => {
+  it('renders epoch reset info when next_epoch_begins is present', () => {
     render(<HeroBalanceCard />)
-    // 45.5% usage displayed as "45.5%"
-    const percentageEls = screen.getAllByText(/45\.5%/)
-    expect(percentageEls.length).toBeGreaterThan(0)
+    expect(screen.getByText(/Epoch resets:/i)).toBeInTheDocument()
   })
 
-  it('shows high-usage warning style when usage > 80%', () => {
-    mockUseBalance.mockReturnValue({
-      data: { ...balanceData, diem_usage_percent: 90.0, usd_usage_percent: 90.0 },
-      isLoading: false,
-      isError: false,
-    } as any)
+  it('does not render usage percentages (moved to other views)', () => {
     render(<HeroBalanceCard />)
-    const highUsageEls = screen.getAllByText('90.0%')
-    expect(highUsageEls.length).toBeGreaterThan(0)
-    // The usage text should have destructive class
-    highUsageEls.forEach(el => {
-      expect(el.className).toMatch(/destructive/)
-    })
-  })
-
-  it('renders daily DIEM limit', () => {
-    render(<HeroBalanceCard />)
-    // Daily Limit label appears twice (DIEM and USD sections)
-    const limitLabels = screen.getAllByText('Daily Limit')
-    expect(limitLabels.length).toBe(2)
+    // HeroBalanceCard no longer shows % usage; those live in BalanceView / TodayUsageCard
+    expect(screen.queryByText(/45\.5%/)).not.toBeInTheDocument()
   })
 })

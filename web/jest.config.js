@@ -22,6 +22,10 @@ const customJestConfig = {
   transformIgnorePatterns: [
     '/node_modules/(?!(lucide-react)/)',
   ],
+  // Do not treat test helper files as test suites
+  testPathIgnorePatterns: [
+    '<rootDir>/__tests__/test-utils\\.tsx$',
+  ],
 }
 
 module.exports = createJestConfig(customJestConfig)

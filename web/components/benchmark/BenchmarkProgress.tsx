@@ -83,45 +83,16 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
     }
   }
 
-  useEffect(() => {
-    finishedRef.current = false
-    seenLinesRef.current = new Set()
-    setLines([{ text: `Connected — streaming job ${jobId}`, type: 'system' }])
-    setProgress(null)
-    setStatus('running')
+  // Polling interval (only started on SSE error as fallback)
+  const pollIntervalRef = useRef<number | null>(null)
 
-    const es = new EventSource(`/api/benchmark/stream/${encodeURIComponent(jobId)}`)
-    esRef.current = es
-
-    es.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        ingestEvent(data)
-      } catch {
-        pushLine(event.data, 'log')
-      }
-    }
-
-    es.onerror = () => {
-      pushLine('SSE stream interrupted; falling back to status polling…', 'system')
-      es.close()
-    }
-
-    return () => {
-      es.close()
-      esRef.current = null
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobId])
-
-  useEffect(() => {
-    let cancelled = false
-
+  const startPolling = () => {
+    if (pollIntervalRef.current != null) return
     const poll = async () => {
-      if (cancelled || finishedRef.current) return
+      if (finishedRef.current) return
       try {
         const st = await api.getBenchmarkStatus(jobId)
-        if (cancelled || finishedRef.current) return
+        if (finishedRef.current) return
 
         if (st.progress && st.progress.total > 0) {
           setProgress({ done: st.progress.done, total: st.progress.total })
@@ -152,11 +123,55 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
       }
     }
 
+    // Kick once immediately, then interval
     poll()
-    const id = window.setInterval(poll, 2000)
+    pollIntervalRef.current = window.setInterval(poll, 2000)
+  }
+
+  const stopPolling = () => {
+    if (pollIntervalRef.current != null) {
+      window.clearInterval(pollIntervalRef.current)
+      pollIntervalRef.current = null
+    }
+  }
+
+  useEffect(() => {
+    finishedRef.current = false
+    seenLinesRef.current = new Set()
+    setLines([{ text: `Connected — streaming job ${jobId}`, type: 'system' }])
+    setProgress(null)
+    setStatus('running')
+
+    // SSE must go through the Next.js proxy (/api/...) so the HttpOnly session cookie
+    // is sent and the proxy can inject the real backend Authorization header.
+    // Direct backend URLs (NEXT_PUBLIC_API_URL) are not supported for SSE because
+    // cookies would not be forwarded cross-origin.
+    const streamUrl = `/api/benchmark/stream/${encodeURIComponent(jobId)}`
+    const es = new EventSource(streamUrl)
+    esRef.current = es
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        ingestEvent(data)
+      } catch {
+        pushLine(event.data, 'log')
+      }
+      // If we had fallen back to polling, stop it — SSE is healthy again
+      stopPolling()
+    }
+
+    es.onerror = () => {
+      pushLine('SSE stream interrupted; falling back to status polling…', 'system')
+      es.close()
+      // Start polling ONLY on error (BUG-12)
+      startPolling()
+    }
+
     return () => {
-      cancelled = true
-      window.clearInterval(id)
+      es.close()
+      esRef.current = null
+      stopPolling()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId])
@@ -169,6 +184,19 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
     status === 'done' ? 'text-green-400' : status === 'error' ? 'text-red-400' : 'text-amber-400'
   const statusLabel = status === 'done' ? 'Complete' : status === 'error' ? 'Error' : 'Running'
 
+  const [cancelling, setCancelling] = useState(false)
+  const onCancel = async () => {
+    setCancelling(true)
+    try {
+      await api.cancelBenchmark(jobId)
+      markError('Benchmark cancelled by user')
+    } catch {
+      pushLine('Failed to cancel benchmark', 'error')
+    } finally {
+      setCancelling(false)
+    }
+  }
+
   return (
     <div className="mt-4 space-y-2">
       <div className="flex items-center justify-between">
@@ -176,11 +204,23 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
           {statusLabel}
           {status === 'running' && <span className="ml-1 animate-pulse">●</span>}
         </span>
-        {progress && (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {progress.done} / {progress.total} models
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {progress && (
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {progress.done} / {progress.total} models
+            </span>
+          )}
+          {status === 'running' && (
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={cancelling}
+              className="rounded-md border border-destructive px-2 py-0.5 text-xs text-destructive hover:bg-destructive/10 disabled:opacity-50"
+            >
+              {cancelling ? 'Cancelling…' : 'Cancel'}
+            </button>
+          )}
+        </div>
       </div>
       {progress && (
         <div className="h-1.5 bg-muted/40 rounded-full overflow-hidden">

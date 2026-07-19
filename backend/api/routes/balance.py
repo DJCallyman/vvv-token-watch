@@ -37,7 +37,25 @@ async def get_balance(
         diem_balance = float(balances.get("DIEM", balance_info.diem))
         usd_balance = float(balances.get("USD", balance_info.usd))
 
-        # Remaining balance as % of allocation (existing field semantics).
+        # BUG-06: Compute CONSUMED percent for both currencies consistently.
+        # When the relevant limit/allocation is absent or zero, we omit the
+        # consumed percent from alert evaluation (instead of sending 0.0 which
+        # would spuriously trigger lte alerts).
+        diem_consumed_percent: Optional[float] = None
+        if diem_epoch_allocation and diem_epoch_allocation > 0:
+            remaining = (diem_balance / diem_epoch_allocation * 100)
+            diem_consumed_percent = max(0.0, min(100.0, 100.0 - remaining))
+        elif balance_info.daily_diem_limit and balance_info.daily_diem_limit > 0:
+            remaining = (diem_balance / balance_info.daily_diem_limit * 100)
+            diem_consumed_percent = max(0.0, min(100.0, 100.0 - remaining))
+
+        usd_consumed_percent: Optional[float] = None
+        if balance_info.daily_usd_limit and balance_info.daily_usd_limit > 0:
+            remaining = (usd_balance / balance_info.daily_usd_limit * 100)
+            usd_consumed_percent = max(0.0, min(100.0, 100.0 - remaining))
+
+        # Legacy fields kept for backward compat (documented as "remaining-ish").
+        # New canonical fields are the consumed percents below.
         diem_usage_percent = (
             (diem_balance / diem_epoch_allocation * 100)
             if diem_epoch_allocation else
@@ -49,12 +67,6 @@ async def get_balance(
             if balance_info.daily_usd_limit else 0.0
         )
 
-        # Consumed % of epoch allocation (for usage_percent alerts).
-        diem_consumed_percent = (
-            max(0.0, 100.0 - diem_usage_percent)
-            if diem_epoch_allocation else 0.0
-        )
-
         result = {
             "diem": diem_balance,
             "usd": usd_balance,
@@ -62,6 +74,9 @@ async def get_balance(
             "daily_usd_limit": balance_info.daily_usd_limit,
             "diem_usage_percent": diem_usage_percent,
             "usd_usage_percent": usd_usage_percent,
+            # BUG-06: explicit consumed percents (used by alerts and recommended for UI)
+            "diem_consumed_percent": diem_consumed_percent,
+            "usd_consumed_percent": usd_consumed_percent,
             "next_epoch_begins": balance_info.next_epoch_begins,
             "consumption_currency": consumption_currency,
             "can_consume": can_consume,
@@ -69,16 +84,20 @@ async def get_balance(
         }
 
         # Best-effort alert evaluation on each balance poll.
+        # Only include consumed metrics when we have a meaningful denominator.
+        alert_metrics: dict[str, float] = {
+            "diem_balance": diem_balance,
+            "usd_balance": usd_balance,
+        }
+        if diem_consumed_percent is not None:
+            alert_metrics["diem_usage_percent"] = diem_consumed_percent  # keep key for existing alert configs
+            alert_metrics["diem_consumed_percent"] = diem_consumed_percent
+        if usd_consumed_percent is not None:
+            alert_metrics["usd_usage_percent"] = usd_consumed_percent
+            alert_metrics["usd_consumed_percent"] = usd_consumed_percent
+
         try:
-            await alert_engine.evaluate_alerts(
-                db,
-                {
-                    "diem_balance": diem_balance,
-                    "usd_balance": usd_balance,
-                    "diem_usage_percent": diem_consumed_percent,
-                    "usd_usage_percent": usd_usage_percent,
-                },
-            )
+            await alert_engine.evaluate_alerts(db, alert_metrics)
         except Exception:
             logger.exception("Alert evaluation failed during balance poll")
 

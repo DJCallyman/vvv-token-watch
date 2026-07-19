@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import sys
 import time
@@ -346,6 +347,45 @@ def _estimate_cost(
     return total_calls, total_usd, skipped, warnings
 
 
+async def _resolve_models_and_estimate(
+    api_key: str, params: BenchmarkStartParams
+) -> tuple[list[dict], list[str], str, int, float, int, list[str]]:
+    """Resolve the concrete model/test set for a start or estimate request and
+    price it out. Shared so /benchmark/start enforces the same privacy/tests
+    validation and cost ceiling that /benchmark/estimate does (T-RS-1).
+    """
+    privacy = params.privacy
+    tests = params.tests or list(_ALL_TESTS)
+
+    raw = await _fetch_and_filter_text_models(api_key)
+    raw = _filter_by_privacy(raw, privacy)
+    by_id = {m.get("id"): m for m in raw if m.get("id")}
+
+    if params.models:
+        selected = []
+        missing = []
+        for mid in params.models:
+            if mid in by_id:
+                selected.append(by_id[mid])
+            else:
+                missing.append(mid)
+        if not selected:
+            raise HTTPException(
+                400,
+                f"None of the requested models are qualifying (missing/filtered: {missing})",
+            )
+        models = selected
+    else:
+        models = list(by_id.values())
+
+    if not models:
+        raise HTTPException(400, "No models match the selected privacy filter")
+
+    models = sorted(models, key=lambda m: m.get("id", ""))
+    calls, usd, skipped, warnings = _estimate_cost(models, tests, params.iterations, _results_dir())
+    return models, tests, privacy, calls, usd, skipped, warnings
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -426,6 +466,7 @@ async def list_benchmark_models():
 
 
 @router.post("/benchmark/estimate")
+@limiter.limit("30/hour")
 async def estimate_benchmark(request: Request):
     """Dry-run cost estimate for a planned benchmark (no job started)."""
     try:
@@ -442,50 +483,17 @@ async def estimate_benchmark(request: Request):
     if not api_key:
         raise HTTPException(400, "No Venice API key configured in settings")
 
-    privacy = (params.privacy or "both").lower()
-    if privacy not in ("both", "private", "anonymized"):
-        raise HTTPException(422, "privacy must be both|private|anonymized")
-
-    tests = params.tests or list(_ALL_TESTS)
-    tests = [t.strip().upper() for t in tests if t and str(t).strip()]
-    unknown = [t for t in tests if t not in _ALL_TESTS]
-    if unknown:
-        raise HTTPException(422, f"Unknown tests: {unknown}")
-    if not tests:
-        raise HTTPException(422, "At least one test is required")
-
     try:
-        raw = await _fetch_and_filter_text_models(api_key)
+        models, tests, privacy, calls, usd, skipped, warnings = await _resolve_models_and_estimate(
+            api_key, params
+        )
     except httpx.HTTPStatusError as exc:
         raise HTTPException(502, f"Venice API error: {exc}") from exc
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(500, f"Failed to fetch models: {exc}") from exc
 
-    raw = _filter_by_privacy(raw, privacy)
-    by_id = {m.get("id"): m for m in raw if m.get("id")}
-
-    if params.models:
-        selected = []
-        missing = []
-        for mid in params.models:
-            if mid in by_id:
-                selected.append(by_id[mid])
-            else:
-                missing.append(mid)
-        if not selected:
-            raise HTTPException(
-                400,
-                f"None of the requested models are qualifying (missing/filtered: {missing})",
-            )
-        models = selected
-    else:
-        models = list(by_id.values())
-
-    if not models:
-        raise HTTPException(400, "No models match the selected privacy filter")
-
-    models = sorted(models, key=lambda m: m.get("id", ""))
-    calls, usd, skipped, warnings = _estimate_cost(models, tests, params.iterations, _results_dir())
     model_ids = [m.get("id", "") for m in models]
 
     note_skip = None
@@ -549,25 +557,54 @@ async def start_benchmark(request: Request):
             "Benchmark runner is not available in this deployment"
         )
 
+    # Re-validate privacy/tests/models against the live model catalog (the
+    # same check /benchmark/estimate performs) and enforce a hard cost
+    # ceiling before spending any money (SEC-05/SEC-06).
+    try:
+        models, tests, privacy, calls, usd, skipped, warnings = await _resolve_models_and_estimate(
+            api_key, params
+        )
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(502, f"Venice API error: {exc}") from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(500, f"Failed to validate benchmark request: {exc}") from exc
+
+    if usd > settings.BENCHMARK_MAX_COST_USD:
+        raise HTTPException(
+            422,
+            f"Estimated cost ${usd:.2f} exceeds the configured ceiling of "
+            f"${settings.BENCHMARK_MAX_COST_USD:.2f} (BENCHMARK_MAX_COST_USD). "
+            f"Reduce iterations/models/tests, or raise the ceiling if this is expected.",
+        )
+
     results_abs = str(_results_dir().resolve())
+    model_ids = [m.get("id", "") for m in models if m.get("id")]
 
     cmd: list[str] = [
         sys.executable,
         str(_BENCHMARK_SCRIPT),
-        "--api-key", api_key,
-        "--admin-key", admin_key,
         "--iterations", str(params.iterations),
         "--workers", str(params.workers),
-        "--privacy", params.privacy,
+        "--privacy", privacy,
         "--output", results_abs,
         "--yes",
         "--no-infographic",
+        "--tests", ",".join(tests),
+        "--models", ",".join(model_ids),
     ]
 
-    if params.tests:
-        cmd.extend(["--tests", ",".join(params.tests)])
-    if params.models:
-        cmd.extend(["--models", ",".join(params.models)])
+    # Pass secrets via environment, not argv, so they never appear in
+    # `ps`/`/proc/<pid>/cmdline` (SEC-07). Only pass the admin key when
+    # billing reconciliation is explicitly enabled — the benchmark itself
+    # only needs inference access.
+    subprocess_env = dict(os.environ)
+    subprocess_env["VENICE_API_KEY"] = api_key
+    if settings.BENCHMARK_ENABLE_BILLING_RECONCILIATION and admin_key:
+        subprocess_env["VENICE_ADMIN_KEY"] = admin_key
+    else:
+        subprocess_env.pop("VENICE_ADMIN_KEY", None)
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -575,6 +612,7 @@ async def start_benchmark(request: Request):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(_REPO_ROOT),
+            env=subprocess_env,
         )
     except Exception as exc:
         raise HTTPException(500, f"Failed to start benchmark: {exc}") from exc
@@ -595,6 +633,39 @@ async def start_benchmark(request: Request):
     job["reader_task"] = asyncio.create_task(_drain_job_output(job_id))
     logger.info("Benchmark job %s started (pid %s)", job_id, proc.pid)
     return {"job_id": job_id}
+
+
+@router.post("/benchmark/cancel/{job_id}")
+@limiter.limit("30/hour")
+async def cancel_benchmark(job_id: str, request: Request):
+    """Terminate a running benchmark job (SEC-06)."""
+    job = _jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+
+    if job.get("status") not in ("running", None):
+        return {"status": job.get("status"), "message": "Job already finished"}
+
+    task = job.get("reader_task")
+    if task is not None and not task.done():
+        task.cancel()
+
+    proc: Optional[asyncio.subprocess.Process] = job.get("proc")
+    if proc is not None and proc.returncode is None:
+        try:
+            proc.terminate()
+            await asyncio.wait_for(proc.wait(), timeout=5.0)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+        except Exception as exc:
+            logger.error("Error terminating benchmark job %s: %s", job_id, exc)
+
+    job["status"] = "failed"
+    job["error"] = "Cancelled by user"
+    _append_log(job, "error", "Benchmark cancelled by user")
+    logger.info("Benchmark job %s cancelled", job_id)
+    return {"status": "failed", "message": "Job cancelled"}
 
 
 @router.get("/benchmark/stream/{job_id}")
@@ -788,7 +859,8 @@ async def _call_venice_image(api_key: str, prompt: str) -> str:
 
 
 @router.post("/benchmark/infographic/{run_id}")
-async def generate_infographic(run_id: str):
+@limiter.limit("5/day")
+async def generate_infographic(run_id: str, request: Request):
     """Generate a 4K PNG infographic for a benchmark run using Venice image API."""
     api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
     if not api_key:

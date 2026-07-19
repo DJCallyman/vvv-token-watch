@@ -1,11 +1,11 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '../../test-utils'
 import { BalanceView } from '@/components/balance/BalanceView'
-import { useBalance, useDailyUsage } from '@/lib/hooks'
+import { useBalance, useEpochUsage } from '@/lib/hooks'
 
 jest.mock('@/lib/hooks')
 const mockUseBalance = useBalance as jest.MockedFunction<typeof useBalance>
-const mockUseDailyUsage = useDailyUsage as jest.MockedFunction<typeof useDailyUsage>
+const mockUseEpochUsage = useEpochUsage as jest.MockedFunction<typeof useEpochUsage>
 
 const balanceData = {
   diem: 45.5,
@@ -17,12 +17,12 @@ const balanceData = {
   next_epoch_begins: '2026-03-02T00:00:00Z',
 }
 
-const usageData = { diem: 8.123, usd: 2.01, date: '2026-03-01' }
+const epochData = { diem: 8.123, usd: 2.01, bundled_credits: 0, epoch_start: '2026-03-01T00:00:00Z', next_epoch: '2026-03-02T00:00:00Z' }
 
 describe('BalanceView — loading', () => {
   beforeEach(() => {
     mockUseBalance.mockReturnValue({ data: undefined, isLoading: true, isError: false } as any)
-    mockUseDailyUsage.mockReturnValue({ data: undefined, isLoading: true, isError: false } as any)
+    mockUseEpochUsage.mockReturnValue({ data: undefined, isLoading: true, isError: false } as any)
   })
 
   it('shows loading indicator', () => {
@@ -34,7 +34,7 @@ describe('BalanceView — loading', () => {
 describe('BalanceView — success', () => {
   beforeEach(() => {
     mockUseBalance.mockReturnValue({ data: balanceData, isLoading: false, isError: false } as any)
-    mockUseDailyUsage.mockReturnValue({ data: usageData, isLoading: false, isError: false } as any)
+    mockUseEpochUsage.mockReturnValue({ data: epochData, isLoading: false, isError: false } as any)
   })
 
   it('renders page heading', () => {
@@ -42,36 +42,40 @@ describe('BalanceView — success', () => {
     expect(screen.getByRole('heading', { name: /balance & limits/i })).toBeInTheDocument()
   })
 
-  it('renders Current Balance card title', () => {
+  it('renders Remaining Balance card title', () => {
     render(<BalanceView />)
-    expect(screen.getByText('Current Balance')).toBeInTheDocument()
+    expect(screen.getByText('Remaining Balance')).toBeInTheDocument()
   })
 
-  it("renders Today's Usage card title", () => {
+  it('renders Epoch Consumption card title', () => {
     render(<BalanceView />)
-    expect(screen.getByText("Today's Usage")).toBeInTheDocument()
+    expect(screen.getByText('Epoch Consumption')).toBeInTheDocument()
   })
 
   it('renders DIEM balance value', () => {
     render(<BalanceView />)
-    // formatNumber(45.5, 4) → "45.5000"
-    expect(screen.getByText('45.5000')).toBeInTheDocument()
+    // formatNumber(45.5, 4) → "45.5000" (appears in Remaining Balance + Balance Summary)
+    const els = screen.getAllByText('45.5000')
+    expect(els.length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders USD balance as currency', () => {
     render(<BalanceView />)
-    expect(screen.getByText('$11.25')).toBeInTheDocument()
+    const els = screen.getAllByText('$11.25')
+    expect(els.length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders DIEM consumed in usage section', () => {
     render(<BalanceView />)
-    // formatNumber(8.123, 4) → "8.1230"
-    expect(screen.getByText('8.1230')).toBeInTheDocument()
+    // formatNumber(8.123, 4) → "8.1230" (appears in Epoch Consumption + Balance Summary)
+    const els = screen.getAllByText('8.1230')
+    expect(els.length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders USD consumed in usage section', () => {
     render(<BalanceView />)
-    expect(screen.getByText('$2.01')).toBeInTheDocument()
+    const els = screen.getAllByText('$2.01')
+    expect(els.length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders Epoch Information card when next_epoch_begins is present', () => {

@@ -17,7 +17,7 @@ describe('Badge', () => {
   it('renders success variant', () => {
     const { container } = render(<Badge variant="success">Live</Badge>)
     const badge = container.firstChild as HTMLElement
-    expect(badge.className).toMatch(/bg-green-500/)
+    expect(badge.className).toMatch(/bg-success/)
   })
 
   it('renders secondary variant', () => {

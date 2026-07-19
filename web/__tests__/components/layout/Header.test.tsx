@@ -1,10 +1,11 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen } from '../../test-utils'
 import { Header } from '@/components/layout/Header'
-import { useBalance } from '@/lib/hooks'
+import { useBalance, useUnacknowledgedAlertEvents } from '@/lib/hooks'
 
 jest.mock('@/lib/hooks')
 const mockUseBalance = useBalance as jest.MockedFunction<typeof useBalance>
+const mockUseUnacknowledgedAlertEvents = useUnacknowledgedAlertEvents as jest.MockedFunction<typeof useUnacknowledgedAlertEvents>
 
 const balanceData = {
   diem: 45.5,
@@ -19,6 +20,7 @@ const balanceData = {
 describe('Header — loading', () => {
   beforeEach(() => {
     mockUseBalance.mockReturnValue({ data: undefined, isLoading: true, isError: false } as any)
+    mockUseUnacknowledgedAlertEvents.mockReturnValue({ data: undefined, isLoading: false, isError: false } as any)
   })
 
   it('renders without crashing while loading', () => {
@@ -28,9 +30,9 @@ describe('Header — loading', () => {
     expect(header).toBeInTheDocument()
   })
 
-  it('renders Connected badge (not yet errored)', () => {
+  it('renders Connecting badge while loading (not yet errored)', () => {
     render(<Header />)
-    expect(screen.getByText('Connected')).toBeInTheDocument()
+    expect(screen.getByText('Connecting')).toBeInTheDocument()
   })
 
   it('does not show balance values while loading', () => {
@@ -42,6 +44,7 @@ describe('Header — loading', () => {
 describe('Header — error', () => {
   beforeEach(() => {
     mockUseBalance.mockReturnValue({ data: undefined, isLoading: false, isError: true } as any)
+    mockUseUnacknowledgedAlertEvents.mockReturnValue({ data: undefined, isLoading: false, isError: false } as any)
   })
 
   it('renders Disconnected badge on error', () => {
@@ -58,6 +61,7 @@ describe('Header — error', () => {
 describe('Header — success', () => {
   beforeEach(() => {
     mockUseBalance.mockReturnValue({ data: balanceData, isLoading: false, isError: false } as any)
+    mockUseUnacknowledgedAlertEvents.mockReturnValue({ data: { count: 0 }, isLoading: false, isError: false } as any)
   })
 
   it('renders Connected badge', () => {

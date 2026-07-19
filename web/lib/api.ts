@@ -1,19 +1,27 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
-const APP_PASSWORD = process.env.NEXT_PUBLIC_APP_PASSWORD || ''
+const API_BASE = ''
 
 async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options?.headers as Record<string, string> | undefined),
   }
-  if (APP_PASSWORD) {
-    headers.Authorization = `Bearer ${APP_PASSWORD}`
-  }
 
+  // Auth is handled by the HttpOnly session cookie set at /login, which the
+  // browser attaches automatically on same-origin requests. The Next.js
+  // route handler proxy (app/api/[...path]/route.ts) validates that cookie
+  // and injects the real backend credential server-side — the password
+  // itself never reaches client-side JavaScript.
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
     headers,
   })
+
+  if (response.status === 401) {
+    if (typeof window !== 'undefined') {
+      window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`
+    }
+    throw new Error('API Error: 401 Unauthorized')
+  }
 
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`
@@ -46,8 +54,12 @@ export interface BalanceData {
   daily_diem_limit: number
   daily_usd_limit: number
   next_epoch_begins: string | null
+  // Legacy "remaining-ish" percents (kept for backward compat)
   diem_usage_percent: number
   usd_usage_percent: number
+  // BUG-06: canonical consumed percents (preferred for alerts and displays)
+  diem_consumed_percent?: number | null
+  usd_consumed_percent?: number | null
   consumption_currency?: string
   can_consume?: boolean
   diem_epoch_allocation?: number | null
@@ -57,7 +69,16 @@ export interface DailyUsage {
   date: string
   diem: number
   usd: number
-  epoch_start?: string
+  bundled_credits?: number
+  // epoch_start removed — use EpochUsage (getEpochUsage) for epoch data
+}
+
+export interface EpochUsage {
+  diem: number
+  usd: number
+  bundled_credits: number
+  epoch_start: string | null
+  next_epoch: string | null
 }
 
 export interface APIKeyUsage {
@@ -387,6 +408,10 @@ export const api = {
     return fetchAPI<DailyUsage>(`/api/usage/daily${params}`)
   },
 
+  async getEpochUsage(): Promise<EpochUsage> {
+    return fetchAPI<EpochUsage>('/api/usage/epoch')
+  },
+
   async getAPIKeysUsage(): Promise<UsageKeysResponse> {
     return fetchAPI<UsageKeysResponse>('/api/usage/keys')
   },
@@ -511,6 +536,13 @@ export const api = {
 
   async getBenchmarkStatus(jobId: string): Promise<BenchmarkJobStatus> {
     return fetchAPI<BenchmarkJobStatus>(`/api/benchmark/status/${encodeURIComponent(jobId)}`)
+  },
+
+  async cancelBenchmark(jobId: string): Promise<{ status: string; message: string }> {
+    return fetchAPI<{ status: string; message: string }>(
+      `/api/benchmark/cancel/${encodeURIComponent(jobId)}`,
+      { method: 'POST' },
+    )
   },
 
   async generateInfographic(runId: string): Promise<{ image_b64: string; prompt: string }> {

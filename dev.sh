@@ -27,6 +27,11 @@ if [[ ! -f ".env" ]]; then
     read -rp "  VENICE_ADMIN_KEY      : " _admin_key
     [[ -n "$_admin_key" ]] || error "VENICE_ADMIN_KEY is required."
 
+    _app_password="$(openssl rand -hex 24 2>/dev/null || true)"
+    read -rp "  APP_PASSWORD          [generated: ${_app_password}]: " _app_password_input
+    _app_password="${_app_password_input:-$_app_password}"
+    [[ -n "$_app_password" ]] || error "APP_PASSWORD is required (could not auto-generate one either)."
+
     read -rp "  COINGECKO_API_KEY     (leave blank if none): " _cg_key
     read -rp "  COINGECKO_HOLDING_AMOUNT [2750]: " _vvv_hold
     _vvv_hold="${_vvv_hold:-2750}"
@@ -36,6 +41,7 @@ if [[ ! -f ".env" ]]; then
     cat > .env <<EOF
 # Created by dev.sh — mirrors your Unraid template values
 VENICE_ADMIN_KEY=${_admin_key}
+APP_PASSWORD=${_app_password}
 COINGECKO_API_KEY=${_cg_key}
 COINGECKO_HOLDING_AMOUNT=${_vvv_hold}
 DIEM_HOLDING_AMOUNT=${_diem_hold}
@@ -51,11 +57,18 @@ fi
 VENICE_KEY=$(grep -E '^VENICE_ADMIN_KEY=' .env | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr -d '[:space:]')
 [[ -n "$VENICE_KEY" ]] || error "VENICE_ADMIN_KEY is empty in .env — edit .env and add it."
 
+APP_PASSWORD_VAL=$(grep -E '^APP_PASSWORD=' .env | cut -d'=' -f2 | tr -d '"' | tr -d "'" | tr -d '[:space:]')
+if [[ -z "$APP_PASSWORD_VAL" ]]; then
+    warn "APP_PASSWORD is empty in .env — the app will refuse to start unless ALLOW_INSECURE_NO_AUTH=true."
+fi
+export APP_PASSWORD="$APP_PASSWORD_VAL"
+
 # ── local overrides (don't clobber .env, just set in environment) ─────────────
 export DATABASE_URL="postgresql+asyncpg://vvvwatch:vvvwatch@localhost:5433/vvvwatch"
 export LOG_FILE_PATH="$REPO_ROOT/data/logs/app.log"
 export DATA_DIR="$REPO_ROOT/data"
 export BACKEND_URL="http://localhost:8000"
+export DEBUG=true
 mkdir -p "$REPO_ROOT/data/logs"
 
 # Note: Python 3.13 + OpenSSL 3.x may show "unsupported hash type blake2b/blake2s" errors# These are harmless - Python falls back to built-in implementations. The app works fine.
@@ -110,7 +123,7 @@ fi
 
 # ── 3. start backend ─────────────────────────────────────────────────────────
 info "Starting FastAPI backend on http://localhost:8000 (hot-reload enabled)..."
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload &
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload &
 PIDS+=($!)
 
 # give the backend a moment to initialise

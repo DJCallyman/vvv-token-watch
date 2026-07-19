@@ -34,11 +34,42 @@ class Settings(BaseSettings):
     
     CACHE_TTL_SECONDS: int = 300
 
-    # Optional shared app password for personal/self-hosted auth.
-    # When unset, API remains open (suitable for local/VPN-only use).
+    # Server-side cost ceiling for a single benchmark run. /benchmark/start
+    # rejects requests whose pre-run estimate exceeds this (USD).
+    BENCHMARK_MAX_COST_USD: float = 5.0
+    # Billing reconciliation needs the admin key (billing scope); disabled by
+    # default so benchmark runs only need an inference-scoped key.
+    BENCHMARK_ENABLE_BILLING_RECONCILIATION: bool = False
+
+    # When false (default), interactive API docs (/docs, /redoc, /openapi.json)
+    # are disabled. Set true only for local development.
+    DEBUG: bool = False
+
+    # Shared app password for personal/self-hosted auth. Required unless
+    # ALLOW_INSECURE_NO_AUTH is explicitly set to true.
     APP_PASSWORD: Optional[str] = None
-    # Comma-separated CORS origins. Use * for open (default).
-    CORS_ORIGINS: str = "*"
+    # Explicit opt-in to run without authentication (NOT recommended).
+    ALLOW_INSECURE_NO_AUTH: bool = False
+    # Comma-separated CORS origins. Defaults to the local Next.js dev/prod origin.
+    CORS_ORIGINS: str = "http://localhost:3000"
+
+    # Comma-separated list of trusted proxy IPs (for X-Forwarded-For handling in rate limiting).
+    # When a request comes from one of these IPs, the first value in X-Forwarded-For is used
+    # as the client IP for rate limiting. Never trust XFF from untrusted peers.
+    TRUSTED_PROXY_IPS: str = "127.0.0.1"
+
+    # Cooldown window (seconds) for alert events: do not create a new unacknowledged
+    # event for the same alert_config_id if one exists within this window.
+    # Prevents flooding the alert_events table on every poll while a threshold is breached.
+    ALERT_COOLDOWN_SECONDS: int = 3600  # 1 hour default
+
+    # Snapshot interval for usage and price history (seconds). Background poller
+    # (if enabled) and/or request-path snapshots use this cadence.
+    SNAPSHOT_INTERVAL_SECONDS: int = 300  # 5 minutes
+
+    # Retention for snapshot tables (days). Rows older than this are purged on
+    # each snapshot write and at startup.
+    SNAPSHOT_RETENTION_DAYS: int = 90
     
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -54,6 +85,12 @@ class Settings(BaseSettings):
     def cors_origins_list(self) -> list[str]:
         raw = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
         return raw or ["*"]
+
+    @property
+    def trusted_proxy_ips_list(self) -> list[str]:
+        """List of IPs that are trusted to forward X-Forwarded-For headers for rate limiting."""
+        raw = [ip.strip() for ip in self.TRUSTED_PROXY_IPS.split(",") if ip.strip()]
+        return raw or ["127.0.0.1"]
 
 
 @lru_cache()

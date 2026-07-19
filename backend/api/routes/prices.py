@@ -2,11 +2,12 @@ import logging
 from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import Settings, get_settings
 from backend.database import get_db
+from backend.limiter import limiter
 from backend.services.price_history_service import get_price_history, record_price_snapshot
 from backend.services import alert_engine
 
@@ -108,16 +109,27 @@ async def get_prices(
             logger.exception("Failed to persist price snapshots")
 
         # Best-effort price threshold alerts.
-        try:
-            await alert_engine.evaluate_alerts(
-                db,
-                {
-                    "vvv_price_usd": float(result["vvv"].get("usd") or 0),
-                    "diem_price_usd": float(result["diem"].get("usd") or 0),
-                },
-            )
-        except Exception:
-            logger.exception("Alert evaluation failed during price poll")
+        # BUG-07: only include metrics that have real present values.
+        # Do not feed 0.0 for missing tokens/currencies (would spuriously fire lte alerts).
+        price_alert_metrics: dict[str, float] = {}
+        vvv_usd = result["vvv"].get("usd")
+        if vvv_usd is not None:
+            try:
+                price_alert_metrics["vvv_price_usd"] = float(vvv_usd)
+            except Exception:
+                pass
+        diem_usd = result["diem"].get("usd")
+        if diem_usd is not None:
+            try:
+                price_alert_metrics["diem_price_usd"] = float(diem_usd)
+            except Exception:
+                pass
+
+        if price_alert_metrics:
+            try:
+                await alert_engine.evaluate_alerts(db, price_alert_metrics)
+            except Exception:
+                logger.exception("Alert evaluation failed during price poll")
 
         return result
     except httpx.HTTPStatusError as e:
@@ -143,7 +155,9 @@ async def get_prices_history(
 
 
 @router.get("/prices/{token_id}")
+@limiter.limit("60/hour")
 async def get_token_price(
+    request: Request,
     token_id: str,
     settings: Settings = Depends(get_settings)
 ):

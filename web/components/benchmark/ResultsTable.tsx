@@ -111,14 +111,15 @@ export function ResultsTable({ runDetail }: Props) {
     }
   }
 
-  const getSortValue = (model: BenchmarkModelResult): number => {
-    if (sortKey === 'composite_score') return model.composite_score ?? -1
-    if (sortKey === 'data_coverage') return model.data_coverage ?? 0
-    if (sortKey === 'pricing_input_usd') return model.model_meta?.pricing_input_usd ?? 9999
-    if (sortKey === 'pricing_output_usd') return model.model_meta?.pricing_output_usd ?? 9999
-    if (sortKey === 'value_score') return computeValueScore(model)
-    if (sortKey === 'actual_cost') return model.costs?.total_cost_usd ?? 9999
-    if (sortKey === 'billed_usd') return model.actual_billed?.total_usd ?? 9999
+const getSortValue = (model: BenchmarkModelResult): number | string => {
+  if (sortKey === 'composite_score') return model.composite_score ?? -1
+  if (sortKey === 'data_coverage') return model.data_coverage ?? 0
+  if (sortKey === 'pricing_input_usd') return model.model_meta?.pricing_input_usd ?? 9999
+  if (sortKey === 'pricing_output_usd') return model.model_meta?.pricing_output_usd ?? 9999
+  if (sortKey === 'value_score') return computeValueScore(model)
+  if (sortKey === 'actual_cost') return model.costs?.total_cost_usd ?? 9999
+  if (sortKey === 'billed_usd') return model.actual_billed?.total_usd ?? 9999
+  if (sortKey === 'model_id') return model.model_id || ''
     // Test column
     const cat = model.categories?.[sortKey]
     if (!cat) return -1
@@ -129,7 +130,16 @@ export function ResultsTable({ runDetail }: Props) {
     return [...runDetail.models].sort((a, b) => {
       const av = getSortValue(a)
       const bv = getSortValue(b)
-      return sortDir === 'desc' ? bv - av : av - bv
+      // Handle string sort (e.g. model_id) vs numeric
+      if (typeof av === 'string' || typeof bv === 'string') {
+        const as = String(av)
+        const bs = String(bv)
+        const cmp = as.localeCompare(bs)
+        return sortDir === 'desc' ? -cmp : cmp
+      }
+      const an = av as number
+      const bn = bv as number
+      return sortDir === 'desc' ? bn - an : an - bn
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runDetail.models, sortKey, sortDir])

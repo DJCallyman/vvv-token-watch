@@ -1,6 +1,6 @@
 'use client'
 
-import { useAPIKeysUsage, useDailyUsage, useUsageTrends } from '@/lib/hooks'
+import { useAPIKeysUsage, useEpochUsage, useUsageTrends } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatNumber, formatCurrency, formatDate } from '@/lib/utils'
 import { BarChart3, Activity, TrendingUp, TrendingDown, Minus } from 'lucide-react'
@@ -16,9 +16,14 @@ import {
 } from 'recharts'
 
 export function UsageView() {
-  const { data: usage, isLoading: usageLoading, isError: usageError } = useDailyUsage()
+  const { data: epochUsage, isLoading: epochLoading, isError: epochError } = useEpochUsage()
   const { data: keysUsage, isLoading: keysLoading, isError: keysError } = useAPIKeysUsage()
   const { data: trends, isLoading: trendsLoading } = useUsageTrends('epoch')
+
+  // For the "Epoch DIEM/USD Spent" cards we now use the dedicated epoch endpoint.
+  const usage = epochUsage
+  const usageLoading = epochLoading
+  const usageError = epochError
 
   const today = new Date().toLocaleDateString('en-US', {
     weekday: 'long',

@@ -28,6 +28,10 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 # Copy backend code
 COPY backend/ ./backend/
 
+# Copy benchmark runner script (required for /api/benchmark/start to succeed in the image).
+# The script is executed as a subprocess by the backend; without it the endpoint returns 503.
+COPY scripts/ ./scripts/
+
 # Copy frontend standalone build
 COPY --from=frontend-builder /app/web/.next/standalone ./web/
 COPY --from=frontend-builder /app/web/.next/static ./web/.next/static
