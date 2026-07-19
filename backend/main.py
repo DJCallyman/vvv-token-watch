@@ -4,15 +4,30 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from backend.config import get_settings
 from backend.database import init_db, engine
+from backend.limiter import limiter
 from backend.api.routes import usage, balance, prices, models, health, analytics, benchmark, onchain, alerts
 from backend.api.deps import verify_auth
 
 settings = get_settings()
+
+# SEC-01: fail closed if no auth password is configured, unless the operator
+# explicitly opts in to running without authentication.
+if not settings.APP_PASSWORD and not settings.ALLOW_INSECURE_NO_AUTH:
+    raise RuntimeError(
+        "APP_PASSWORD is not set. Refusing to start without authentication. "
+        "Set APP_PASSWORD to a strong secret (e.g. `openssl rand -hex 24`), "
+        "or set ALLOW_INSECURE_NO_AUTH=true to explicitly run without auth "
+        "(NOT recommended for anything but a fully isolated, trusted network)."
+    )
+if not settings.APP_PASSWORD and settings.ALLOW_INSECURE_NO_AUTH:
+    logging.getLogger(__name__).warning(
+        "SECURITY WARNING: running with ALLOW_INSECURE_NO_AUTH=true and no "
+        "APP_PASSWORD. All API endpoints are unauthenticated."
+    )
 
 # Ensure log directory exists
 os.makedirs(os.path.dirname(settings.LOG_FILE_PATH), exist_ok=True)
@@ -59,13 +74,14 @@ async def lifespan(app: FastAPI):
         logger.error(f"Error terminating benchmark jobs: {e}")
 
 
-limiter = Limiter(key_func=get_remote_address)
-
 app = FastAPI(
     title="VVV Token Watch API",
     description="API for monitoring Venice AI usage, balances, and token prices",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
+    openapi_url="/openapi.json" if settings.DEBUG else None,
 )
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -104,5 +120,5 @@ async def root():
     return {
         "name": "VVV Token Watch API",
         "version": "1.0.0",
-        "docs": "/docs"
+        "docs": "/docs" if settings.DEBUG else None
     }

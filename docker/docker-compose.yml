@@ -7,6 +7,8 @@ services:
       - "3000:3000"
     environment:
       - VENICE_ADMIN_KEY=${VENICE_ADMIN_KEY}
+      - APP_PASSWORD=${APP_PASSWORD:?APP_PASSWORD must be set. Generate one with: openssl rand -hex 24}
+      - ALLOW_INSECURE_NO_AUTH=${ALLOW_INSECURE_NO_AUTH:-false}
       - COINGECKO_API_KEY=${COINGECKO_API_KEY:-}
       - DATABASE_URL=${DATABASE_URL:-postgresql://vvvwatch:${DB_PASSWORD}@postgres:5432/vvvwatch}
       - COINGECKO_HOLDING_AMOUNT=${COINGECKO_HOLDING_AMOUNT:-2750}

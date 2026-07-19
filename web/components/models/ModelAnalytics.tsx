@@ -84,7 +84,11 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
     )
   }
 
-  const { model_usage, total_requests, total_tokens, total_cost, recommendations } = analytics
+  const { model_usage, total_requests, total_tokens, total_cost, recommendations, source } = analytics
+  const isBillingAnalytics = source === 'billing/usage-analytics'
+
+  // BUG-08: when using the lighter analytics endpoint, requests and latency are not provided
+  const showRequestLatency = !isBillingAnalytics
 
   // Derive available model types for the filter dropdown
   const availableTypes = Array.from(
@@ -98,7 +102,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
         Object.entries(model_usage).filter(([, d]) => (d.model_type || 'other') === modelType)
       )
 
-  const filteredTotalRequests = Object.values(filteredUsage).reduce((s, d) => s + d.requests, 0)
+  const filteredTotalRequests = Object.values(filteredUsage).reduce((s, d) => s + (d.requests ?? 0), 0)
   const filteredTotalTokens = Object.values(filteredUsage).reduce((s, d) => s + d.tokens, 0)
   const filteredTotalCost = Object.values(filteredUsage).reduce((s, d) => s + d.cost, 0)
 
@@ -106,10 +110,12 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
     .map(([name, data]) => ({
       name: name.length > 30 ? name.substring(0, 30) + '...' : name,
       fullName: name,
-      requests: data.requests,
+      requests: data.requests ?? 0,
       tokens: data.tokens,
       cost: data.cost,
-      avgResponseTime: data.avg_response_time_ms,
+      costUsd: data.cost_usd ?? 0,
+      costDiem: data.cost_diem ?? 0,
+      avgResponseTime: data.avg_response_time_ms ?? 0,
     }))
     .sort((a, b) => b.cost - a.cost)
     .slice(0, 10)
@@ -193,7 +199,8 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
               <DollarSign className="w-4 h-4" />
               <span className="text-sm">Total Cost</span>
             </div>
-            <p className="text-2xl font-bold mt-1">{formatCost(filteredTotalCost)} DIEM</p>
+            <p className="text-2xl font-bold mt-1">{formatCost(filteredTotalCost)}</p>
+            <p className="text-[10px] text-muted-foreground">Mixed DIEM+USD (see breakdown below)</p>
           </CardContent>
         </Card>
         <Card>

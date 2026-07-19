@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: vvvwatch
       POSTGRES_PASSWORD: vvvwatch
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - dev_postgres_data:/var/lib/postgresql/data
     healthcheck:

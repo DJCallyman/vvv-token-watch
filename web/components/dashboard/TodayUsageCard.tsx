@@ -1,12 +1,12 @@
 'use client'
 
-import { useDailyUsage } from '@/lib/hooks'
+import { useEpochUsage } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatNumber, formatCurrency } from '@/lib/utils'
 import { Activity } from 'lucide-react'
 
 export function TodayUsageCard() {
-  const { data: usage, isLoading, isError } = useDailyUsage()
+  const { data: usage, isLoading, isError } = useEpochUsage()
 
   if (isLoading) {
     return (

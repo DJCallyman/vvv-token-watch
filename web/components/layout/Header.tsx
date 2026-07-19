@@ -2,7 +2,7 @@
 
 import { useBalance, useUnacknowledgedAlertEvents } from '@/lib/hooks'
 import { formatCurrency, formatNumber } from '@/lib/utils'
-import { Activity, Bell, Moon, RefreshCw, Sun } from 'lucide-react'
+import { Activity, Bell, LogOut, Moon, RefreshCw, Sun } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { useTheme } from '@/components/ThemeProvider'
 import { useQueryClient } from '@tanstack/react-query'
@@ -28,6 +28,11 @@ export function Header() {
     } finally {
       setRefreshing(false)
     }
+  }
+
+  const onLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' })
+    window.location.href = '/login'
   }
 
   return (
@@ -95,6 +100,15 @@ export function Header() {
           aria-label="Refresh all data"
         >
           <RefreshCw className={`w-4 h-4 ${refreshing || isLoading ? 'animate-spin' : ''}`} />
+        </button>
+
+        <button
+          type="button"
+          onClick={onLogout}
+          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          aria-label="Sign out"
+        >
+          <LogOut className="w-4 h-4" />
         </button>
       </div>
     </header>

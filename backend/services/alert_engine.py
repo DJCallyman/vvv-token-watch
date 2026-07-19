@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import get_settings
 from backend.models.db import AlertConfig, AlertEvent
 
 logger = logging.getLogger(__name__)
@@ -109,9 +111,15 @@ async def evaluate_alerts(
     metrics keys examples:
       diem_usage_percent, usd_usage_percent, diem_balance, usd_balance,
       vvv_price_usd, diem_price_usd
+
+    BUG-01: deduplicates to prevent flooding. At most one unacknowledged event
+    per alert_config_id. Additionally respects ALERT_COOLDOWN_SECONDS to avoid
+    immediate re-trigger after acknowledge.
     """
     configs = await list_alert_configs(db, enabled_only=True)
     created: List[AlertEvent] = []
+    settings = get_settings()
+    cooldown = max(0, int(settings.ALERT_COOLDOWN_SECONDS or 0))
 
     for cfg in configs:
         if cfg.metric not in metrics:
@@ -119,6 +127,30 @@ async def evaluate_alerts(
         value = float(metrics[cfg.metric])
         if not _compare(value, cfg.threshold, cfg.comparison or "gte"):
             continue
+
+        # Dedup: skip if there is already an unacknowledged event for this config.
+        existing_unack = await db.execute(
+            select(AlertEvent)
+            .where(AlertEvent.alert_config_id == cfg.id)
+            .where(AlertEvent.acknowledged.is_(False))
+            .order_by(AlertEvent.triggered_at.desc())
+            .limit(1)
+        )
+        if existing_unack.scalars().first() is not None:
+            continue
+
+        # Cooldown window: even after ack (or first time), don't re-create within window.
+        if cooldown > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=cooldown)
+            recent = await db.execute(
+                select(AlertEvent)
+                .where(AlertEvent.alert_config_id == cfg.id)
+                .where(AlertEvent.triggered_at >= cutoff)
+                .order_by(AlertEvent.triggered_at.desc())
+                .limit(1)
+            )
+            if recent.scalars().first() is not None:
+                continue
 
         message = (
             f"{cfg.name}: {cfg.metric}={value:.4f} "

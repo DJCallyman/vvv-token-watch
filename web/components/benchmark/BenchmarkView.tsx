@@ -127,6 +127,24 @@ export function BenchmarkView() {
 
           {runDetail && (
             <>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                {runDetail.total_cost_usd != null && (
+                  <div className="flex items-center gap-2">
+                    <span>List cost:</span>
+                    <span className="font-mono text-foreground">
+                      ${runDetail.total_cost_usd.toFixed(4)} USD
+                    </span>
+                  </div>
+                )}
+                {runDetail.total_actual_billed_usd_equivalent != null && (
+                  <div className="flex items-center gap-2">
+                    <span>Billed:</span>
+                    <span className="font-mono text-foreground">
+                      ${runDetail.total_actual_billed_usd_equivalent.toFixed(4)} USD
+                    </span>
+                  </div>
+                )}
+              </div>
               {showCostOverlay && (
                 <CostOverlay models={runDetail.models} />
               )}

@@ -57,6 +57,14 @@ export function useDailyUsage(date?: string) {
   })
 }
 
+export function useEpochUsage() {
+  return useQuery({
+    queryKey: ['epochUsage'],
+    queryFn: api.getEpochUsage,
+    refetchInterval: 30000,
+  })
+}
+
 export function useAPIKeysUsage() {
   return useQuery({
     queryKey: ['apiKeysUsage'],

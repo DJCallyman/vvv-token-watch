@@ -135,7 +135,12 @@ def clean_model_name(sku: str) -> str:
 
 
 def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Process raw billing usage data into analytics format."""
+    """Process raw billing usage data into analytics format.
+
+    BUG-05: Track cost_usd and cost_diem separately based on entry['currency'].
+    Do NOT mix currencies 1:1. 'cost' is retained (sum of absolute amounts) for
+    backward compat but is a mixed unit; prefer the separated fields.
+    """
     model_data: Dict[str, Dict] = {}
     request_tracker: Dict[str, set] = {}
 
@@ -144,6 +149,7 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
     for entry in usage_entries:
         sku = entry.get('sku', 'unknown')
         amount = entry.get('amount', 0)
+        currency = (entry.get('currency') or '').upper()
         inference = entry.get('inferenceDetails') or {}
 
         abs_amount = abs(amount)
@@ -152,7 +158,7 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
 
         model_name = clean_model_name(sku)
         model_type = detect_model_type(sku)
-        logger.debug(f"SKU: {sku} -> Model: {model_name}, Type: {model_type}, Amount: {abs_amount}")
+        logger.debug(f"SKU: {sku} -> Model: {model_name}, Type: {model_type}, Amount: {abs_amount}, Currency: {currency}")
 
         if model_name not in model_data:
             model_data[model_name] = {
@@ -160,7 +166,9 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
                 'tokens': 0,
                 'prompt_tokens': 0,
                 'completion_tokens': 0,
-                'cost': 0.0,
+                'cost': 0.0,          # legacy mixed; prefer cost_usd + cost_diem
+                'cost_usd': 0.0,
+                'cost_diem': 0.0,
                 'response_times': [],
                 'model_type': model_type,
             }
@@ -189,7 +197,15 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
                 if exec_time:
                     model_data[model_name]['response_times'].append(exec_time)
 
+        # Separate by currency (BUG-05). Use abs for "cost" semantics.
         model_data[model_name]['cost'] += abs_amount
+        if currency == 'USD':
+            model_data[model_name]['cost_usd'] += abs_amount
+        elif currency == 'DIEM':
+            model_data[model_name]['cost_diem'] += abs_amount
+        else:
+            # Unknown/other currencies contribute to legacy 'cost' only
+            pass
 
     logger.info(f"Found {len(model_data)} models with data")
 
@@ -290,7 +306,10 @@ async def get_model_analytics(
 
             for model in analytics.get('byModel', []):
                 name = model.get('modelName', 'unknown')
-                cost = float(model.get('totalUsd', 0)) + float(model.get('totalDiem', 0))
+                cost_usd = float(model.get('totalUsd', 0))
+                cost_diem = float(model.get('totalDiem', 0))
+                # BUG-05: do not mix; keep separate. Legacy 'cost' is the sum for compat only.
+                cost = cost_usd + cost_diem
                 units = int(model.get('totalUnits', 0))
                 breakdown = [
                     ModelBreakdown(
@@ -302,17 +321,19 @@ async def get_model_analytics(
                     for b in model.get('breakdown', [])
                 ]
                 model_usage[name] = ModelAnalytics(
-                    requests=0,  # usage-analytics does not expose request counts
+                    requests=None,  # BUG-08: usage-analytics does not expose request counts
                     tokens=units,
                     prompt_tokens=sum(b.units for b in breakdown if (b.type or '').lower() == 'input'),
                     completion_tokens=sum(b.units for b in breakdown if (b.type or '').lower() == 'output'),
                     cost=cost,
-                    avg_response_time_ms=0.0,
+                    cost_usd=cost_usd,
+                    cost_diem=cost_diem,
+                    avg_response_time_ms=None,  # BUG-08: not provided by this source
                     model_type=(model.get('modelType') or 'other').lower(),
                     breakdown=breakdown,
                 )
                 total_tokens += units
-                total_cost += cost
+                total_cost += cost  # legacy mixed total (documented)
 
             recommendations = generate_recommendations({
                 name: {
@@ -423,15 +444,31 @@ async def get_daily_analytics(
         analytics = await _fetch_usage_analytics(client, start_date, end_date)
         if analytics:
             logger.info("Analytics /daily using /billing/usage-analytics")
-            daily_usage = [
-                DailyUsage(
-                    date=entry.get('date', ''),
-                    requests=0,
-                    tokens=0,
-                    cost=sum(float(v) for v in entry.values() if isinstance(v, (int, float))),
+            daily_usage = []
+            for entry in analytics.get('byDate', []):
+                # BUG-08 + BUG-05: do not sum every numeric; prefer explicit usd/diem.
+                # If the payload provides them, use them; otherwise leave at 0 and let
+                # the UI know via source that request/latency/cost details are limited.
+                usd = entry.get('usd') or entry.get('totalUsd') or 0
+                diem = entry.get('diem') or entry.get('totalDiem') or 0
+                try:
+                    usd_f = float(usd)
+                except Exception:
+                    usd_f = 0.0
+                try:
+                    diem_f = float(diem)
+                except Exception:
+                    diem_f = 0.0
+                daily_usage.append(
+                    DailyUsage(
+                        date=entry.get('date', ''),
+                        requests=0,   # not provided by this source
+                        tokens=0,     # not provided by this source
+                        cost=usd_f + diem_f,
+                        cost_usd=usd_f,
+                        cost_diem=diem_f,
+                    )
                 )
-                for entry in analytics.get('byDate', [])
-            ]
             return DailyAnalyticsResponse(
                 daily_usage=daily_usage,
                 period_days=days,
@@ -477,13 +514,16 @@ async def get_daily_analytics(
                 continue
             
             amount = abs(entry.get('amount', 0))
+            currency = (entry.get('currency') or '').upper()
             inference = entry.get('inferenceDetails') or {}
             
             if date_key not in daily_data:
                 daily_data[date_key] = {
                     'requests': 0,
                     'tokens': 0,
-                    'cost': 0.0
+                    'cost': 0.0,
+                    'cost_usd': 0.0,
+                    'cost_diem': 0.0,
                 }
                 request_tracker[date_key] = set()
             
@@ -503,14 +543,21 @@ async def get_daily_analytics(
                 completion_tokens = inference.get('completionTokens') or 0
                 daily_data[date_key]['tokens'] += prompt_tokens + completion_tokens
             
+            # BUG-05: separate by currency; do not sum every numeric field.
             daily_data[date_key]['cost'] += amount
+            if currency == 'USD':
+                daily_data[date_key]['cost_usd'] += amount
+            elif currency == 'DIEM':
+                daily_data[date_key]['cost_diem'] += amount
         
         daily_usage = [
             DailyUsage(
                 date=date,
                 requests=data['requests'],
                 tokens=data['tokens'],
-                cost=data['cost']
+                cost=data['cost'],
+                cost_usd=data.get('cost_usd', 0.0),
+                cost_diem=data.get('cost_diem', 0.0),
             )
             for date, data in sorted(daily_data.items())
         ]

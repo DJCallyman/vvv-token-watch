@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hmac
+
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -14,10 +16,11 @@ async def verify_auth(
     credentials: HTTPAuthorizationCredentials | None = Security(_bearer),
     settings: Settings = Depends(get_settings),
 ) -> None:
-    """Optional single-password auth.
+    """Single shared-password auth.
 
-    When APP_PASSWORD is unset, all requests are allowed (local/VPN use).
-    When set, require Authorization: Bearer <APP_PASSWORD>.
+    APP_PASSWORD is required in normal operation (enforced at startup in
+    main.py). If ALLOW_INSECURE_NO_AUTH was explicitly set and APP_PASSWORD
+    is empty, all requests are allowed.
     """
     expected = settings.APP_PASSWORD
     if not expected:
@@ -30,7 +33,7 @@ async def verify_auth(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if credentials.credentials != expected:
+    if not hmac.compare_digest(credentials.credentials, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid credentials",

@@ -9,6 +9,9 @@ export interface ModelAnalytics {
   prompt_tokens: number
   completion_tokens: number
   cost: number
+  // BUG-05: separated costs (preferred over the mixed 'cost')
+  cost_usd?: number
+  cost_diem?: number
   avg_response_time_ms: number
   model_type: string
 }
@@ -26,6 +29,7 @@ export interface AnalyticsResponse {
   total_cost: number
   period_days: number
   recommendations: ModelRecommendation[]
+  source?: string
 }
 
 export interface DailyUsage {
@@ -33,11 +37,15 @@ export interface DailyUsage {
   requests: number
   tokens: number
   cost: number
+  // BUG-05: separated daily costs
+  cost_usd?: number
+  cost_diem?: number
 }
 
 export interface DailyAnalyticsResponse {
   daily_usage: DailyUsage[]
   period_days: number
+  source?: string
 }
 
 export function useAnalytics(days: number = 7) {

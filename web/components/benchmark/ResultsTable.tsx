@@ -15,7 +15,7 @@ const TEST_LABELS: Record<string, string> = {
   T8: 'Concise',
 }
 
-type SortKey = 'composite_score' | 'data_coverage' | 'pricing_input_usd' | 'pricing_output_usd' | 'value_score' | string
+type SortKey = 'composite_score' | 'data_coverage' | 'pricing_input_usd' | 'pricing_output_usd' | 'value_score' | 'actual_cost' | 'billed_usd' | string
 
 function ScoreBadge({ score }: { score: number | null }) {
   if (score === null || score === undefined) {
@@ -78,6 +78,13 @@ function formatPrice(val: number | null): string {
   return `$${val.toFixed(2)}`
 }
 
+function formatCost(val: number | null): string {
+  if (val === null || val === undefined) return '—'
+  if (val >= 1) return `$${val.toFixed(2)}`
+  if (val >= 0.01) return `$${val.toFixed(3)}`
+  return `$${val.toFixed(6)}`
+}
+
 function computeValueScore(model: BenchmarkModelResult): number {
   const score = model.composite_score
   const cost = model.model_meta?.pricing_input_usd
@@ -100,16 +107,19 @@ export function ResultsTable({ runDetail }: Props) {
     } else {
       setSortKey(key)
       // Cost columns sort ascending by default (cheaper = better), others descending
-      setSortDir(['pricing_input_usd', 'pricing_output_usd'].includes(key) ? 'asc' : 'desc')
+      setSortDir(['pricing_input_usd', 'pricing_output_usd', 'actual_cost', 'billed_usd'].includes(key) ? 'asc' : 'desc')
     }
   }
 
-  const getSortValue = (model: BenchmarkModelResult): number => {
-    if (sortKey === 'composite_score') return model.composite_score ?? -1
-    if (sortKey === 'data_coverage') return model.data_coverage ?? 0
-    if (sortKey === 'pricing_input_usd') return model.model_meta?.pricing_input_usd ?? 9999
-    if (sortKey === 'pricing_output_usd') return model.model_meta?.pricing_output_usd ?? 9999
-    if (sortKey === 'value_score') return computeValueScore(model)
+const getSortValue = (model: BenchmarkModelResult): number | string => {
+  if (sortKey === 'composite_score') return model.composite_score ?? -1
+  if (sortKey === 'data_coverage') return model.data_coverage ?? 0
+  if (sortKey === 'pricing_input_usd') return model.model_meta?.pricing_input_usd ?? 9999
+  if (sortKey === 'pricing_output_usd') return model.model_meta?.pricing_output_usd ?? 9999
+  if (sortKey === 'value_score') return computeValueScore(model)
+  if (sortKey === 'actual_cost') return model.costs?.total_cost_usd ?? 9999
+  if (sortKey === 'billed_usd') return model.actual_billed?.total_usd ?? 9999
+  if (sortKey === 'model_id') return model.model_id || ''
     // Test column
     const cat = model.categories?.[sortKey]
     if (!cat) return -1
@@ -120,7 +130,16 @@ export function ResultsTable({ runDetail }: Props) {
     return [...runDetail.models].sort((a, b) => {
       const av = getSortValue(a)
       const bv = getSortValue(b)
-      return sortDir === 'desc' ? bv - av : av - bv
+      // Handle string sort (e.g. model_id) vs numeric
+      if (typeof av === 'string' || typeof bv === 'string') {
+        const as = String(av)
+        const bs = String(bv)
+        const cmp = as.localeCompare(bs)
+        return sortDir === 'desc' ? -cmp : cmp
+      }
+      const an = av as number
+      const bn = bv as number
+      return sortDir === 'desc' ? bn - an : an - bn
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runDetail.models, sortKey, sortDir])
@@ -158,6 +177,8 @@ export function ResultsTable({ runDetail }: Props) {
                 <>
                   <SortHeader label="In $/1M" sortKey="pricing_input_usd" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
                   <SortHeader label="Out $/1M" sortKey="pricing_output_usd" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
+                  <SortHeader label="List Cost" sortKey="actual_cost" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
+                  <SortHeader label="Billed" sortKey="billed_usd" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
                   <SortHeader label="Score/$" sortKey="value_score" currentKey={sortKey} dir={sortDir} onClick={handleSort} />
                 </>
               )}
@@ -201,6 +222,12 @@ export function ResultsTable({ runDetail }: Props) {
                       </td>
                       <td className="px-2 py-1.5 text-xs text-muted-foreground tabular-nums">
                         {formatPrice(model.model_meta?.pricing_output_usd)}
+                      </td>
+                      <td className="px-2 py-1.5 text-xs text-muted-foreground tabular-nums" title={`${model.costs?.total_cost_per_run_usd ?? '—'} per run`}>
+                        {formatCost(model.costs?.total_cost_usd ?? null)}
+                      </td>
+                      <td className="px-2 py-1.5 text-xs text-muted-foreground tabular-nums" title={`${model.actual_billed?.categories ? Object.values(model.actual_billed.categories).map(c => c.billed_per_run_usd_equivalent).filter(Boolean).join(', ') : '—'} per run`}>
+                        {formatCost(model.actual_billed?.total_usd_equivalent ?? null)}
                       </td>
                       <td className="px-2 py-1.5 text-xs text-muted-foreground tabular-nums">
                         {valueScore > 0 ? valueScore.toFixed(1) : '—'}
