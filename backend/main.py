@@ -4,11 +4,11 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from backend.config import get_settings
 from backend.database import init_db, engine
+from backend.limiter import limiter
 from backend.api.routes import usage, balance, prices, models, health, analytics, benchmark, onchain, alerts
 from backend.api.deps import verify_auth
 
@@ -58,8 +58,6 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Error terminating benchmark jobs: {e}")
 
-
-limiter = Limiter(key_func=get_remote_address)
 
 app = FastAPI(
     title="VVV Token Watch API",

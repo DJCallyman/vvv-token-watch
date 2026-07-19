@@ -61,3 +61,25 @@ class BenchmarkStartParams(BaseModel):
     iterations: int = 10
     workers: int = 4
     privacy: str = "both"               # "both" | "private" | "anonymized"
+
+
+class BenchmarkEstimateParams(BaseModel):
+    """Same shape as start params; used for dry-run cost estimation."""
+    models: Optional[List[str]] = None
+    tests: Optional[List[str]] = None
+    iterations: int = 10
+    workers: int = 4
+    privacy: str = "both"
+
+
+class BenchmarkEstimateResponse(BaseModel):
+    model_count: int
+    model_ids: List[str]
+    tests: List[str]
+    iterations: int
+    workers: int
+    privacy: str
+    estimated_calls: int
+    estimated_usd: float
+    skipped_tests_note: Optional[str] = None
+    note: str = "Estimate uses rough token counts; actual cost may vary."

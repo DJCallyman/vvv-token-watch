@@ -16,7 +16,25 @@ async function fetchAPI<T>(endpoint: string, options?: RequestInit): Promise<T> 
   })
 
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status} ${response.statusText}`)
+    let detail = `${response.status} ${response.statusText}`
+    try {
+      const errBody = await response.json()
+      if (typeof errBody?.detail === 'string') {
+        detail = errBody.detail
+      } else if (Array.isArray(errBody?.detail)) {
+        detail = errBody.detail
+          .map((d: { loc?: unknown[]; msg?: string }) => {
+            const loc = Array.isArray(d.loc) ? d.loc.join('.') : ''
+            return loc ? `${loc}: ${d.msg ?? 'invalid'}` : (d.msg ?? 'invalid')
+          })
+          .join('; ')
+      } else if (errBody?.detail != null) {
+        detail = JSON.stringify(errBody.detail)
+      }
+    } catch {
+      // keep status text fallback
+    }
+    throw new Error(`API Error: ${detail}`)
   }
 
   return response.json()
@@ -141,6 +159,11 @@ export interface BenchmarkModelMeta {
   description: string
 }
 
+export interface BenchmarkCategoryCost {
+  cost_usd: number | null
+  cost_per_run_usd: number | null
+}
+
 export interface BenchmarkCategory {
   runs_total: number
   runs_success: number
@@ -159,10 +182,35 @@ export interface BenchmarkCategory {
   tokens_prompt_mean: number | null
 }
 
+export interface BenchmarkModelCosts {
+  categories: Record<string, BenchmarkCategoryCost>
+  total_cost_usd: number | null
+  total_cost_per_run_usd: number | null
+}
+
+export interface BenchmarkActualBilledCategory {
+  billed_usd: number | null
+  billed_diem: number | null
+  billed_bundled_credits: number | null
+  billed_usd_equivalent: number | null
+  billed_per_run_usd_equivalent?: number | null
+}
+
+export interface BenchmarkActualBilled {
+  categories: Record<string, BenchmarkActualBilledCategory>
+  total_usd: number
+  total_diem: number
+  total_bundled_credits: number
+  total_usd_equivalent: number
+  diem_price_usd: number | null
+}
+
 export interface BenchmarkModelResult {
   model_id: string
   model_meta: BenchmarkModelMeta
   categories: Record<string, BenchmarkCategory>
+  costs?: BenchmarkModelCosts
+  actual_billed?: BenchmarkActualBilled
   composite_score: number | null
   data_coverage: number | null
 }
@@ -171,6 +219,9 @@ export interface BenchmarkRunDetail {
   run_id: string
   generated_at: string
   model_count: number
+  total_cost_usd?: number | null
+  total_actual_billed_usd?: number | null
+  total_actual_billed_usd_equivalent?: number | null
   models: BenchmarkModelResult[]
 }
 
@@ -203,10 +254,32 @@ export interface BenchmarkStartParams {
   privacy: 'both' | 'private' | 'anonymized'
 }
 
+export interface BenchmarkEstimateResponse {
+  model_count: number
+  model_ids: string[]
+  tests: string[]
+  iterations: number
+  workers: number
+  privacy: string
+  estimated_calls: number
+  estimated_usd: number
+  skipped_tests_note?: string | null
+  note: string
+}
+
+export interface BenchmarkJobLogEntry {
+  type: 'log' | 'progress' | 'error' | 'done' | string
+  line: string
+  ts?: number
+}
+
 export interface BenchmarkJobStatus {
   status: 'running' | 'done' | 'failed'
   run_id: string | null
   error: string | null
+  progress?: { done: number; total: number; model_id?: string | null } | null
+  log_count?: number
+  logs?: BenchmarkJobLogEntry[]
 }
 
 // ---------------------------------------------------------------------------
@@ -420,6 +493,13 @@ export const api = {
 
   async getBenchmarkModels(): Promise<BenchmarkModelsResponse> {
     return fetchAPI<BenchmarkModelsResponse>('/api/benchmark/models')
+  },
+
+  async estimateBenchmark(params: BenchmarkStartParams): Promise<BenchmarkEstimateResponse> {
+    return fetchAPI<BenchmarkEstimateResponse>('/api/benchmark/estimate', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    })
   },
 
   async startBenchmark(params: BenchmarkStartParams): Promise<{ job_id: string }> {

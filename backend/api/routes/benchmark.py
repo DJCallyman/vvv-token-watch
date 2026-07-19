@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import sys
 import time
 import uuid
@@ -25,7 +26,13 @@ from typing import Optional
 import httpx
 from backend.core.venice_api_client import VeniceAPIClient
 from fastapi import APIRouter, HTTPException, Request
-from backend.models.schemas import BenchmarkStartParams
+from pydantic import ValidationError
+from backend.models.schemas import (
+    BenchmarkEstimateParams,
+    BenchmarkEstimateResponse,
+    BenchmarkStartParams,
+)
+from backend.limiter import limiter
 from sse_starlette.sse import EventSourceResponse
 
 from backend.config import get_settings
@@ -33,6 +40,54 @@ from backend.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 router = APIRouter()
+
+# Rough token estimates for cost projection (prompt / completion per call).
+# Prompt estimates are kept in sync with scripts/benchmark_models.py.
+# Completion estimates prefer historical observed means from prior runs.
+_TOKEN_ESTIMATES = {
+    "T1": (20, 30),
+    "T2": (80, 60),
+    "T3": (60, 80),
+    "T4": (50, 60),
+    "T5": (120, 200),
+    "T6": (150, 40),  # multi-turn: ~3 messages
+    "T7": (25, 15),
+    "T8": (40, 60),
+}
+_ALL_TESTS = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]
+
+# Models that always generate reasoning tokens regardless of max_tokens or
+# reasoning controls. Estimates for these models should use historical averages.
+_ALWAYS_REASONING_MODELS = {
+    "grok-build-0-1",
+    "grok-4-3",
+    "grok-4-5",
+    "grok-4-20",
+    "grok-4-20-multi-agent",
+}
+
+
+def _load_historical_completion_estimates(results_dir: Path) -> dict[str, dict[str, float]]:
+    """Load observed completion token means per (model_id, test_id) from prior runs."""
+    estimates: dict[str, dict[str, float]] = {}
+    for path in sorted(results_dir.glob("benchmark_*.json"), key=lambda p: p.stat().st_mtime):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        for model in data.get("models", []):
+            model_id = model.get("model_id")
+            if not model_id:
+                continue
+            model_est = estimates.setdefault(model_id, {})
+            for tid, cat in model.get("categories", {}).items():
+                if cat.get("skipped") or cat.get("runs_success", 0) == 0:
+                    continue
+                mean = cat.get("tokens_completion_mean")
+                if mean is None:
+                    continue
+                model_est[tid] = float(mean)
+    return estimates
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -57,16 +112,30 @@ def _results_dir() -> Path:
 # ---------------------------------------------------------------------------
 
 _jobs: dict[str, dict] = {}
-# {job_id: {"proc": asyncio.subprocess.Process, "status": str,
-#            "run_id": str | None, "started_at": float}}
+# {
+#   job_id: {
+#     "proc": asyncio.subprocess.Process,
+#     "status": "running"|"done"|"failed",
+#     "run_id": str | None,
+#     "started_at": float,
+#     "logs": list[dict],          # {type, line, ts}
+#     "progress": dict | None,     # {done, total, model_id}
+#     "error": str | None,
+#     "reader_task": asyncio.Task | None,
+#   }
+# }
 
 _MAX_CONCURRENT_JOBS = 1
 _JOB_TTL_SECONDS = 3600
+_MAX_LOG_LINES = 2000
 
 
 async def terminate_all_jobs():
     """Terminate all running benchmark jobs. Called during application shutdown."""
     for job_id, job in list(_jobs.items()):
+        task = job.get("reader_task")
+        if task is not None and not task.done():
+            task.cancel()
         proc = job.get("proc")
         if proc is not None and proc.returncode is None:
             try:
@@ -89,6 +158,84 @@ def _cleanup_stale_jobs():
     ]
     for job_id in stale:
         _jobs.pop(job_id, None)
+
+
+def _append_log(job: dict, event_type: str, line: str) -> None:
+    logs = job.setdefault("logs", [])
+    logs.append({"type": event_type, "line": line, "ts": time.time()})
+    if len(logs) > _MAX_LOG_LINES:
+        del logs[: len(logs) - _MAX_LOG_LINES]
+    # Mirror into backend logs so the app terminal shows activity.
+    if event_type == "error":
+        logger.error("[benchmark] %s", line)
+    else:
+        logger.info("[benchmark] %s", line)
+
+
+def _resolve_run_id(started_at: float) -> Optional[str]:
+    results_dir = _results_dir()
+    new_files = [
+        f for f in results_dir.glob("benchmark_*.json")
+        if f.stat().st_mtime > started_at - 1.0
+    ]
+    if not new_files:
+        return None
+    newest = max(new_files, key=lambda f: f.stat().st_mtime)
+    return newest.stem
+
+
+def _finalize_job(job: dict, exit_code: Optional[int]) -> None:
+    if job.get("status") in ("done", "failed"):
+        return
+    if exit_code == 0:
+        run_id = _resolve_run_id(job.get("started_at", time.time()))
+        job["status"] = "done"
+        job["run_id"] = run_id
+        job["error"] = None
+        _append_log(job, "done", f"Benchmark complete. Run ID: {run_id}")
+    else:
+        job["status"] = "failed"
+        job["error"] = f"Benchmark process exited with code {exit_code}"
+        _append_log(job, "error", job["error"])
+
+
+async def _drain_job_output(job_id: str) -> None:
+    """Read subprocess stdout continuously, independent of SSE consumers.
+
+    This prevents silent UI when Next.js rewrites buffer SSE, and ensures
+    status polling still has logs/progress after the process finishes.
+    """
+    job = _jobs.get(job_id)
+    if not job:
+        return
+    proc: asyncio.subprocess.Process = job["proc"]
+    try:
+        assert proc.stdout is not None
+        async for raw_line in proc.stdout:
+            line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
+            if not line:
+                continue
+            if line.startswith("##PROGRESS##"):
+                _append_log(job, "progress", line)
+                m = re.search(r"##PROGRESS##\s+(\d+)/(\d+)(?:\s+(\S+))?", line)
+                if m:
+                    job["progress"] = {
+                        "done": int(m.group(1)),
+                        "total": int(m.group(2)),
+                        "model_id": m.group(3),
+                    }
+            else:
+                _append_log(job, "log", line)
+
+        await proc.wait()
+        _finalize_job(job, proc.returncode)
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        logger.exception("Benchmark reader failed for job %s", job_id)
+        job["status"] = "failed"
+        job["error"] = str(exc)
+        _append_log(job, "error", f"Reader error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +291,59 @@ def _model_to_summary(m: dict) -> dict:
         "pricing_output_usd": (pricing.get("output") or {}).get("usd"),
         "deprecation": spec.get("deprecation"),
     }
+
+
+def _filter_by_privacy(raw: list[dict], privacy: str) -> list[dict]:
+    allowed = {"private", "anonymized"} if privacy == "both" else {privacy}
+    result = []
+    for m in raw:
+        p = ((m.get("model_spec") or {}).get("privacy") or "").lower()
+        if p in allowed:
+            result.append(m)
+    return result
+
+
+def _estimate_cost(
+    models: list[dict],
+    tests: list[str],
+    iterations: int,
+    results_dir: Path,
+) -> tuple[int, float, int, list[str]]:
+    """Return (estimated_calls, estimated_usd, skipped_test_slots, warnings)."""
+    historical = _load_historical_completion_estimates(results_dir)
+    total_calls = 0
+    total_usd = 0.0
+    skipped = 0
+    warnings: list[str] = []
+
+    for m in models:
+        summary = _model_to_summary(m)
+        model_id = summary["id"]
+        caps = summary["capabilities"]
+        pin = summary["pricing_input_usd"] or 0.0
+        pout = summary["pricing_output_usd"] or 0.0
+
+        for tid in tests:
+            if tid == "T2" and not caps.get("supportsFunctionCalling"):
+                skipped += 1
+                continue
+            calls_per_iter = 3 if tid == "T6" else 1
+            calls = calls_per_iter * iterations
+            total_calls += calls
+
+            prompt_tok, fallback_completion_tok = _TOKEN_ESTIMATES.get(tid, (50, 50))
+            completion_tok = int(historical.get(model_id, {}).get(tid, fallback_completion_tok))
+            total_usd += (
+                (prompt_tok * calls * pin / 1_000_000)
+                + (completion_tok * calls * pout / 1_000_000)
+            )
+
+            if model_id in _ALWAYS_REASONING_MODELS and tid not in historical.get(model_id, {}):
+                warnings.append(
+                    f"{model_id} always reasons; {tid} estimate uses a ceiling and may be low."
+                )
+
+    return total_calls, total_usd, skipped, warnings
 
 
 # ---------------------------------------------------------------------------
@@ -225,13 +425,112 @@ async def list_benchmark_models():
     return {"models": models, "count": len(models)}
 
 
-@router.post("/benchmark/start")
-async def start_benchmark(request: Request, params: BenchmarkStartParams):
-    """Start a benchmark subprocess. Returns a job_id for streaming/status."""
-    limiter = request.app.state.limiter
-    await limiter.shared_limit("1/hour", scope="benchmark_start")(request)
+@router.post("/benchmark/estimate")
+async def estimate_benchmark(request: Request):
+    """Dry-run cost estimate for a planned benchmark (no job started)."""
+    try:
+        raw_body = await request.json()
+        params = BenchmarkEstimateParams.model_validate(
+            raw_body if isinstance(raw_body, dict) else {}
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid JSON body: {exc}") from exc
 
     api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
+    if not api_key:
+        raise HTTPException(400, "No Venice API key configured in settings")
+
+    privacy = (params.privacy or "both").lower()
+    if privacy not in ("both", "private", "anonymized"):
+        raise HTTPException(422, "privacy must be both|private|anonymized")
+
+    tests = params.tests or list(_ALL_TESTS)
+    tests = [t.strip().upper() for t in tests if t and str(t).strip()]
+    unknown = [t for t in tests if t not in _ALL_TESTS]
+    if unknown:
+        raise HTTPException(422, f"Unknown tests: {unknown}")
+    if not tests:
+        raise HTTPException(422, "At least one test is required")
+
+    try:
+        raw = await _fetch_and_filter_text_models(api_key)
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(502, f"Venice API error: {exc}") from exc
+    except Exception as exc:
+        raise HTTPException(500, f"Failed to fetch models: {exc}") from exc
+
+    raw = _filter_by_privacy(raw, privacy)
+    by_id = {m.get("id"): m for m in raw if m.get("id")}
+
+    if params.models:
+        selected = []
+        missing = []
+        for mid in params.models:
+            if mid in by_id:
+                selected.append(by_id[mid])
+            else:
+                missing.append(mid)
+        if not selected:
+            raise HTTPException(
+                400,
+                f"None of the requested models are qualifying (missing/filtered: {missing})",
+            )
+        models = selected
+    else:
+        models = list(by_id.values())
+
+    if not models:
+        raise HTTPException(400, "No models match the selected privacy filter")
+
+    models = sorted(models, key=lambda m: m.get("id", ""))
+    calls, usd, skipped, warnings = _estimate_cost(models, tests, params.iterations, _results_dir())
+    model_ids = [m.get("id", "") for m in models]
+
+    note_skip = None
+    if skipped:
+        note_skip = (
+            f"{skipped} model/test combination(s) would be skipped "
+            f"(e.g. T2 without function calling)."
+        )
+
+    note = "Estimate uses historical averages where available; actual cost may vary."
+    if warnings:
+        note += " " + " ".join(warnings)
+
+    return BenchmarkEstimateResponse(
+        model_count=len(models),
+        model_ids=model_ids,
+        tests=tests,
+        iterations=params.iterations,
+        workers=params.workers,
+        privacy=privacy,
+        estimated_calls=calls,
+        estimated_usd=round(usd, 6),
+        skipped_tests_note=note_skip,
+        note=note,
+    ).model_dump()
+
+
+@router.post("/benchmark/start")
+@limiter.limit("10/hour")
+async def start_benchmark(request: Request):
+    """Start a benchmark subprocess. Returns a job_id for streaming/status.
+
+    Body is parsed manually so SlowAPI's decorator does not break FastAPI body
+    inference (which otherwise yields 422 query.params required).
+    """
+    try:
+        raw = await request.json()
+        params = BenchmarkStartParams.model_validate(raw if isinstance(raw, dict) else {})
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid JSON body: {exc}") from exc
+
+    api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
+    admin_key = settings.VENICE_ADMIN_KEY or settings.VENICE_API_KEY
     if not api_key:
         raise HTTPException(400, "No Venice API key configured in settings")
 
@@ -256,6 +555,7 @@ async def start_benchmark(request: Request, params: BenchmarkStartParams):
         sys.executable,
         str(_BENCHMARK_SCRIPT),
         "--api-key", api_key,
+        "--admin-key", admin_key,
         "--iterations", str(params.iterations),
         "--workers", str(params.workers),
         "--privacy", params.privacy,
@@ -280,62 +580,81 @@ async def start_benchmark(request: Request, params: BenchmarkStartParams):
         raise HTTPException(500, f"Failed to start benchmark: {exc}") from exc
 
     job_id = str(uuid.uuid4())
-    _jobs[job_id] = {
+    job = {
         "proc": proc,
         "status": "running",
         "run_id": None,
         "started_at": time.time(),
+        "logs": [],
+        "progress": None,
+        "error": None,
+        "reader_task": None,
     }
+    _jobs[job_id] = job
+    _append_log(job, "log", f"Started benchmark subprocess pid={proc.pid}")
+    job["reader_task"] = asyncio.create_task(_drain_job_output(job_id))
     logger.info("Benchmark job %s started (pid %s)", job_id, proc.pid)
     return {"job_id": job_id}
 
 
 @router.get("/benchmark/stream/{job_id}")
 async def stream_benchmark(job_id: str):
-    """SSE stream of benchmark subprocess stdout. Emits log lines + final done/error event."""
+    """SSE stream of benchmark logs/progress.
+
+    Reads from the in-memory job log buffer (filled by a background reader),
+    so progress still works even if the browser reconnects or SSE is buffered.
+    """
     job = _jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
 
     async def event_generator():
-        proc: asyncio.subprocess.Process = job["proc"]
-        started_at: float = job["started_at"]
+        cursor = 0
+        # Immediate hello so the UI is not blank while waiting for first model.
+        yield {
+            "data": json.dumps({
+                "type": "log",
+                "line": f"Streaming job {job_id} (status={job.get('status')})",
+            })
+        }
 
         try:
-            async for raw_line in proc.stdout:  # type: ignore[union-attr]
-                line = raw_line.decode("utf-8", errors="replace").rstrip("\r\n")
-                if not line:
-                    continue
-                # Parse progress markers emitted by benchmark_models.py
-                if line.startswith("##PROGRESS##"):
-                    yield {"data": json.dumps({"type": "progress", "line": line})}
-                else:
-                    yield {"data": json.dumps({"type": "log", "line": line})}
+            while True:
+                logs = job.get("logs") or []
+                while cursor < len(logs):
+                    entry = logs[cursor]
+                    cursor += 1
+                    yield {
+                        "data": json.dumps({
+                            "type": entry.get("type", "log"),
+                            "line": entry.get("line", ""),
+                            "run_id": job.get("run_id"),
+                            "exit_code": None,
+                        })
+                    }
 
-            await proc.wait()
-            exit_code = proc.returncode
+                status = job.get("status")
+                if status in ("done", "failed") and cursor >= len(logs):
+                    if status == "done":
+                        yield {
+                            "data": json.dumps({
+                                "type": "done",
+                                "run_id": job.get("run_id"),
+                            })
+                        }
+                    else:
+                        yield {
+                            "data": json.dumps({
+                                "type": "error",
+                                "exit_code": 1,
+                                "message": job.get("error") or "Benchmark failed",
+                            })
+                        }
+                    break
 
-            if exit_code == 0:
-                # Find the newest JSON result file written after this job started
-                results_dir = _results_dir()
-                new_files = [
-                    f for f in results_dir.glob("benchmark_*.json")
-                    if f.stat().st_mtime > started_at
-                ]
-                run_id: Optional[str] = None
-                if new_files:
-                    newest = max(new_files, key=lambda f: f.stat().st_mtime)
-                    run_id = newest.stem
-                job["status"] = "done"
-                job["run_id"] = run_id
-                yield {"data": json.dumps({"type": "done", "run_id": run_id})}
-            else:
-                job["status"] = "failed"
-                yield {"data": json.dumps({"type": "error", "exit_code": exit_code})}
-
+                await asyncio.sleep(0.4)
         except Exception as exc:
             logger.error("SSE stream error for job %s: %s", job_id, exc)
-            job["status"] = "failed"
             yield {"data": json.dumps({"type": "error", "message": str(exc)})}
 
     return EventSourceResponse(event_generator())
@@ -343,33 +662,27 @@ async def stream_benchmark(job_id: str):
 
 @router.get("/benchmark/status/{job_id}")
 async def job_status(job_id: str):
-    """Return current status of a benchmark job."""
+    """Return current status of a benchmark job (poll-friendly)."""
     job = _jobs.get(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
 
-    # Eagerly update status if the process has finished but SSE wasn't consumed
+    # Eagerly finalize if process ended but reader hasn't updated yet.
     proc: asyncio.subprocess.Process = job["proc"]
     if job["status"] == "running" and proc.returncode is not None:
-        if proc.returncode == 0:
-            results_dir = _results_dir()
-            new_files = [
-                f for f in results_dir.glob("benchmark_*.json")
-                if f.stat().st_mtime > job["started_at"]
-            ]
-            run_id: Optional[str] = None
-            if new_files:
-                newest = max(new_files, key=lambda f: f.stat().st_mtime)
-                run_id = newest.stem
-            job["status"] = "done"
-            job["run_id"] = run_id
-        else:
-            job["status"] = "failed"
+        _finalize_job(job, proc.returncode)
+
+    logs = job.get("logs") or []
+    # Return a tail so the UI can catch up without SSE.
+    tail = logs[-80:] if logs else []
 
     return {
         "status": job["status"],
         "run_id": job.get("run_id"),
-        "error": None if job["status"] != "failed" else "Benchmark process exited with non-zero status",
+        "error": job.get("error"),
+        "progress": job.get("progress"),
+        "log_count": len(logs),
+        "logs": tail,
     }
 
 

@@ -85,3 +85,7 @@ web/.vercel
 # Backend __pycache__
 backend/__pycache__/
 backend/**/__pycache__/
+
+# Test and coverage reports
+/review
+/data/benchmark_results
