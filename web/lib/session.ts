@@ -23,11 +23,11 @@ function base64UrlEncode(bytes: Uint8Array): string {
   return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
-function base64UrlDecode(str: string): Uint8Array {
+function base64UrlDecode(str: string): Uint8Array<ArrayBuffer> {
   const padLength = (4 - (str.length % 4)) % 4
   const padded = str.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat(padLength)
   const bin = atob(padded)
-  const bytes = new Uint8Array(bin.length)
+  const bytes = new Uint8Array(new ArrayBuffer(bin.length))
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
   return bytes
 }
