@@ -29,8 +29,9 @@ if not settings.APP_PASSWORD and settings.ALLOW_INSECURE_NO_AUTH:
         "APP_PASSWORD. All API endpoints are unauthenticated."
     )
 
-# Ensure log directory exists
-os.makedirs(os.path.dirname(settings.LOG_FILE_PATH), exist_ok=True)
+# Ensure log directory exists. dirname("") returns ""; makedirs("") raises,
+# so coerce to a safe value when the operator gives a bare file name.
+os.makedirs(os.path.dirname(settings.LOG_FILE_PATH) or ".", exist_ok=True)
 
 log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
 log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -60,7 +61,17 @@ async def lifespan(app: FastAPI):
     logger.info("Starting VVV Token Watch API...")
     await init_db()
     logger.info("Database initialized")
+
+    # Build the model cache lazily, once per process, so /api/models does
+    # not read or parse the JSON file on every request.
+    from backend.core.model_cache import ModelCacheManager
+    cache = ModelCacheManager()
+    await cache.initialize()
+    app.state.model_cache = cache
+    logger.info("Model cache initialized")
+
     yield
+
     logger.info("Shutting down VVV Token Watch API...")
     try:
         await engine.dispose()

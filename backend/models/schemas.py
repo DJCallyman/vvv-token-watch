@@ -23,6 +23,8 @@ class ModelAnalytics(BaseModel):
     cost: float = 0.0
     cost_usd: float = 0.0
     cost_diem: float = 0.0
+    # Bundled/legacy credits (BUNDLED_CREDITS, VCU) tracked separately.
+    cost_bundled_credits: float = 0.0
     avg_response_time_ms: Optional[float] = None  # None when source='billing/usage-analytics'
     # success_rate removed: Venice billing usage does not expose per-request
     # success/failure status, so any computed rate would always be 100%.
@@ -55,6 +57,8 @@ class DailyUsage(BaseModel):
     # BUG-05: separate per-currency daily costs
     cost_usd: float = 0.0
     cost_diem: float = 0.0
+    # Bundled/legacy credits (BUNDLED_CREDITS, VCU) tracked separately.
+    cost_bundled_credits: float = 0.0
 
 
 class DailyAnalyticsResponse(BaseModel):

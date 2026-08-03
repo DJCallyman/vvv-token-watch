@@ -2,6 +2,7 @@
 
 import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { safeNextPath } from '@/lib/safe-next-path'
 
 function LoginForm() {
   const [password, setPassword] = useState('')
@@ -25,7 +26,7 @@ function LoginForm() {
         setError(body.error || 'Invalid password.')
         return
       }
-      const next = searchParams.get('next') || '/'
+      const next = safeNextPath(searchParams.get('next'))
       router.replace(next)
       router.refresh()
     } catch {

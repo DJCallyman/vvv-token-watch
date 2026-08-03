@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 import re
-import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 
 from backend.config import Settings, get_settings
+from backend.core.cache import TtlCache
 from backend.core.venice_api_client import VeniceAPIClient
 
 logger = logging.getLogger(__name__)
@@ -28,29 +28,21 @@ _SEL_SYMBOL = "0x95d89b41"
 
 _ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
 
-# Simple in-process TTL cache: key -> (expires_at, value)
-_cache: Dict[str, Tuple[float, Any]] = {}
-_CACHE_TTL = 60.0
+# Bounded in-process TTL cache. Capped at 256 entries (caps history growth
+# from per-address balance queries) — for a single-instance deployment this
+# is generous. Replace with Redis if scaling out.
+_cache = TtlCache(max_size=256)
+_META_TTL_SECONDS = 60.0
+_BALANCE_TTL_SECONDS = 30.0
+
+# One cached entry holds (decimals, total_raw, staked_raw) so /onchain/supply
+# and /onchain/staking don't triple-fetch on a cold cache.
+_META_CACHE_KEY = "vvv-erc20-meta"
 
 
 def get_venice_client(settings: Settings = Depends(get_settings)) -> VeniceAPIClient:
     api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
     return VeniceAPIClient(api_key)
-
-
-def _cache_get(key: str) -> Optional[Any]:
-    item = _cache.get(key)
-    if not item:
-        return None
-    expires, value = item
-    if time.time() > expires:
-        _cache.pop(key, None)
-        return None
-    return value
-
-
-def _cache_set(key: str, value: Any, ttl: float = _CACHE_TTL) -> None:
-    _cache[key] = (time.time() + ttl, value)
 
 
 def _pad_address(address: str) -> str:
@@ -100,17 +92,22 @@ async def _eth_call(client: VeniceAPIClient, to: str, data: str) -> str:
     return result
 
 
-async def _erc20_total_supply(client: VeniceAPIClient, token: str) -> int:
-    return _decode_uint(await _eth_call(client, token, _SEL_TOTAL_SUPPLY))
-
-
-async def _erc20_decimals(client: VeniceAPIClient, token: str) -> int:
-    return _decode_uint(await _eth_call(client, token, _SEL_DECIMALS))
-
-
-async def _erc20_balance(client: VeniceAPIClient, token: str, holder: str) -> int:
-    data = _SEL_BALANCE_OF + _pad_address(holder)
-    return _decode_uint(await _eth_call(client, token, data))
+async def _fetch_vvv_erc20_meta(client: VeniceAPIClient) -> Dict[str, int]:
+    """Cached read of (decimals, totalSupply, stakedRaw). One entry per TTL
+    so /onchain/supply and /onchain/staking share the bound check."""
+    cached = _cache.get(_META_CACHE_KEY)
+    if cached is not None:
+        return cached
+    decimals = _decode_uint(await _eth_call(client, VVV_TOKEN, _SEL_DECIMALS))
+    total_raw = _decode_uint(await _eth_call(client, VVV_TOKEN, _SEL_TOTAL_SUPPLY))
+    staked_raw = _decode_uint(
+        await _eth_call(
+            client, VVV_TOKEN, _SEL_BALANCE_OF + _pad_address(STAKING_CONTRACT)
+        )
+    )
+    meta = {"decimals": decimals, "total_raw": total_raw, "staked_raw": staked_raw}
+    _cache.set(_META_CACHE_KEY, meta, ttl=_META_TTL_SECONDS)
+    return meta
 
 
 @router.get("/onchain/supply")
@@ -118,33 +115,29 @@ async def get_onchain_supply(
     client: VeniceAPIClient = Depends(get_venice_client),
 ):
     """VVV total supply on Base via Venice crypto RPC."""
-    cached = _cache_get("supply")
+    cached = _cache.get("supply")
     if cached is not None:
         return cached
 
     try:
-        decimals = await _erc20_decimals(client, VVV_TOKEN)
-        total_raw = await _erc20_total_supply(client, VVV_TOKEN)
-        # Staking contract VVV balance ≈ staked amount (tokens locked in contract).
-        staked_raw = await _erc20_balance(client, VVV_TOKEN, STAKING_CONTRACT)
-
-        scale = 10 ** decimals
-        total = total_raw / scale
-        staked = staked_raw / scale
+        meta = await _fetch_vvv_erc20_meta(client)
+        scale = 10 ** meta["decimals"]
+        total = meta["total_raw"] / scale
+        staked = meta["staked_raw"] / scale
         circulating_est = max(total - staked, 0.0)
 
         result = {
             "network": NETWORK,
             "token_address": VVV_TOKEN,
             "staking_contract": STAKING_CONTRACT,
-            "decimals": decimals,
+            "decimals": meta["decimals"],
             "total_supply": total,
             "staked_in_contract": staked,
             "circulating_estimate": circulating_est,
-            "total_supply_raw": str(total_raw),
-            "staked_raw": str(staked_raw),
+            "total_supply_raw": str(meta["total_raw"]),
+            "staked_raw": str(meta["staked_raw"]),
         }
-        _cache_set("supply", result)
+        _cache.set("supply", result)
         return result
     except HTTPException:
         raise
@@ -158,17 +151,15 @@ async def get_onchain_staking(
     client: VeniceAPIClient = Depends(get_venice_client),
 ):
     """Staking pool stats derived from VVV balance of the staking contract."""
-    cached = _cache_get("staking")
+    cached = _cache.get("staking")
     if cached is not None:
         return cached
 
     try:
-        decimals = await _erc20_decimals(client, VVV_TOKEN)
-        total_raw = await _erc20_total_supply(client, VVV_TOKEN)
-        staked_raw = await _erc20_balance(client, VVV_TOKEN, STAKING_CONTRACT)
-        scale = 10 ** decimals
-        total = total_raw / scale
-        staked = staked_raw / scale
+        meta = await _fetch_vvv_erc20_meta(client)
+        scale = 10 ** meta["decimals"]
+        total = meta["total_raw"] / scale
+        staked = meta["staked_raw"] / scale
         pct = (staked / total * 100.0) if total else 0.0
 
         result = {
@@ -183,7 +174,7 @@ async def get_onchain_staking(
                 "APY and staker count require additional contract reads not yet wired."
             ),
         }
-        _cache_set("staking", result)
+        _cache.set("staking", result)
         return result
     except HTTPException:
         raise
@@ -202,24 +193,27 @@ async def get_onchain_balance(
         raise HTTPException(400, "Invalid EVM address")
 
     cache_key = f"bal:{address.lower()}"
-    cached = _cache_get(cache_key)
+    cached = _cache.get(cache_key)
     if cached is not None:
         return cached
 
     try:
-        decimals = await _erc20_decimals(client, VVV_TOKEN)
-        bal_raw = await _erc20_balance(client, VVV_TOKEN, address)
-        # Staking contract may hold sVVV; for now report VVV ERC-20 balance only.
-        scale = 10 ** decimals
+        meta = await _fetch_vvv_erc20_meta(client)
+        bal_raw = _decode_uint(
+            await _eth_call(
+                client, VVV_TOKEN, _SEL_BALANCE_OF + _pad_address(address)
+            )
+        )
+        scale = 10 ** meta["decimals"]
         result = {
             "network": NETWORK,
             "address": address,
             "token_address": VVV_TOKEN,
             "vvv_balance": bal_raw / scale,
             "vvv_balance_raw": str(bal_raw),
-            "decimals": decimals,
+            "decimals": meta["decimals"],
         }
-        _cache_set(cache_key, result, ttl=30.0)
+        _cache.set(cache_key, result, ttl=_BALANCE_TTL_SECONDS)
         return result
     except HTTPException:
         raise

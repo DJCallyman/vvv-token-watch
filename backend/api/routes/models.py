@@ -1,8 +1,11 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
+
 from backend.config import get_settings, Settings
-from backend.core.venice_api_client import VeniceAPIClient
 from backend.core.model_cache import ModelCacheManager
+from backend.core.venice_api_client import VeniceAPIClient
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -14,12 +17,23 @@ def get_venice_client(settings: Settings = Depends(get_settings)) -> VeniceAPICl
     return VeniceAPIClient(api_key)
 
 
+def get_model_cache(request: Request) -> ModelCacheManager:
+    cache = getattr(request.app.state, "model_cache", None)
+    if cache is None:
+        # Lifespan failed to initialize the cache — surface a clear error so we
+        # don't silently fall back to per-request file I/O.
+        raise HTTPException(
+            status_code=503,
+            detail="Model cache unavailable (not initialized)",
+        )
+    return cache
+
+
 @router.get("/models")
 async def get_models(
-    client: VeniceAPIClient = Depends(get_venice_client)
+    cache: ModelCacheManager = Depends(get_model_cache),
 ):
     try:
-        cache = ModelCacheManager(client)
         await cache.fetch_models()
 
         # Prefer full Venice model objects so the UI can render type-specific
@@ -45,6 +59,8 @@ async def get_models(
             "count": len(models),
             "types": sorted(model_types),
         }
+    except HTTPException:
+        raise
     except Exception:
         logger.exception("Failed to fetch models")
         raise HTTPException(status_code=500, detail="Failed to fetch models")
@@ -52,11 +68,20 @@ async def get_models(
 
 @router.get("/models/traits")
 async def get_model_traits(
-    client: VeniceAPIClient = Depends(get_venice_client)
+    client: VeniceAPIClient = Depends(get_venice_client),
 ):
     """Passthrough of Venice GET /models/traits (trait → model ID mappings)."""
     try:
         return await client.get_json("/models/traits")
+    except httpx.HTTPStatusError as e:
+        logger.warning("Upstream error in /models/traits: %s", e)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Venice API error: {e.response.status_code if e.response else '?'}",
+        ) from e
+    except (httpx.TimeoutException, httpx.ConnectError) as e:
+        logger.warning("Upstream unreachable in /models/traits: %s", e)
+        raise HTTPException(status_code=504, detail=f"Venice API unreachable: {e}") from e
     except Exception:
         logger.exception("Failed to fetch model traits")
         raise HTTPException(status_code=500, detail="Failed to fetch model traits")
@@ -65,10 +90,9 @@ async def get_model_traits(
 @router.get("/models/{model_id}")
 async def get_model(
     model_id: str,
-    client: VeniceAPIClient = Depends(get_venice_client)
+    cache: ModelCacheManager = Depends(get_model_cache),
 ):
     try:
-        cache = ModelCacheManager(client)
         await cache.fetch_models()
         model = cache.get_model(model_id)
 

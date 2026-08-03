@@ -217,6 +217,7 @@ export interface ModelSpec {
     supportsMultipleImages?: boolean
     supportsReasoningEffort?: boolean
     supportsTeeAttestation?: boolean
+    maxVideos?: number
     quantization?: string
     [key: string]: unknown
   }
@@ -239,7 +240,10 @@ export interface ModelSpec {
     model_type?: string
     upscale_factors?: string[]
     factors?: string[]
+    maxStyleReferences?: number
     [key: string]: unknown
   }
+  supportsStyleReferences?: boolean
+  supportsStyleReferenceStrength?: boolean
 }
 

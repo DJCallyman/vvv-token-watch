@@ -1,9 +1,12 @@
 import logging
+from typing import Optional
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.venice_api_client import VeniceAPIClient
-from backend.core.usage_tracker import UsageTracker
+from backend.core.usage_tracker import UsageTracker, VeniceUpstreamError
 from backend.config import get_settings, Settings
 from backend.database import get_db
 from backend.services import alert_engine
@@ -102,6 +105,11 @@ async def get_balance(
             logger.exception("Alert evaluation failed during balance poll")
 
         return result
+    except HTTPException:
+        raise
+    except VeniceUpstreamError as e:
+        logger.warning("Upstream Venice API error in /balance: %s", e)
+        raise HTTPException(status_code=502, detail=f"Venice API error: {e}") from e
     except Exception:
         logger.exception("Failed to fetch balance")
         raise HTTPException(status_code=500, detail="Failed to fetch balance")
@@ -113,6 +121,12 @@ async def get_rate_limits(
 ):
     try:
         return await client.get_json("/api_keys/rate_limits")
+    except httpx.HTTPStatusError as e:
+        logger.warning("Upstream Venice API error in /rate-limits: %s", e)
+        raise HTTPException(status_code=502, detail=f"Venice API error: {e.response.status_code if e.response else '?'} {e}") from e
+    except (httpx.TimeoutException, httpx.ConnectError) as e:
+        logger.warning("Upstream Venice API unreachable in /rate-limits: %s", e)
+        raise HTTPException(status_code=504, detail=f"Venice API unreachable: {e}") from e
     except Exception:
         logger.exception("Failed to fetch rate limits")
         raise HTTPException(status_code=500, detail="Failed to fetch rate limits")
@@ -125,6 +139,12 @@ async def get_rate_limits_log(
     """Passthrough of Venice GET /api_keys/rate_limits/log (exceedance events)."""
     try:
         return await client.get_json("/api_keys/rate_limits/log")
+    except httpx.HTTPStatusError as e:
+        logger.warning("Upstream Venice API error in /rate-limits/log: %s", e)
+        raise HTTPException(status_code=502, detail=f"Venice API error: {e.response.status_code if e.response else '?'} {e}") from e
+    except (httpx.TimeoutException, httpx.ConnectError) as e:
+        logger.warning("Upstream Venice API unreachable in /rate-limits/log: %s", e)
+        raise HTTPException(status_code=504, detail=f"Venice API unreachable: {e}") from e
     except Exception:
         logger.exception("Failed to fetch rate limit log")
         raise HTTPException(status_code=500, detail="Failed to fetch rate limit log")
