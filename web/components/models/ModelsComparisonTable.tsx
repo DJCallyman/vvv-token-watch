@@ -166,6 +166,44 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
       }
       break
 
+    case 'max_videos':
+      if (modelType === 'text') {
+        const maxV = capabilities.maxVideos ?? (flatModel as Record<string, unknown>).max_videos
+        if (typeof maxV === 'number' && maxV > 0) {
+          display = String(maxV)
+          sortValue = maxV
+        } else {
+          display = '—'
+          sortValue = 0
+        }
+      } else {
+        display = '—'
+        sortValue = 0
+      }
+      break
+
+    case 'style_references':
+      if (modelType === 'image' || modelType === 'upscale' || modelType === 'inpaint') {
+        const maxRef = constraints.maxStyleReferences ?? (flatModel as Record<string, unknown>).max_style_references
+        const supports = Boolean(
+          modelSpec.supportsStyleReferences ?? (flatModel as Record<string, unknown>).supports_style_references
+        )
+        if (supports && typeof maxRef === 'number' && maxRef > 0) {
+          display = `✓ (max ${maxRef})`
+          sortValue = maxRef
+        } else if (supports) {
+          display = '✓'
+          sortValue = 1
+        } else {
+          display = '✗'
+          sortValue = 0
+        }
+      } else {
+        display = '—'
+        sortValue = 0
+      }
+      break
+
     case 'input_price':
     case 'price':
       if (modelType === 'text' || modelType === 'embedding') {
@@ -566,9 +604,10 @@ export function ModelsComparisonTable({
             >
               {visibleColumns.map((column) => {
                 const { display, sortValue } = getCellValue(model, column.key)
-                const isBoolean = typeof sortValue === 'number' && (sortValue === 0 || sortValue === 1) && 
-                  ['vision', 'functions', 'web_search', 'reasoning', 'logprobs', 'response_schema', 
-                   'optimized_for_code', 'audio_input', 'video_input', 'audio', 'audio_configurable'].includes(column.key)
+                const isBoolean = typeof sortValue === 'number' && (sortValue === 0 || sortValue === 1) &&
+                  ['vision', 'functions', 'web_search', 'reasoning', 'logprobs', 'response_schema',
+                   'optimized_for_code', 'audio_input', 'video_input', 'audio', 'audio_configurable',
+                   'style_references'].includes(column.key)
                 
                 return (
                   <td

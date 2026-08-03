@@ -12,7 +12,6 @@ from backend.models.schemas import (
 from backend.models.db import (
     AlertConfig,
     AlertEvent,
-    BenchmarkRun,
     PriceSnapshot,
     UsageSnapshot,
 )
@@ -27,7 +26,6 @@ __all__ = [
     "ModelRecommendation",
     "AlertConfig",
     "AlertEvent",
-    "BenchmarkRun",
     "PriceSnapshot",
     "UsageSnapshot",
 ]

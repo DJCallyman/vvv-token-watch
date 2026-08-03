@@ -14,13 +14,14 @@ interface Props {
   onError?: () => void
 }
 
+const MAX_DISPLAYED_LINES = 1000
+
 export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
   const [lines, setLines] = useState<LogLine[]>([])
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
   const [status, setStatus] = useState<'running' | 'done' | 'error'>('running')
   const bottomRef = useRef<HTMLDivElement>(null)
   const esRef = useRef<EventSource | null>(null)
-  const seenLinesRef = useRef<Set<string>>(new Set())
   const finishedRef = useRef(false)
 
   const onCompleteRef = useRef(onComplete)
@@ -32,10 +33,13 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
   }, [onComplete, onError])
 
   const pushLine = (text: string, type: LogLine['type']) => {
-    const key = `${type}:${text}`
-    if (seenLinesRef.current.has(key)) return
-    seenLinesRef.current.add(key)
-    setLines((prev) => [...prev, { text, type }])
+    // Drop empty placeholder lines from the SSE handshake; keep every real
+    // log line so repeated warnings and progress events remain visible.
+    if (!text) return
+    setLines((prev) => {
+      const next = prev.length >= MAX_DISPLAYED_LINES ? prev.slice(1) : prev
+      return [...next, { text, type }]
+    })
   }
 
   const markDone = (runId: string | null | undefined) => {
@@ -137,7 +141,6 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
 
   useEffect(() => {
     finishedRef.current = false
-    seenLinesRef.current = new Set()
     setLines([{ text: `Connected — streaming job ${jobId}`, type: 'system' }])
     setProgress(null)
     setStatus('running')

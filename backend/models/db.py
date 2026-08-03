@@ -102,18 +102,9 @@ class AlertEvent(Base):
     config: Mapped[AlertConfig] = relationship("AlertConfig", back_populates="events")
 
 
-class BenchmarkRun(Base):
-    """Persisted benchmark job metadata (survives restarts)."""
-
-    __tablename__ = "benchmark_runs"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    job_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
-    run_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
-    status: Mapped[str] = mapped_column(String(32), default="queued")
-    # queued | running | completed | failed | interrupted
-    config_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    results_file: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+# NOTE: A previous incarnation of the project defined a BenchmarkRun ORM model
+# here for persisting in-memory benchmark job metadata across restarts. The
+# model was never wired to a repository; the actual source of truth for runs
+# is the JSON results files written by scripts/benchmark_models.py to
+# BENCHMARK_RESULTS_DIR. The model was removed so the schema no longer
+# implies a feature that does not exist.

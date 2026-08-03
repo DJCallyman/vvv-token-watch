@@ -3,8 +3,14 @@ Model Cache Manager for Venice AI Models
 
 Fetches and manages model data from the Venice API, providing dynamic model lists
 and pricing information. Includes caching and fallback mechanisms for reliability.
+
+Cache file I/O is performed off the event loop via asyncio.to_thread so that
+hot paths don't block. Construct the manager once in the FastAPI lifespan and
+stash it on ``app.state.model_cache``; per-request construction defeats the
+TTL cache.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -42,6 +48,12 @@ class CachedModel:
     is_beta: bool = False
     context_window: Optional[int] = None
     deprecation: Optional[Dict] = None              # Venice deprecation metadata
+    # Image-model style references (POST /image/generate style_references).
+    supports_style_references: bool = False
+    max_style_references: Optional[int] = None
+    supports_style_reference_strength: bool = False
+    # LLM video-input cap (max video attachments per chat request).
+    max_videos: Optional[int] = None
 
     def __post_init__(self):
         if self.capabilities is None:
@@ -64,7 +76,7 @@ class ModelCacheManager:
     def __init__(self, api_client: Optional[VeniceAPIClient] = None):
         """
         Initialize the model cache manager.
-        
+
         Args:
             api_client: Optional VeniceAPIClient. If None, creates one with admin API key (required for reliable model fetching)
         """
@@ -77,28 +89,22 @@ class ModelCacheManager:
         self.models: Dict[str, CachedModel] = {}
         self.raw_api_data: Optional[Dict] = None  # Store raw API response for full details
         self.cache_timestamp: Optional[str] = None  # ISO format timestamp
-        self._load_cache()
 
-    def _is_cache_fresh(self) -> bool:
-        """Return True if in-memory/file cache is within CACHE_TTL_SECONDS."""
-        if not self.cache_timestamp or not self.models:
-            return False
-        try:
-            ts = datetime.fromisoformat(self.cache_timestamp)
-            age = (datetime.now() - ts).total_seconds()
-            return age < settings.CACHE_TTL_SECONDS
-        except (TypeError, ValueError):
-            return False
-    
+    async def initialize(self) -> None:
+        """Load any persisted cache from disk. Called once during app startup
+        to avoid synchronous file I/O in the constructor (which previously
+        ran on every request)."""
+        await asyncio.to_thread(self._load_cache)
+
     async def fetch_models(self, force_refresh: bool = False) -> bool:
-        """
-        Fetch models from Venice API and update cache.
-        
+        """Fetch models from Venice API and update cache (async-friendly).
+
         Args:
-            force_refresh: If True, always fetch from API even if cache exists
-            
+            force_refresh: If True, always fetch from API even if cache is fresh.
+
         Returns:
-            True if fetch successful, False if failed (may have fallen back to cache)
+            True if fetch succeeded (or cache was already fresh); False if the
+            API call failed and we kept the existing in-memory cache (if any).
         """
         if not force_refresh and self._is_cache_fresh():
             logger.debug(
@@ -110,22 +116,33 @@ class ModelCacheManager:
         try:
             logger.info("Fetching models from Venice API...")
             response = await self.api_client.get("/models", params={"type": "all"})
-            
+
             if response.status_code != 200:
                 logger.warning(f"Failed to fetch models: {response.status_code}")
                 return False
-            
+
             data = response.json()
-            self.raw_api_data = data  # Store raw data for accessing full model specs
+            self.raw_api_data = data
             self._parse_models(data)
-            self._save_cache()
+            await asyncio.to_thread(self._save_cache)
             logger.info(f"Successfully fetched and cached {len(self.models)} models")
             return True
-            
+
         except Exception as e:
             logger.warning(f"Failed to fetch models from API: {e}. Using cached data.")
             return False
-    
+
+    def _is_cache_fresh(self) -> bool:
+        """Return True if in-memory/file cache is within CACHE_TTL_SECONDS."""
+        if not self.cache_timestamp or not self.models:
+            return False
+        try:
+            ts = datetime.fromisoformat(self.cache_timestamp)
+            age = (datetime.now() - ts).total_seconds()
+            return age < settings.CACHE_TTL_SECONDS
+        except (TypeError, ValueError):
+            return False
+
     def _parse_models(self, api_response: Dict) -> None:
         """Parse API response and build model cache."""
         self.models.clear()
@@ -174,7 +191,7 @@ class ModelCacheManager:
                 # Extract capabilities (store both short keys and Venice supports* names)
                 capabilities_spec = model_spec.get('capabilities', {})
                 capabilities = []
-                
+
                 if isinstance(capabilities_spec, dict):
                     capability_map = {
                         'supportsVision': 'vision',
@@ -190,7 +207,19 @@ class ModelCacheManager:
                     for venice_key, short_key in capability_map.items():
                         if capabilities_spec.get(venice_key):
                             capabilities.append(short_key)
-                
+
+                # Image-model style references (POST /image/generate).
+                supports_style_references = bool(
+                    model_spec.get('supportsStyleReferences', False)
+                )
+                max_style_references = model_spec.get('maxStyleReferences')
+                supports_style_reference_strength = bool(
+                    model_spec.get('supportsStyleReferenceStrength', False)
+                )
+
+                # LLM video-input cap (max video attachments per chat request).
+                max_videos = capabilities_spec.get('maxVideos') if isinstance(capabilities_spec, dict) else None
+
                 cached_model = CachedModel(
                     id=model_id,
                     name=model_spec.get('name', model_id),
@@ -206,6 +235,10 @@ class ModelCacheManager:
                     is_beta=model_spec.get('beta', False) or model_spec.get('betaModel', False),
                     context_window=model_spec.get('availableContextTokens'),
                     deprecation=model_spec.get('deprecation'),
+                    supports_style_references=supports_style_references,
+                    max_style_references=max_style_references,
+                    supports_style_reference_strength=supports_style_reference_strength,
+                    max_videos=max_videos,
                 )
                 
                 self.models[model_id] = cached_model
@@ -216,12 +249,16 @@ class ModelCacheManager:
                 continue
     
     def _save_cache(self) -> None:
-        """Save models to local cache file with secure permissions."""
+        """Save models to local cache file with secure permissions.
+
+        Writes to a sibling tmp file and renames atomically so a crash
+        mid-write cannot leave a half-written cache on disk.
+        """
         try:
             self.cache_file.parent.mkdir(parents=True, exist_ok=True)
-            
+
             self.cache_timestamp = datetime.now().isoformat()
-            
+
             cache_data = {
                 'timestamp': self.cache_timestamp,
                 'models': {
@@ -240,24 +277,38 @@ class ModelCacheManager:
                         'is_beta': m.is_beta,
                         'context_window': m.context_window,
                         'deprecation': m.deprecation,
+                        'supports_style_references': m.supports_style_references,
+                        'max_style_references': m.max_style_references,
+                        'supports_style_reference_strength': m.supports_style_reference_strength,
+                        'max_videos': m.max_videos,
                     }
                     for model_id, m in self.models.items()
                 },
                 'raw_api_data': self.raw_api_data
             }
-            
-            # Write with secure permissions
-            with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(cache_data, f, indent=2)
-            
-            # Set restrictive file permissions (owner read/write only)
+
+            # Atomic write: serialize to a sibling tmp file, then os.replace()
+            # so a crash mid-write cannot corrupt the live cache.
+            tmp_file = self.cache_file.with_suffix(self.cache_file.suffix + ".tmp")
+            fd = os.open(
+                str(tmp_file),
+                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                SENSITIVE_FILE_MODE,
+            )
             try:
-                os.chmod(self.cache_file, SENSITIVE_FILE_MODE)
-            except OSError as e:
-                logger.warning(f"Could not set file permissions on cache: {e}")
-            
+                with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                    json.dump(cache_data, f, indent=2)
+            except Exception:
+                # Clean up partial file on serialization failure.
+                try:
+                    os.unlink(tmp_file)
+                except OSError:
+                    pass
+                raise
+            os.replace(tmp_file, self.cache_file)
+
             logger.debug(f"Saved model cache to {self.cache_file} (timestamp: {self.cache_timestamp})")
-            
+
         except Exception as e:
             logger.warning(f"Failed to save model cache: {e}")
     
@@ -291,6 +342,10 @@ class ModelCacheManager:
                     is_beta=model_dict.get('is_beta', False),
                     context_window=model_dict.get('context_window'),
                     deprecation=model_dict.get('deprecation'),
+                    supports_style_references=model_dict.get('supports_style_references', False),
+                    max_style_references=model_dict.get('max_style_references'),
+                    supports_style_reference_strength=model_dict.get('supports_style_reference_strength', False),
+                    max_videos=model_dict.get('max_videos'),
                 )
             
             self.raw_api_data = cache_data.get('raw_api_data')

@@ -23,6 +23,7 @@ export const TEXT_COLUMNS: ColumnDefinition[] = [
   { key: 'optimized_for_code', header: 'Code Opt', minWidth: 70, sortable: true },
   { key: 'audio_input', header: 'Audio In', minWidth: 75, sortable: true },
   { key: 'video_input', header: 'Video In', minWidth: 75, sortable: true },
+  { key: 'max_videos', header: 'Max Videos', minWidth: 95, sortable: true, tooltip: 'Max video attachments per chat request (when Video In is supported)' },
   { key: 'input_price', header: 'Input $/1M', minWidth: 110, sortable: true },
   { key: 'output_price', header: 'Output $/1M', minWidth: 120, sortable: true },
   { key: 'cache_input', header: 'Cache Read $/1M', minWidth: 110, sortable: true },
@@ -35,7 +36,7 @@ export const IMAGE_COLUMNS: ColumnDefinition[] = [
   { key: 'type', header: 'Type', minWidth: 80, sortable: true },
   { key: 'resolutions', header: 'Resolutions', minWidth: 150, sortable: true },
   { key: 'steps', header: 'Steps', minWidth: 80, sortable: true },
-  { key: 'prompt_limit', header: 'Prompt Limit', minWidth: 110, sortable: true },
+  { key: 'style_references', header: 'Style Refs', minWidth: 95, sortable: true, tooltip: 'Max style_references accepted by POST /image/generate' },
   { key: 'generation_price', header: 'Price/Image', minWidth: 110, sortable: true },
   { key: 'privacy', header: 'Privacy', minWidth: 90, sortable: true },
 ]

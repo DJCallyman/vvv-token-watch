@@ -78,6 +78,10 @@ Stop with **Ctrl+C** — all processes and the Postgres container are cleaned up
 | `COINGECKO_CURRENCIES` | — | Currencies to fetch (default: `usd,aud`) |
 | `LOG_LEVEL` | — | `INFO` or `DEBUG` (default: `INFO`) |
 | `DEBUG` | — | Enables `/docs`, `/redoc`, `/openapi.json` (default: `false`) |
+| `EPOCH_LENGTH_HOURS` | — | Venice billing epoch length in hours, used to compute epoch_start from `nextEpochBegins` (default: `24`) |
+| `SNAPSHOT_INTERVAL_SECONDS` | — | Cadence (seconds) used for the doc-comment describing the request-path snapshot write cadence. Snapshots are recorded by request-path pollers; no background poller is currently shipped. (default: `300`) |
+| `SNAPSHOT_RETENTION_DAYS` | — | Retention window for `usage_snapshots` and `price_snapshots` rows; older rows are purged on each snapshot write and at startup (default: `90`) |
+| `SESSION_SECURE_COOKIE` (frontend) | — | When `true`, the session cookie is set with `Secure`. Defaults to `NODE_ENV === "production"`. Set explicitly for plaintext HTTP deployments. |
 
 > **Admin key required:** Regular inference keys return 401 on `/billing/usage`. Create an Admin key at https://venice.ai/settings/api.
 > **Use a separate inference key:** Set `VENICE_API_KEY` to a distinct inference-only key rather than reusing `VENICE_ADMIN_KEY`, so public endpoints never expose admin-level credentials.
@@ -92,11 +96,21 @@ See [.env.example](.env.example) for all available options with descriptions.
 
 ## Testing
 
+Backend (pytest, from the repo root):
 ```bash
-pip install -r requirements-dev.txt
-python run_tests.py            # all tests
-python run_tests.py -c         # with coverage report
-python -m pytest tests/test_config.py -v  # single file
+cd backend
+pip install -r requirements.txt
+PYTHONPATH=. pytest tests/ -v
+PYTHONPATH=. pytest tests/<file>.py -v   # single file
+```
+
+Frontend (Jest):
+```bash
+cd web
+npm install        # one-time
+npm run lint
+npm test
+npm run test:coverage
 ```
 
 ---

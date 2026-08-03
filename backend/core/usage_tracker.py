@@ -10,11 +10,43 @@ from typing import List, Dict, Optional, Any
 import logging
 from datetime import datetime, timezone, timedelta
 
+import httpx
+
 from backend.core.venice_api_client import VeniceAPIClient
 from backend.config import get_settings
+from backend.core.billing_pagination import (
+    BillingUsageDeprecated,
+    UsageHistoryUnavailable,
+    walk_billing_usage_history,
+    walk_billing_usage_legacy,
+)
+
+# Re-export for callers that import the names from this module.
+__all__ = [
+    "VeniceUpstreamError",
+    "BillingUsageDeprecated",
+    "UsageHistoryUnavailable",
+    "UsageTracker",
+    "UsageWorker",
+    "UsageMetrics",
+    "APIKeyUsage",
+    "BalanceInfo",
+    "_net_usage_from_entries",
+]
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+
+class VeniceUpstreamError(Exception):
+    """Raised when the Venice API responds with an unexpected HTTP status
+    or cannot be reached. Callers should map this to HTTP 502/504. Carries
+    `status_code` when known so the upstream status can be surfaced.
+    """
+
+    def __init__(self, message: str, *, status_code: Optional[int] = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 @dataclass
@@ -46,7 +78,12 @@ class BalanceInfo:
 
 
 def _net_usage_from_entries(entries: List[Dict[str, Any]]) -> Dict[str, float]:
-    """Net billing amounts: charges are negative, refunds positive. Return positive usage."""
+    """Net billing amounts: charges are negative, refunds positive. Return positive usage.
+
+    Tracks DIEM, USD, and bundled/legacy credits (BUNDLED_CREDITS, VCU) as
+    separate buckets. Do NOT mix currencies 1:1 — callers should display each
+    bucket on its own axis.
+    """
     totals = {"diem": 0.0, "usd": 0.0, "bundled_credits": 0.0}
     for entry in entries:
         currency = (entry.get("currency") or "").upper()
@@ -58,7 +95,13 @@ def _net_usage_from_entries(entries: List[Dict[str, Any]]) -> Dict[str, float]:
         elif currency in ("BUNDLED_CREDITS", "VCU"):
             # Track bundled/legacy credits separately — do not mix into diem.
             totals["bundled_credits"] -= amount
+        # Unknown currencies are ignored (logged elsewhere if needed).
     return totals
+
+
+# Billing-pagination exceptions are imported from backend.core.billing_pagination
+# above. They are re-exported via __all__ for callers that import them from
+# this module's stable name.
 
 
 class UsageTracker:
@@ -85,60 +128,56 @@ class UsageTracker:
                 daily_usd_limit=settings.DEFAULT_DAILY_USD_LIMIT,
                 next_epoch_begins=next_epoch,
             )
-        except Exception as e:
-            raise Exception(f"Failed to fetch rate limits: {e}") from e
+        except httpx.HTTPStatusError as e:
+            raise VeniceUpstreamError(
+                f"Venice /api_keys/rate_limits returned {e.response.status_code if e.response else '?'}",
+                status_code=e.response.status_code if e.response else None,
+            ) from e
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            raise VeniceUpstreamError(
+                f"Venice /api_keys/rate_limits unreachable: {e}",
+            ) from e
 
-    async def _paginate_billing_usage(
+    async def fetch_billing_entries(
         self,
         start_datetime: str,
         end_datetime: str,
         sort_order: str = "desc",
+        currency: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Paginate /billing/usage with API_MAX_PAGES safety cap."""
-        entries: List[Dict[str, Any]] = []
-        page = 1
-        max_pages = settings.API_MAX_PAGES
+        """Fetch billing entries for a window, preferring /billing/usage-history.
 
-        while page <= max_pages:
-            params = {
-                "startDate": start_datetime,
-                "endDate": end_datetime,
-                "limit": settings.API_PAGE_SIZE,
-                "sortOrder": sort_order,
-                "page": page,
-            }
-            response = await self.api_client.get("/billing/usage", params=params)
-            if response.status_code >= 400:
-                response.raise_for_status()
-            payload = response.json()
-            page_entries = payload.get("data", [])
-            entries.extend(page_entries)
-
-            pagination = payload.get("pagination", {})
-            total_pages = int(
-                pagination.get(
-                    "totalPages",
-                    response.headers.get("x-pagination-total-pages", 1),
-                )
-            )
-            if page >= total_pages:
-                break
-            page += 1
-        else:
-            logger.warning(
-                "billing/usage pagination hit API_MAX_PAGES=%s (%s → %s); totals may be incomplete",
-                max_pages,
+        Falls back to /billing/usage when the new endpoint is unavailable
+        (older accounts). Raises BillingUsageDeprecated if /billing/usage
+        returns 410 — the caller should surface this to the user.
+        """
+        try:
+            return await walk_billing_usage_history(
+                self.api_client,
                 start_datetime,
                 end_datetime,
+                currency=currency,
             )
-
-        return entries
+        except UsageHistoryUnavailable as exc:
+            logger.info(
+                "Falling back to /billing/usage (history unavailable: %s)",
+                exc,
+            )
+            return await walk_billing_usage_legacy(
+                self.api_client,
+                start_datetime,
+                end_datetime,
+                sort_order=sort_order,
+            )
 
     async def get_epoch_usage(self) -> Dict:
         """Query billing usage from the start of the current epoch to now.
 
         Uses nextEpochBegins from the rate limits endpoint to determine epoch start.
         Returns usage totals plus the epoch_start datetime string.
+
+        Prefers /billing/usage-history (cursor-paginated, no rate limit) and
+        falls back to /billing/usage for legacy accounts.
         """
         try:
             rl_data = await self.api_client.get_json("/api_keys/rate_limits")
@@ -147,7 +186,7 @@ class UsageTracker:
 
             if next_epoch_str:
                 next_epoch = datetime.fromisoformat(next_epoch_str.replace("Z", "+00:00"))
-                epoch_start = next_epoch - timedelta(days=1)
+                epoch_start = next_epoch - timedelta(hours=settings.EPOCH_LENGTH_HOURS)
             else:
                 # Fallback: midnight UTC today
                 epoch_start = datetime.now(timezone.utc).replace(
@@ -157,7 +196,7 @@ class UsageTracker:
             epoch_start_str = epoch_start.strftime("%Y-%m-%dT%H:%M:%SZ")
             now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            entries = await self._paginate_billing_usage(epoch_start_str, now_str)
+            entries = await self.fetch_billing_entries(epoch_start_str, now_str)
             totals = _net_usage_from_entries(entries)
 
             return {
@@ -167,8 +206,15 @@ class UsageTracker:
                 "epoch_start": epoch_start_str,
                 "next_epoch": next_epoch_str,
             }
-        except Exception as e:
-            raise Exception(f"Failed to fetch epoch usage: {e}") from e
+        except httpx.HTTPStatusError as e:
+            raise VeniceUpstreamError(
+                f"Venice API (rate-limits or billing/usage-history) returned {e.response.status_code if e.response else '?'}",
+                status_code=e.response.status_code if e.response else None,
+            ) from e
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            raise VeniceUpstreamError(
+                "Venice API (rate-limits or billing/usage-history) unreachable",
+            ) from e
 
     async def get_daily_usage(self, target_date: Optional[str] = None) -> Dict[str, float]:
         try:
@@ -178,7 +224,7 @@ class UsageTracker:
             start_datetime = f"{target_date}T00:00:00Z"
             end_datetime = f"{target_date}T23:59:59Z"
 
-            entries = await self._paginate_billing_usage(start_datetime, end_datetime)
+            entries = await self.fetch_billing_entries(start_datetime, end_datetime)
             totals = _net_usage_from_entries(entries)
 
             return {
@@ -187,8 +233,15 @@ class UsageTracker:
                 "bundled_credits": totals["bundled_credits"],
                 "date": target_date,
             }
-        except Exception as e:
-            raise Exception(f"Failed to fetch daily usage: {e}") from e
+        except httpx.HTTPStatusError as e:
+            raise VeniceUpstreamError(
+                f"Venice /billing/usage-history (daily) returned {e.response.status_code if e.response else '?'}",
+                status_code=e.response.status_code if e.response else None,
+            ) from e
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            raise VeniceUpstreamError(
+                f"Venice /billing/usage-history (daily) unreachable: {e}",
+            ) from e
 
     async def fetch_api_keys_with_daily_usage(self) -> List[APIKeyUsage]:
         try:
@@ -213,8 +266,15 @@ class UsageTracker:
                     )
                 )
             return api_keys
-        except Exception as e:
-            raise Exception(f"Failed to fetch keys with daily usage: {e}") from e
+        except httpx.HTTPStatusError as e:
+            raise VeniceUpstreamError(
+                f"Venice /api_keys returned {e.response.status_code if e.response else '?'}",
+                status_code=e.response.status_code if e.response else None,
+            ) from e
+        except (httpx.TimeoutException, httpx.ConnectError) as e:
+            raise VeniceUpstreamError(
+                f"Venice /api_keys unreachable: {e}",
+            ) from e
 
 
 class UsageWorker:

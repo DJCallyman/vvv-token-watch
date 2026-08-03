@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     VENICE_ADMIN_KEY: str
     VENICE_API_KEY: Optional[str] = None
     # Matches docker-compose.dev.yml (host port 5433, user/db/password: vvvwatch).
-    DATABASE_URL: Optional[str] = "postgresql+asyncpg://vvvwatch:vvvwatch@localhost:5433/vvvwatch"
+    DATABASE_URL: str = "postgresql+asyncpg://vvvwatch:vvvwatch@localhost:5433/vvvwatch"
     
     COINGECKO_API_KEY: Optional[str] = None
     COINGECKO_TOKEN_ID: str = "venice-token"
@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     
     DEFAULT_DAILY_DIEM_LIMIT: float = 100.0
     DEFAULT_DAILY_USD_LIMIT: float = 25.0
+    # Venice billing epochs are 24-hour windows by default; configured here so
+    # any future change to the upstream epoch length can be supported without
+    # a code change.
+    EPOCH_LENGTH_HOURS: int = 24
     
     VENICE_API_BASE_URL: str = "https://api.venice.ai/api/v1"
     COINGECKO_API_BASE_URL: str = "https://api.coingecko.com/api/v3"
@@ -63,8 +67,10 @@ class Settings(BaseSettings):
     # Prevents flooding the alert_events table on every poll while a threshold is breached.
     ALERT_COOLDOWN_SECONDS: int = 3600  # 1 hour default
 
-    # Snapshot interval for usage and price history (seconds). Background poller
-    # (if enabled) and/or request-path snapshots use this cadence.
+    # Snapshot interval for usage and price history (seconds). Snapshots are
+    # recorded by request-path pollers (e.g. when the dashboard polls /prices
+    # or /usage/daily); no background poller is included. Tune this to
+    # describe the cadence you expect your poller to drive.
     SNAPSHOT_INTERVAL_SECONDS: int = 300  # 5 minutes
 
     # Retention for snapshot tables (days). Rows older than this are purged on

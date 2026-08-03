@@ -6,10 +6,19 @@ import logging
 import re
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timedelta, timezone
+
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.core.venice_api_client import VeniceAPIClient
 from backend.config import get_settings, Settings
+from backend.core.billing_pagination import (
+    BillingUsageDeprecated,
+    UsageHistoryUnavailable,
+    fetch_usage_analytics_optional,
+    walk_billing_usage_history,
+    walk_billing_usage_legacy,
+)
 from backend.models.schemas import (
     AnalyticsResponse,
     DailyAnalyticsResponse,
@@ -169,6 +178,7 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
                 'cost': 0.0,          # legacy mixed; prefer cost_usd + cost_diem
                 'cost_usd': 0.0,
                 'cost_diem': 0.0,
+                'cost_bundled_credits': 0.0,
                 'response_times': [],
                 'model_type': model_type,
             }
@@ -203,6 +213,9 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
             model_data[model_name]['cost_usd'] += abs_amount
         elif currency == 'DIEM':
             model_data[model_name]['cost_diem'] += abs_amount
+        elif currency in ('BUNDLED_CREDITS', 'VCU'):
+            # Track bundled/legacy credits separately — do not mix into diem.
+            model_data[model_name]['cost_bundled_credits'] += abs_amount
         else:
             # Unknown/other currencies contribute to legacy 'cost' only
             pass
@@ -218,67 +231,102 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def generate_recommendations(model_data: Dict[str, Dict]) -> List[Dict[str, str]]:
-    """Generate actionable recommendations based on usage patterns."""
-    recommendations = []
-    
+    """Generate actionable recommendations based on usage patterns.
+
+    Uses the per-currency cost buckets (``cost_usd`` / ``cost_diem``) so the
+    ranking and message text never mix currencies. The legacy mixed ``cost``
+    field is still present in payloads (backward compat) but is no longer
+    authoritative for these recommendations.
+    """
+    recommendations: List[Dict[str, str]] = []
+
     if not model_data:
         return recommendations
-    
-    efficiency = {}
+
+    # Prefer USD for ranking and labels when present, otherwise fall back to
+    # DIEM (with a '$'→'DIEM' label switch). The currency is described in the
+    # message itself so there is no hidden currency conversion.
+    def primary_currency(data: Dict[str, Any]) -> str:
+        return 'usd' if float(data.get('cost_usd') or 0.0) > 0 else 'diem'
+
+    def cost_per_1k(data: Dict[str, Any]) -> float:
+        tokens = data.get('tokens') or 0
+        if tokens <= 0:
+            return 0.0
+        cur = primary_currency(data)
+        amount = float(data.get('cost_usd') or 0.0) if cur == 'usd' else float(data.get('cost_diem') or 0.0)
+        return amount / (tokens / 1000.0)
+
+    efficiency: Dict[str, tuple[float, str]] = {}
     for model, data in model_data.items():
-        if data['tokens'] > 0:
-            efficiency[model] = data['cost'] / (data['tokens'] / 1000)
-    
+        if (data.get('tokens') or 0) > 0:
+            efficiency[model] = (cost_per_1k(data), primary_currency(data))
+
     if efficiency:
-        sorted_by_efficiency = sorted(efficiency.items(), key=lambda x: x[1])
-        most_efficient = sorted_by_efficiency[0]
-        least_efficient = sorted_by_efficiency[-1]
-        
-        if most_efficient[1] < least_efficient[1] * 0.5:
+        sorted_by_efficiency = sorted(
+            [(m, c[0], c[1]) for m, c in efficiency.items()],
+            key=lambda x: x[1],
+        )
+        most_efficient, most_cost, most_cur = sorted_by_efficiency[0]
+        least_efficient, least_cost, least_cur = sorted_by_efficiency[-1]
+
+        if most_cost < least_cost * 0.5:
+            unit = '$' if most_cur == 'usd' else 'DIEM'
             recommendations.append({
                 'type': 'efficiency',
-                'message': f"'{most_efficient[0]}' is most cost-efficient (${most_efficient[1]:.4f}/1K tokens)",
-                'priority': 'high'
+                'message': (
+                    f"'{most_efficient}' is most cost-efficient "
+                    f"({unit}{most_cost:.4f}/1K tokens)"
+                ),
+                'priority': 'high',
             })
-    
+
+    # Latency recommendations are currency-agnostic.
     for model, data in model_data.items():
-        if data['avg_response_time_ms'] > 5000:
+        avg_ms = data.get('avg_response_time_ms')
+        if avg_ms is not None and avg_ms > 5000:
             recommendations.append({
                 'type': 'performance',
-                'message': f"'{model}' has high latency ({data['avg_response_time_ms']/1000:.1f}s avg)",
-                'priority': 'medium'
+                'message': f"'{model}' has high latency ({avg_ms/1000:.1f}s avg)",
+                'priority': 'medium',
             })
-    
-    sorted_by_usage = sorted(model_data.items(), key=lambda x: x[1]['cost'], reverse=True)
+
+    # Dominance: pick the dominant model in whichever currency this dataset
+    # reports. Show the actual currency instead of mislabeling as DIEM.
+    sorted_by_usage = sorted(
+        model_data.items(),
+        key=lambda x: float(x[1].get('cost_usd') or 0.0) + float(x[1].get('cost_diem') or 0.0),
+        reverse=True,
+    )
     if len(sorted_by_usage) > 1:
-        top_model = sorted_by_usage[0]
-        if top_model[1]['cost'] > sum(d['cost'] for _, d in sorted_by_usage[1:]) * 0.5:
+        top_model_name, top_model_data = sorted_by_usage[0]
+        top_cost = float(top_model_data.get('cost_usd') or 0.0)
+        top_currency = 'usd' if top_cost > 0 else 'diem'
+        rest_cost = sum(
+            float(d.get('cost_usd') or 0.0) if top_currency == 'usd'
+            else float(d.get('cost_diem') or 0.0)
+            for _, d in sorted_by_usage[1:]
+        )
+        if top_cost > 0 and top_cost > rest_cost * 0.5:
+            unit = '$' if top_currency == 'usd' else 'DIEM'
             recommendations.append({
                 'type': 'cost',
-                'message': f"'{top_model[0]}' accounts for {top_model[1]['cost']:.2f} DIEM usage",
-                'priority': 'high'
+                'message': (
+                    f"'{top_model_name}' accounts for {unit}{top_cost:.2f} usage "
+                    f"(more than half of total)"
+                ),
+                'priority': 'high',
             })
-    
+
     return recommendations[:5]
 
 
-async def _fetch_usage_analytics(
-    client: VeniceAPIClient,
-    start_date: datetime,
-    end_date: datetime,
-) -> Optional[Dict[str, Any]]:
-    """Try the Beta usage-analytics endpoint; return None if unavailable."""
-    try:
-        params = {
-            'startDate': start_date.strftime('%Y-%m-%d'),
-            'endDate': end_date.strftime('%Y-%m-%d'),
-        }
-        response = await client.get('/billing/usage-analytics', params=params)
-        if response.status_code == 200:
-            return response.json()
-    except Exception as exc:
-        logger.debug("usage-analytics endpoint unavailable: %s", exc)
-    return None
+# ---------------------------------------------------------------------------
+# Billing pagination (cursor + legacy) lives in backend.core.billing_pagination.
+# The legacy walker raises BillingUsageDeprecated (with HTTP 410) which the
+# route handlers below let propagate to the frontend as the documented
+# migration signal — previously a blanket `except Exception` swallowed it.
+# ---------------------------------------------------------------------------
 
 
 @router.get("/models", response_model=AnalyticsResponse)
@@ -296,7 +344,7 @@ async def get_model_analytics(
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
 
-        analytics = await _fetch_usage_analytics(client, start_date, end_date)
+        analytics = await fetch_usage_analytics_optional(client, start_date, end_date)
         if analytics:
             logger.info("Analytics /models using /billing/usage-analytics")
             model_usage: Dict[str, ModelAnalytics] = {}
@@ -355,29 +403,19 @@ async def get_model_analytics(
                 source='billing/usage-analytics',
             )
 
-        usage_entries = []
-        page = 1
-        max_pages = settings.API_MAX_PAGES
-        while page <= max_pages:
-            params = {
-                'startDate': start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-                'endDate': end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-                'limit': settings.API_PAGE_SIZE,
-                'sortOrder': 'desc',
-                'page': page,
-            }
-            response = await client.get('/billing/usage', params=params)
-            if response.status_code >= 400:
-                response.raise_for_status()
-            data = response.json()
-            page_entries = data.get('data', [])
-            usage_entries.extend(page_entries)
-            pagination = data.get('pagination', {})
-            total_pages = int(pagination.get('totalPages', response.headers.get('x-pagination-total-pages', 1)))
-            if page >= total_pages:
-                break
-            page += 1
-        logger.info(f"Analytics /models fetched {len(usage_entries)} billing entries across {page} page(s) for last {days} day(s)")
+        billing_source = 'billing/usage-history'
+        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        try:
+            usage_entries = await walk_billing_usage_history(
+                client, start_str, end_str
+            )
+        except UsageHistoryUnavailable:
+            usage_entries = await walk_billing_usage_legacy(
+                client, start_str, end_str, sort_order='desc'
+            )
+            billing_source = 'billing/usage'
+        logger.info(f"Analytics /models fetched {len(usage_entries)} billing entries for last {days} day(s) via {billing_source}")
         
         model_data = process_usage_data(usage_entries)
         
@@ -388,9 +426,10 @@ async def get_model_analytics(
                 total_tokens=0,
                 total_cost=0.0,
                 period_days=days,
-                recommendations=[]
+                recommendations=[],
+                source=billing_source,
             )
-        
+
         model_analytics = {}
         for model_name, mdata in model_data.items():
             model_analytics[model_name] = ModelAnalytics(
@@ -399,16 +438,19 @@ async def get_model_analytics(
                 prompt_tokens=mdata['prompt_tokens'],
                 completion_tokens=mdata['completion_tokens'],
                 cost=mdata['cost'],
+                cost_usd=mdata.get('cost_usd', 0.0),
+                cost_diem=mdata.get('cost_diem', 0.0),
+                cost_bundled_credits=mdata.get('cost_bundled_credits', 0.0),
                 avg_response_time_ms=mdata['avg_response_time_ms'],
                 model_type=mdata.get('model_type', 'other'),
             )
-        
+
         total_requests = sum(d['requests'] for d in model_data.values())
         total_tokens = sum(d['tokens'] for d in model_data.values())
         total_cost = sum(d['cost'] for d in model_data.values())
-        
+
         recommendations = generate_recommendations(model_data)
-        
+
         return AnalyticsResponse(
             model_usage=model_analytics,
             total_requests=total_requests,
@@ -416,10 +458,28 @@ async def get_model_analytics(
             total_cost=total_cost,
             period_days=days,
             recommendations=[ModelRecommendation(**r) for r in recommendations],
-            source='billing/usage',
+            source=billing_source,
         )
 
-    except Exception as e:
+    except HTTPException:
+        raise
+    except BillingUsageDeprecated as exc:
+        logger.info("Legacy /billing/usage 410 in model analytics: %s", exc)
+        raise HTTPException(
+            status_code=410,
+            detail=(
+                "/billing/usage is no longer available for this account. "
+                "Use /billing/usage-history."
+            ),
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        detail = str(exc)
+        if exc.response is not None:
+            body = (exc.response.text or "")[:200]
+            detail = f"Venice API returned {exc.response.status_code}: {body}".strip()
+        logger.warning("Upstream Venice API error in model analytics: %s", detail)
+        raise HTTPException(status_code=502, detail=f"Venice API error: {detail}") from exc
+    except Exception:
         logger.exception("Failed to fetch model analytics")
         raise HTTPException(status_code=500, detail="Failed to fetch model analytics")
 
@@ -441,7 +501,7 @@ async def get_daily_analytics(
         end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=days)
 
-        analytics = await _fetch_usage_analytics(client, start_date, end_date)
+        analytics = await fetch_usage_analytics_optional(client, start_date, end_date)
         if analytics:
             logger.info("Analytics /daily using /billing/usage-analytics")
             daily_usage = []
@@ -475,29 +535,19 @@ async def get_daily_analytics(
                 source='billing/usage-analytics',
             )
 
-        usage_entries = []
-        page = 1
-        max_pages = settings.API_MAX_PAGES
-        while page <= max_pages:
-            params = {
-                'startDate': start_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-                'endDate': end_date.strftime('%Y-%m-%dT%H:%M:%S.000Z'),
-                'limit': settings.API_PAGE_SIZE,
-                'sortOrder': 'asc',
-                'page': page,
-            }
-            response = await client.get('/billing/usage', params=params)
-            if response.status_code >= 400:
-                response.raise_for_status()
-            data = response.json()
-            page_entries = data.get('data', [])
-            usage_entries.extend(page_entries)
-            pagination = data.get('pagination', {})
-            total_pages = int(pagination.get('totalPages', response.headers.get('x-pagination-total-pages', 1)))
-            if page >= total_pages:
-                break
-            page += 1
-        logger.info(f"Analytics /daily fetched {len(usage_entries)} billing entries across {page} page(s)")
+        billing_source = 'billing/usage-history'
+        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        try:
+            usage_entries = await walk_billing_usage_history(
+                client, start_str, end_str
+            )
+        except UsageHistoryUnavailable:
+            usage_entries = await walk_billing_usage_legacy(
+                client, start_str, end_str, sort_order='asc'
+            )
+            billing_source = 'billing/usage'
+        logger.info(f"Analytics /daily fetched {len(usage_entries)} billing entries via {billing_source}")
         
         daily_data: Dict[str, Dict] = {}
         request_tracker: Dict[str, set] = {}
@@ -524,32 +574,35 @@ async def get_daily_analytics(
                     'cost': 0.0,
                     'cost_usd': 0.0,
                     'cost_diem': 0.0,
+                    'cost_bundled_credits': 0.0,
                 }
                 request_tracker[date_key] = set()
-            
+
             request_id = None
             if isinstance(inference, dict):
                 request_id = inference.get('requestId')
-            
+
             date_request_key = f"{date_key}-{request_id}" if request_id else None
             if date_request_key and date_request_key not in request_tracker[date_key]:
                 request_tracker[date_key].add(date_request_key)
                 daily_data[date_key]['requests'] += 1
             elif not request_id:
                 daily_data[date_key]['requests'] += 1
-            
+
             if isinstance(inference, dict):
                 prompt_tokens = inference.get('promptTokens') or 0
                 completion_tokens = inference.get('completionTokens') or 0
                 daily_data[date_key]['tokens'] += prompt_tokens + completion_tokens
-            
+
             # BUG-05: separate by currency; do not sum every numeric field.
             daily_data[date_key]['cost'] += amount
             if currency == 'USD':
                 daily_data[date_key]['cost_usd'] += amount
             elif currency == 'DIEM':
                 daily_data[date_key]['cost_diem'] += amount
-        
+            elif currency in ('BUNDLED_CREDITS', 'VCU'):
+                daily_data[date_key]['cost_bundled_credits'] += amount
+
         daily_usage = [
             DailyUsage(
                 date=date,
@@ -558,16 +611,35 @@ async def get_daily_analytics(
                 cost=data['cost'],
                 cost_usd=data.get('cost_usd', 0.0),
                 cost_diem=data.get('cost_diem', 0.0),
+                cost_bundled_credits=data.get('cost_bundled_credits', 0.0),
             )
             for date, data in sorted(daily_data.items())
         ]
-        
+
         return DailyAnalyticsResponse(
             daily_usage=daily_usage,
             period_days=days,
-            source='billing/usage',
+            source=billing_source,
         )
 
-    except Exception as e:
+    except HTTPException:
+        raise
+    except BillingUsageDeprecated as exc:
+        logger.info("Legacy /billing/usage 410 in daily analytics: %s", exc)
+        raise HTTPException(
+            status_code=410,
+            detail=(
+                "/billing/usage is no longer available for this account. "
+                "Use /billing/usage-history."
+            ),
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        detail = str(exc)
+        if exc.response is not None:
+            body = (exc.response.text or "")[:200]
+            detail = f"Venice API returned {exc.response.status_code}: {body}".strip()
+        logger.warning("Upstream Venice API error in daily analytics: %s", detail)
+        raise HTTPException(status_code=502, detail=f"Venice API error: {detail}") from exc
+    except Exception:
         logger.exception("Failed to fetch daily analytics")
         raise HTTPException(status_code=500, detail="Failed to fetch daily analytics")
