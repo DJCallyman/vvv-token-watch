@@ -2,7 +2,7 @@
 # Pin to linux/amd64 so Next.js SWC native binaries work correctly even when
 # building for linux/arm64 targets via QEMU. The build output is plain JS/CSS
 # and is platform-independent.
-FROM node:20-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:20-alpine AS frontend-builder
 WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci
