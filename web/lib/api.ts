@@ -88,10 +88,81 @@ export interface APIKeyUsage {
   usd_usage: number
   created_at: string
   is_active: boolean
+  last_used_at?: string | null
+  api_key_type?: 'INFERENCE' | 'ADMIN' | string | null
+  limit_period?: 'EPOCH' | 'MONTH' | 'LIFETIME' | string | null
+  expires_at?: string | null
+  last6_chars?: string | null
+  consumption_limits_usd?: number | null
+  consumption_limits_diem?: number | null
+  current_period_usage_usd?: string | null
+  current_period_usage_diem?: string | null
 }
 
 export interface UsageKeysResponse {
   keys: APIKeyUsage[]
+}
+
+// ---------------------------------------------------------------------------
+// API key CRUD (create / edit / revoke)
+// ---------------------------------------------------------------------------
+
+export type ApiKeyType = 'INFERENCE' | 'ADMIN'
+export type LimitPeriod = 'EPOCH' | 'MONTH' | 'LIFETIME'
+
+export interface ConsumptionLimitInput {
+  usd?: number | null
+  diem?: number | null
+}
+
+export interface ApiKeyCreatePayload {
+  apiKeyType: ApiKeyType
+  description: string
+  consumptionLimit?: ConsumptionLimitInput | null
+  limitPeriod?: LimitPeriod | null
+  expiresAt?: string | null
+}
+
+export interface ApiKeyUpdatePayload {
+  id: string
+  description?: string | null
+  consumptionLimit?: ConsumptionLimitInput | null
+  limitPeriod?: LimitPeriod | null
+  expiresAt?: string | null
+}
+
+export interface ApiKeyCreatedSecret {
+  apiKey: string
+  id: string
+  apiKeyType: ApiKeyType
+  description?: string
+  limitPeriod?: LimitPeriod
+  expiresAt?: string | null
+}
+
+export interface ApiKeyCreateResponse {
+  data: ApiKeyCreatedSecret
+  success: boolean
+}
+
+export interface ApiKeyDeleteResponse {
+  success: boolean
+  id: string
+}
+
+/** Shape of the Venice `/api_keys/{id}` detail endpoint. */
+export interface ApiKeyDetail {
+  id: string
+  apiKeyType: ApiKeyType
+  description?: string
+  consumptionLimits?: ConsumptionLimitInput
+  limitPeriod?: LimitPeriod
+  createdAt?: string | null
+  expiresAt?: string | null
+  last6Chars?: string
+  lastUsedAt?: string | null
+  usage?: { trailingSevenDays: { usd: string; diem: string } }
+  currentPeriodUsage?: { usd: string; diem: string }
 }
 
 export interface PricesData {
@@ -144,6 +215,28 @@ export interface ModelsResponse {
   count: number
   types: string[]
 }
+
+/**
+ * Response from `GET /models/traits`. Venice returns a map of
+ * trait name → recommended model id inside ``data``; the panel uses
+ * this to surface Venice-curated picks next to the user-facing filters.
+ */
+export interface ModelTraitsResponse {
+  data: Record<string, string>
+  object: 'list'
+  type: string
+}
+
+export type TraitModelType =
+  | 'text'
+  | 'image'
+  | 'video'
+  | 'tts'
+  | 'asr'
+  | 'embedding'
+  | 'upscale'
+  | 'inpaint'
+  | 'music'
 
 // ---------------------------------------------------------------------------
 // Benchmark types
@@ -304,6 +397,65 @@ export interface BenchmarkJobStatus {
 }
 
 // ---------------------------------------------------------------------------
+// Venice Characters (preview API)
+// ---------------------------------------------------------------------------
+
+export interface CharacterStats {
+  averageRating: number
+  imports: number
+  ratingCount: number
+  ratingSum: number
+  userRating: number | null
+}
+
+export interface Character {
+  id: string
+  name: string
+  slug: string
+  description: string | null
+  tags: string[]
+  modelId: string
+  photoUrl: string | null
+  shareUrl: string | null
+  adult: boolean
+  featured: boolean
+  webEnabled: boolean
+  author: string
+  createdAt: string
+  updatedAt: string
+  stats: CharacterStats
+}
+
+export interface CharactersResponse {
+  data: Character[]
+  object: 'list'
+}
+
+export type CharacterSortBy =
+  | 'featured'
+  | 'highestRating'
+  | 'highlyRated'
+  | 'highlyRatedAndRecent'
+  | 'imports'
+  | 'mostRecent'
+  | 'ratingCount'
+
+export type CharacterSortOrder = 'asc' | 'desc'
+
+export interface GetCharactersParams {
+  search?: string
+  tags?: string[]
+  modelId?: string[]
+  isAdult?: 'true' | 'false'
+  isPro?: 'true' | 'false'
+  isWebEnabled?: 'true' | 'false'
+  limit?: number
+  offset?: number
+  sortBy?: CharacterSortBy
+  sortOrder?: CharacterSortOrder
+}
+
+// ---------------------------------------------------------------------------
 // History / on-chain / alerts types
 // ---------------------------------------------------------------------------
 
@@ -416,6 +568,33 @@ export const api = {
     return fetchAPI<UsageKeysResponse>('/api/usage/keys')
   },
 
+  async createAPIKey(payload: ApiKeyCreatePayload): Promise<ApiKeyCreateResponse> {
+    return fetchAPI<ApiKeyCreateResponse>('/api/keys', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  async updateAPIKey(payload: ApiKeyUpdatePayload): Promise<unknown> {
+    return fetchAPI<unknown>('/api/keys', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  async deleteAPIKey(id: string): Promise<ApiKeyDeleteResponse> {
+    return fetchAPI<ApiKeyDeleteResponse>(
+      `/api/keys?id=${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    )
+  },
+
+  async getAPIKeyDetail(id: string): Promise<{ data: ApiKeyDetail }> {
+    return fetchAPI<{ data: ApiKeyDetail }>(
+      `/api/keys/${encodeURIComponent(id)}`,
+    )
+  },
+
   async getPrices(): Promise<PricesData> {
     return fetchAPI<PricesData>('/api/prices')
   },
@@ -424,8 +603,8 @@ export const api = {
     return fetchAPI<ModelsResponse>('/api/models')
   },
 
-  async getModelTraits(): Promise<Record<string, unknown>> {
-    return fetchAPI<Record<string, unknown>>('/api/models/traits')
+  async getModelTraits(modelType: TraitModelType = 'text'): Promise<ModelTraitsResponse> {
+    return fetchAPI<ModelTraitsResponse>(`/api/models/traits?type=${modelType}`)
   },
 
   async getHealth(): Promise<{ status: string; timestamp: string }> {
@@ -549,6 +728,34 @@ export const api = {
     return fetchAPI<{ image_b64: string; prompt: string }>(
       `/api/benchmark/infographic/${encodeURIComponent(runId)}`,
       { method: 'POST' },
+    )
+  },
+
+  // Character endpoints
+  async getCharacters(params: GetCharactersParams = {}): Promise<CharactersResponse> {
+    const search = new URLSearchParams()
+    if (params.search) search.set('search', params.search)
+    if (params.limit != null) search.set('limit', String(params.limit))
+    if (params.offset != null) search.set('offset', String(params.offset))
+    if (params.sortBy) search.set('sortBy', params.sortBy)
+    if (params.sortOrder) search.set('sortOrder', params.sortOrder)
+    if (params.isAdult) search.set('isAdult', params.isAdult)
+    if (params.isPro) search.set('isPro', params.isPro)
+    if (params.isWebEnabled) search.set('isWebEnabled', params.isWebEnabled)
+    if (params.tags?.length) {
+      params.tags.forEach((t) => search.append('tags', t))
+    }
+    if (params.modelId?.length) {
+      params.modelId.forEach((m) => search.append('modelId', m))
+    }
+    const qs = search.toString()
+    const path = qs ? `/api/characters?${qs}` : '/api/characters'
+    return fetchAPI<CharactersResponse>(path)
+  },
+
+  async getCharacter(slug: string): Promise<{ data: Character; object: 'character' }> {
+    return fetchAPI<{ data: Character; object: 'character' }>(
+      `/api/characters/${encodeURIComponent(slug)}`,
     )
   },
 }

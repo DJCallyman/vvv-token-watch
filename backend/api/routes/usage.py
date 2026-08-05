@@ -97,7 +97,15 @@ async def get_api_keys_usage(
                     "diem_usage": key.usage.diem,
                     "usd_usage": key.usage.usd,
                     "created_at": key.created_at,
-                    "is_active": key.is_active
+                    "is_active": key.is_active,
+                    "api_key_type": key.api_key_type,
+                    "limit_period": key.limit_period,
+                    "expires_at": key.expires_at,
+                    "last6_chars": key.last6_chars,
+                    "consumption_limits_usd": key.consumption_limits_usd,
+                    "consumption_limits_diem": key.consumption_limits_diem,
+                    "current_period_usage_usd": key.current_period_usage_usd,
+                    "current_period_usage_diem": key.current_period_usage_diem,
                 }
                 for key in keys_usage
             ]
