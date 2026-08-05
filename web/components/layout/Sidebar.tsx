@@ -12,12 +12,16 @@ import {
   FlaskConical,
   Blocks,
   Bell,
+  Key,
+  Drama,
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Models', href: '/models', icon: Cpu },
   { name: 'Usage', href: '/usage', icon: BarChart3 },
+  { name: 'API Keys', href: '/api-keys', icon: Key },
+  { name: 'Characters', href: '/characters', icon: Drama },
   { name: 'Balance', href: '/balance', icon: Wallet },
   { name: 'Prices', href: '/prices', icon: DollarSign },
   { name: 'On-Chain', href: '/onchain', icon: Blocks },

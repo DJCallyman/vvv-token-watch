@@ -7,9 +7,11 @@ import { ModelCard } from './ModelCard'
 import { ModelsComparisonTable } from './ModelsComparisonTable'
 import { ColumnSelector } from './ColumnSelector'
 import { ModelAnalytics } from './ModelAnalytics'
+import { TraitsPanel } from './TraitsPanel'
 import { Search, Filter, X, LayoutGrid, List, Table, ChevronDown, ChevronUp, DollarSign, BarChart3, ListX } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ModelType, loadColumnPreferences } from './columnConfig'
+import type { TraitModelType } from '@/lib/api'
 
 type ViewMode = 'grid' | 'list' | 'table'
 type SortMode = 'name' | 'type' | 'context'
@@ -20,7 +22,14 @@ interface CapabilityFilter {
   functions: boolean
   web_search: boolean
   reasoning: boolean
+  audio_input: boolean
+  video_input: boolean
+  response_schema: boolean
+  logprobs: boolean
+  optimized_for_code: boolean
 }
+
+type SupportedTraitModelType = Exclude<TraitModelType, 'music' | 'all'>
 
 export function ModelsView() {
   const { data, isLoading, isError } = useModels()
@@ -36,8 +45,14 @@ export function ModelsView() {
     functions: false,
     web_search: false,
     reasoning: false,
+    audio_input: false,
+    video_input: false,
+    response_schema: false,
+    logprobs: false,
+    optimized_for_code: false,
   })
   const [maxPriceFilter, setMaxPriceFilter] = useState<string>('')
+  const [pickedModelId, setPickedModelId] = useState<string | null>(null)
   const [columnSelectorOpen, setColumnSelectorOpen] = useState(false)
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set())
 
@@ -60,6 +75,11 @@ export function ModelsView() {
 
   const filteredModels = useMemo(() => {
     let result = [...models]
+
+    if (pickedModelId) {
+      result = result.filter((m) => m.id === pickedModelId)
+      return result
+    }
 
     if (search) {
       const searchLower = search.toLowerCase()
@@ -115,6 +135,11 @@ export function ModelsView() {
             cap === 'vision' ? ['supportsVision', 'vision'] :
             cap === 'functions' ? ['supportsFunctionCalling', 'function_calling', 'functions'] :
             cap === 'reasoning' ? ['supportsReasoning', 'reasoning'] :
+            cap === 'audio_input' ? ['supportsAudioInput', 'audio_input'] :
+            cap === 'video_input' ? ['supportsVideoInput', 'video_input'] :
+            cap === 'response_schema' ? ['supportsResponseSchema', 'response_schema'] :
+            cap === 'logprobs' ? ['supportsLogProbs', 'logprobs'] :
+            cap === 'optimized_for_code' ? ['optimizedForCode', 'optimized_for_code'] :
             [cap]
           return aliases.some((key) => Boolean(capabilities[key]))
         })
@@ -169,25 +194,54 @@ export function ModelsView() {
     })
 
     return result
-  }, [models, search, typeFilter, traitFilter, sortMode, capabilityFilter, maxPriceFilter])
+  }, [models, search, typeFilter, traitFilter, sortMode, capabilityFilter, maxPriceFilter, pickedModelId])
 
-  const activeFilters = (typeFilter !== 'all' ? 1 : 0) + 
-    (traitFilter !== 'all' ? 1 : 0) + 
+  const activeFilters = (typeFilter !== 'all' ? 1 : 0) +
+    (traitFilter !== 'all' ? 1 : 0) +
     (search ? 1 : 0) +
     (Object.values(capabilityFilter).some(Boolean) ? 1 : 0) +
-    (maxPriceFilter ? 1 : 0)
+    (maxPriceFilter ? 1 : 0) +
+    (pickedModelId ? 1 : 0)
 
   const clearFilters = () => {
     setSearch('')
     setTypeFilter('all')
     setTraitFilter('all')
-    setCapabilityFilter({ vision: false, functions: false, web_search: false, reasoning: false })
+    setCapabilityFilter({
+      vision: false,
+      functions: false,
+      web_search: false,
+      reasoning: false,
+      audio_input: false,
+      video_input: false,
+      response_schema: false,
+      logprobs: false,
+      optimized_for_code: false,
+    })
     setMaxPriceFilter('')
+    setPickedModelId(null)
   }
 
   const toggleCapability = (key: keyof CapabilityFilter) => {
     setCapabilityFilter(prev => ({ ...prev, [key]: !prev[key] }))
   }
+
+  // Pick a sensible TraitsPanel model type matching the active type filter
+  // (or default to "text" when no filter is applied).
+  const traitsModelType: TraitModelType =
+    typeFilter !== 'all' &&
+    [
+      'text',
+      'image',
+      'video',
+      'tts',
+      'asr',
+      'embedding',
+      'upscale',
+      'inpaint',
+    ].includes(typeFilter)
+      ? (typeFilter as SupportedTraitModelType)
+      : 'text'
 
   const modelTypeForTable: ModelType = useMemo(() => {
     if (typeFilter !== 'all' && ['text', 'image', 'video', 'tts', 'asr', 'embedding', 'upscale', 'inpaint'].includes(typeFilter)) {
@@ -281,6 +335,11 @@ export function ModelsView() {
         <ModelAnalytics />
       ) : (
         <div className="space-y-4">
+          <TraitsPanel
+            modelType={traitsModelType}
+            onPickModel={(id) => setPickedModelId((prev) => (prev === id ? null : id))}
+            selectedModelId={pickedModelId}
+          />
           <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -358,25 +417,45 @@ export function ModelsView() {
             <div>
               <p className="text-xs font-medium text-muted-foreground mb-2">Capabilities</p>
               <div className="flex flex-wrap gap-2">
-                {(['vision', 'functions', 'web_search', 'reasoning'] as const).map((cap) => (
-                  <label
-                    key={cap}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md cursor-pointer border transition-colors",
-                      capabilityFilter[cap]
-                        ? "bg-primary/10 border-primary text-primary"
-                        : "bg-background border-input hover:bg-muted"
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={capabilityFilter[cap]}
-                      onChange={() => toggleCapability(cap)}
-                      className="sr-only"
-                    />
-                    {cap === 'web_search' ? 'Web Search' : cap.charAt(0).toUpperCase() + cap.slice(1)}
-                  </label>
-                ))}
+                {([
+                  'vision',
+                  'functions',
+                  'web_search',
+                  'reasoning',
+                  'audio_input',
+                  'video_input',
+                  'response_schema',
+                  'logprobs',
+                  'optimized_for_code',
+                ] as const).map((cap) => {
+                  const label =
+                    cap === 'web_search' ? 'Web Search' :
+                    cap === 'audio_input' ? 'Audio In' :
+                    cap === 'video_input' ? 'Video In' :
+                    cap === 'response_schema' ? 'JSON' :
+                    cap === 'logprobs' ? 'LogProbs' :
+                    cap === 'optimized_for_code' ? 'Code Opt' :
+                    cap.charAt(0).toUpperCase() + cap.slice(1)
+                  return (
+                    <label
+                      key={cap}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md cursor-pointer border transition-colors",
+                        capabilityFilter[cap]
+                          ? "bg-primary/10 border-primary text-primary"
+                          : "bg-background border-input hover:bg-muted"
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={capabilityFilter[cap]}
+                        onChange={() => toggleCapability(cap)}
+                        className="sr-only"
+                      />
+                      {label}
+                    </label>
+                  )
+                })}
               </div>
             </div>
 
@@ -397,7 +476,17 @@ export function ModelsView() {
             {(Object.values(capabilityFilter).some(Boolean) || maxPriceFilter) && (
               <button
                 onClick={() => {
-                  setCapabilityFilter({ vision: false, functions: false, web_search: false, reasoning: false })
+                  setCapabilityFilter({
+                    vision: false,
+                    functions: false,
+                    web_search: false,
+                    reasoning: false,
+                    audio_input: false,
+                    video_input: false,
+                    response_schema: false,
+                    logprobs: false,
+                    optimized_for_code: false,
+                  })
                   setMaxPriceFilter('')
                 }}
                 className="self-end text-xs text-primary hover:underline"

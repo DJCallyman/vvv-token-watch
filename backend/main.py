@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import get_settings
 from backend.database import init_db, engine
 from backend.limiter import limiter
-from backend.api.routes import usage, balance, prices, models, health, analytics, benchmark, onchain, alerts
+from backend.api.routes import usage, balance, prices, models, health, analytics, benchmark, onchain, alerts, api_keys, characters
 from backend.api.deps import verify_auth
 
 settings = get_settings()
@@ -120,6 +120,8 @@ app.include_router(usage.router, prefix="/api/usage", tags=["usage"], dependenci
 app.include_router(balance.router, prefix="/api", tags=["balance"], dependencies=[Depends(verify_auth)])
 app.include_router(prices.router, prefix="/api", tags=["prices"], dependencies=[Depends(verify_auth)])
 app.include_router(models.router, prefix="/api", tags=["models"], dependencies=[Depends(verify_auth)])
+app.include_router(api_keys.router, prefix="/api", tags=["api-keys"], dependencies=[Depends(verify_auth)])
+app.include_router(characters.router, prefix="/api", tags=["characters"], dependencies=[Depends(verify_auth)])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"], dependencies=[Depends(verify_auth)])
 app.include_router(benchmark.router, prefix="/api", tags=["benchmark"], dependencies=[Depends(verify_auth)])
 app.include_router(onchain.router, prefix="/api", tags=["onchain"], dependencies=[Depends(verify_auth)])

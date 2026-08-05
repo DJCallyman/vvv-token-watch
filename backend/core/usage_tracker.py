@@ -65,6 +65,14 @@ class APIKeyUsage:
     created_at: str
     is_active: bool
     last_used_at: Optional[str] = None
+    api_key_type: Optional[str] = None
+    consumption_limits_usd: Optional[float] = None
+    consumption_limits_diem: Optional[float] = None
+    limit_period: Optional[str] = None
+    expires_at: Optional[str] = None
+    last6_chars: Optional[str] = None
+    current_period_usage_usd: Optional[str] = None
+    current_period_usage_diem: Optional[str] = None
 
 
 @dataclass
@@ -255,6 +263,8 @@ class UsageTracker:
                     diem=float(usage_data.get("diem", 0)),
                     usd=float(usage_data.get("usd", 0)),
                 )
+                consumption_limits = key_data.get("consumptionLimits") or {}
+                current_period = key_data.get("currentPeriodUsage") or {}
                 api_keys.append(
                     APIKeyUsage(
                         id=key_id,
@@ -263,6 +273,14 @@ class UsageTracker:
                         created_at=key_data.get("createdAt", "2025-01-01T00:00:00Z"),
                         is_active=key_data.get("isActive", True),
                         last_used_at=key_data.get("lastUsedAt"),
+                        api_key_type=key_data.get("apiKeyType"),
+                        consumption_limits_usd=consumption_limits.get("usd"),
+                        consumption_limits_diem=consumption_limits.get("diem"),
+                        limit_period=key_data.get("limitPeriod"),
+                        expires_at=key_data.get("expiresAt"),
+                        last6_chars=key_data.get("last6Chars"),
+                        current_period_usage_usd=current_period.get("usd"),
+                        current_period_usage_diem=current_period.get("diem"),
                     )
                 )
             return api_keys

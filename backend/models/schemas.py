@@ -120,3 +120,48 @@ class BenchmarkEstimateResponse(BaseModel):
     estimated_usd: float
     skipped_tests_note: Optional[str] = None
     note: str = "Estimate uses rough token counts; actual cost may vary."
+
+
+# ---------------------------------------------------------------------------
+# API Key management schemas
+# ---------------------------------------------------------------------------
+
+LimitPeriod = Literal["EPOCH", "MONTH", "LIFETIME"]
+ApiKeyType = Literal["INFERENCE", "ADMIN"]
+
+
+class ConsumptionLimit(BaseModel):
+    """Per-period consumption cap applied to an API key.
+
+    Mirrors the Venice API's ``consumptionLimit`` (singular) in requests. The
+    upstream pairs this with ``limitPeriod`` to define the reset window.
+    ``vcu`` (legacy bundled credits) is intentionally omitted from the
+    surfaced request shape — Venice is deprecating VCU in favor of Diem.
+    """
+
+    usd: Optional[float] = Field(default=None, ge=0, le=9999999999)
+    diem: Optional[float] = Field(default=None, ge=0, le=9999999999)
+
+
+class ApiKeyCreate(BaseModel):
+    """Request body for ``POST /api/keys`` (proxied to Venice ``POST /api_keys``)."""
+
+    apiKeyType: ApiKeyType
+    description: str = Field(..., min_length=1, max_length=64)
+    consumptionLimit: Optional[ConsumptionLimit] = None
+    limitPeriod: Optional[LimitPeriod] = None
+    expiresAt: Optional[str] = None
+
+
+class ApiKeyUpdate(BaseModel):
+    """Request body for ``PATCH /api/keys`` (proxied to Venice ``PATCH /api_keys``).
+
+    Note: Venice places the key ID in the request body, NOT the URL path.
+    Only fields explicitly set will be forwarded.
+    """
+
+    id: str = Field(..., min_length=1)
+    description: Optional[str] = Field(default=None, max_length=64)
+    consumptionLimit: Optional[ConsumptionLimit] = None
+    limitPeriod: Optional[LimitPeriod] = None
+    expiresAt: Optional[str] = None

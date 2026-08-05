@@ -1,0 +1,182 @@
+'use client'
+
+import { useEffect } from 'react'
+import { X, Star, Users, ExternalLink, Cpu } from 'lucide-react'
+import type { Character } from '@/lib/api'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
+
+export interface CharacterDetailDrawerProps {
+  character: Character | null
+  onClose: () => void
+}
+
+export function CharacterDetailDrawer({ character, onClose }: CharacterDetailDrawerProps) {
+  useEffect(() => {
+    if (!character) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [character, onClose])
+
+  if (!character) return null
+
+  const {
+    name,
+    slug,
+    description,
+    tags,
+    photoUrl,
+    modelId,
+    shareUrl,
+    adult,
+    featured,
+    webEnabled,
+    author,
+    createdAt,
+    updatedAt,
+    stats,
+  } = character
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="character-drawer-title"
+      className="fixed inset-0 z-50 flex justify-end bg-background/80 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg h-full overflow-y-auto bg-card border-l border-border shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 backdrop-blur-sm p-4">
+          <h2 id="character-drawer-title" className="text-lg font-semibold truncate">
+            {name}
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close drawer"
+            className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {photoUrl && (
+          <div className="aspect-square w-full overflow-hidden bg-muted">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={photoUrl}
+              alt={name}
+              className="h-full w-full object-cover"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        )}
+
+        <div className="space-y-6 p-4">
+          <div className="flex flex-wrap gap-2">
+            {adult && <Badge variant="destructive">Adult (18+)</Badge>}
+            {featured && <Badge>Featured</Badge>}
+            <Badge variant={webEnabled ? 'success' : 'secondary'}>
+              {webEnabled ? 'Web enabled' : 'Web disabled'}
+            </Badge>
+          </div>
+
+          <section>
+            <h3 className="text-xs font-medium text-muted-foreground mb-1">Description</h3>
+            <p className="text-sm leading-relaxed">
+              {description ?? <span className="italic text-muted-foreground">No description.</span>}
+            </p>
+          </section>
+
+          {tags.length > 0 && (
+            <section>
+              <h3 className="text-xs font-medium text-muted-foreground mb-2">Tags</h3>
+              <div className="flex flex-wrap gap-1">
+                {tags.map((t) => (
+                  <Badge key={t} variant="outline">
+                    #{t}
+                  </Badge>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <section className="grid grid-cols-3 gap-3 rounded-lg border border-border p-3">
+            <Stat label="Avg rating" value={stats.averageRating.toFixed(1)} icon={Star} />
+            <Stat label="Imports" value={String(stats.imports)} icon={Users} />
+            <Stat label="Ratings" value={String(stats.ratingCount)} icon={Star} />
+          </section>
+
+          <section>
+            <h3 className="text-xs font-medium text-muted-foreground mb-1">Model</h3>
+            <div className="flex items-center gap-2 text-sm">
+              <Cpu className="w-4 h-4 text-muted-foreground" />
+              <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{modelId}</code>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-xs font-medium text-muted-foreground mb-1">Slug</h3>
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/{slug}</code>
+          </section>
+
+          <section>
+            <h3 className="text-xs font-medium text-muted-foreground mb-1">Author</h3>
+            <p className="text-sm font-mono">{author}</p>
+          </section>
+
+          <section className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
+            <div>
+              <span className="font-medium text-foreground">Created:</span>{' '}
+              {new Date(createdAt).toLocaleDateString()}
+            </div>
+            <div>
+              <span className="font-medium text-foreground">Updated:</span>{' '}
+              {new Date(updatedAt).toLocaleDateString()}
+            </div>
+          </section>
+
+          {shareUrl && (
+            <a
+              href={shareUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent',
+              )}
+            >
+              <ExternalLink className="w-4 h-4" />
+              Open on Venice
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Stat({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string
+  value: string
+  icon: React.ComponentType<{ className?: string }>
+}) {
+  return (
+    <div className="flex flex-col items-start">
+      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Icon className="w-3 h-3" />
+        {label}
+      </div>
+      <span className="text-lg font-semibold leading-none">{value}</span>
+    </div>
+  )
+}

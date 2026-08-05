@@ -1,7 +1,7 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, type GetCharactersParams, type TraitModelType } from '@/lib/api'
 
 // ---------------------------------------------------------------------------
 // Benchmark hooks
@@ -73,6 +73,63 @@ export function useAPIKeysUsage() {
   })
 }
 
+export function useAPIKeyDetail(id: string | null) {
+  return useQuery({
+    queryKey: ['apiKeyDetail', id],
+    queryFn: () => api.getAPIKeyDetail(id!),
+    enabled: !!id,
+    staleTime: 30000,
+  })
+}
+
+export function useCreateAPIKey() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.createAPIKey,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['apiKeysUsage'] })
+    },
+  })
+}
+
+export function useUpdateAPIKey() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.updateAPIKey,
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['apiKeysUsage'] })
+      queryClient.invalidateQueries({ queryKey: ['apiKeyDetail', variables.id] })
+    },
+  })
+}
+
+export function useDeleteAPIKey() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.deleteAPIKey(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['apiKeysUsage'] })
+    },
+  })
+}
+
+export function useCharacters(params: GetCharactersParams = {}) {
+  return useQuery({
+    queryKey: ['characters', params],
+    queryFn: () => api.getCharacters(params),
+    staleTime: 60_000,
+  })
+}
+
+export function useCharacter(slug: string | null) {
+  return useQuery({
+    queryKey: ['character', slug],
+    queryFn: () => api.getCharacter(slug!),
+    enabled: !!slug,
+    staleTime: 60_000,
+  })
+}
+
 export function usePrices() {
   return useQuery({
     queryKey: ['prices'],
@@ -97,10 +154,10 @@ export function useModel(modelId: string) {
   })
 }
 
-export function useModelTraits() {
+export function useModelTraits(modelType: TraitModelType = 'text') {
   return useQuery({
-    queryKey: ['modelTraits'],
-    queryFn: api.getModelTraits,
+    queryKey: ['modelTraits', modelType],
+    queryFn: () => api.getModelTraits(modelType),
     staleTime: 5 * 60 * 1000,
   })
 }

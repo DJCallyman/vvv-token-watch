@@ -153,12 +153,21 @@ class VeniceAPIClient:
     ) -> httpx.Response:
         return await self._request("PUT", endpoint, json_body=data, timeout=timeout)
 
+    async def patch(
+        self,
+        endpoint: str,
+        data: Optional[Dict] = None,
+        timeout: float = 30.0,
+    ) -> httpx.Response:
+        return await self._request("PATCH", endpoint, json_body=data, timeout=timeout)
+
     async def delete(
         self,
         endpoint: str,
+        params: Optional[Dict] = None,
         timeout: float = 30.0,
     ) -> httpx.Response:
-        return await self._request("DELETE", endpoint, timeout=timeout)
+        return await self._request("DELETE", endpoint, params=params, timeout=timeout)
 
     async def get_json(
         self,
