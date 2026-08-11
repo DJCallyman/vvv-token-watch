@@ -30,13 +30,14 @@ const typeIcons: Record<string, string> = {
   embedding: '🔢',
   upscale: '📈',
   inpaint: '🎨',
+  music: '🎵',
 }
 
 function getModelType(model: Model): ModelType {
   const type = (model.type || model.model_type)?.toLowerCase()
   if (type === 'text' || type === 'image' || type === 'video' || 
       type === 'tts' || type === 'asr' || type === 'embedding' || 
-      type === 'upscale' || type === 'inpaint') {
+      type === 'upscale' || type === 'inpaint' || type === 'music') {
     return type as ModelType
   }
   return 'all'

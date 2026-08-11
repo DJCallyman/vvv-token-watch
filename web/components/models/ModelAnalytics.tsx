@@ -19,7 +19,7 @@ import {
   Legend,
 } from 'recharts'
 import { Activity, DollarSign, Clock, Zap, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react'
-import { cn, getPriorityStyles } from '@/lib/utils'
+import { cn, formatCurrency, formatNumber as formatFixedNumber, getPriorityStyles } from '@/lib/utils'
 
 const CHART_COLORS = [
   'hsl(var(--chart-1))',
@@ -38,6 +38,13 @@ const TYPE_ICONS = {
   efficiency: Zap,
   performance: Clock,
   cost: DollarSign,
+}
+
+const BREAKDOWN_LABELS: Record<string, string> = {
+  input: 'Input',
+  output: 'Output',
+  'cache-input': 'Cache read',
+  'cache-write': 'Cache write',
 }
 
 interface ModelAnalyticsProps {
@@ -104,7 +111,9 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
 
   const filteredTotalRequests = Object.values(filteredUsage).reduce((s, d) => s + (d.requests ?? 0), 0)
   const filteredTotalTokens = Object.values(filteredUsage).reduce((s, d) => s + d.tokens, 0)
-  const filteredTotalCost = Object.values(filteredUsage).reduce((s, d) => s + d.cost, 0)
+  const filteredTotalUsd = Object.values(filteredUsage).reduce((s, d) => s + (d.cost_usd ?? 0), 0)
+  const filteredTotalDiem = Object.values(filteredUsage).reduce((s, d) => s + (d.cost_diem ?? 0), 0)
+  const filteredTotalBundledCredits = Object.values(filteredUsage).reduce((s, d) => s + (d.cost_bundled_credits ?? 0), 0)
 
   const modelData = Object.entries(filteredUsage)
     .map(([name, data]) => ({
@@ -115,7 +124,9 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
       cost: data.cost,
       costUsd: data.cost_usd ?? 0,
       costDiem: data.cost_diem ?? 0,
+      costBundledCredits: data.cost_bundled_credits ?? 0,
       avgResponseTime: data.avg_response_time_ms ?? 0,
+      breakdown: data.breakdown ?? [],
     }))
     .sort((a, b) => b.cost - a.cost)
     .slice(0, 10)
@@ -124,6 +135,9 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
     ...m,
     color: CHART_COLORS[i % CHART_COLORS.length],
   }))
+  const chartCurrency = filteredTotalUsd > 0 ? 'USD' : 'DIEM'
+  const chartCostKey = filteredTotalUsd > 0 ? 'costUsd' : 'costDiem'
+  const hasBreakdowns = modelData.some((model) => model.breakdown.length > 0)
 
   const dailyChartData = dailyData?.daily_usage.map((d) => ({
     date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -132,15 +146,10 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
     cost: d.cost,
   })) || []
 
-  const formatNumber = (n: number) => {
+  const formatCompactNumber = (n: number) => {
     if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`
     if (n >= 1000) return `${(n / 1000).toFixed(1)}K`
     return n.toFixed(0)
-  }
-
-  const formatCost = (n: number) => {
-    if (n >= 1000) return `${(n / 1000).toFixed(2)}K`
-    return n.toFixed(4)
   }
 
   return (
@@ -181,7 +190,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
               <Activity className="w-4 h-4" />
               <span className="text-sm">Total Requests</span>
             </div>
-            <p className="text-2xl font-bold mt-1">{formatNumber(filteredTotalRequests)}</p>
+            <p className="text-2xl font-bold mt-1">{formatCompactNumber(filteredTotalRequests)}</p>
           </CardContent>
         </Card>
         <Card>
@@ -190,17 +199,23 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
               <TrendingUp className="w-4 h-4" />
               <span className="text-sm">Total Tokens</span>
             </div>
-            <p className="text-2xl font-bold mt-1">{formatNumber(filteredTotalTokens)}</p>
+            <p className="text-2xl font-bold mt-1">{formatCompactNumber(filteredTotalTokens)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="py-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <DollarSign className="w-4 h-4" />
-              <span className="text-sm">Total Cost</span>
+              <span className="text-sm">Cost Summary</span>
             </div>
-            <p className="text-2xl font-bold mt-1">{formatCost(filteredTotalCost)}</p>
-            <p className="text-[10px] text-muted-foreground">Mixed DIEM+USD (see breakdown below)</p>
+            <div className="mt-1 space-y-0.5">
+              <p className="text-2xl font-bold">{formatCurrency(filteredTotalUsd)}</p>
+              <p className="text-sm font-semibold">{formatFixedNumber(filteredTotalDiem, 4)} DIEM</p>
+              {filteredTotalBundledCredits > 0 && (
+                <p className="text-xs font-medium">{formatFixedNumber(filteredTotalBundledCredits, 4)} bundled credits</p>
+              )}
+            </div>
+            <p className="text-[10px] text-muted-foreground">Currencies kept separate</p>
           </CardContent>
         </Card>
         <Card>
@@ -224,7 +239,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={modelData} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis type="number" className="text-xs" tickFormatter={formatNumber} />
+                  <XAxis type="number" className="text-xs" tickFormatter={formatCompactNumber} />
                   <YAxis type="category" dataKey="name" className="text-xs" width={100} />
                   <Tooltip
                     contentStyle={{
@@ -233,7 +248,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                       borderRadius: '6px',
                     }}
                     formatter={(value: number, name: string) => [
-                      name === 'tokens' ? formatNumber(value) : value,
+                      name === 'tokens' ? formatCompactNumber(value) : value,
                       name,
                     ]}
                   />
@@ -246,7 +261,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Cost Distribution</CardTitle>
+            <CardTitle className="text-base">Cost Distribution ({chartCurrency})</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="h-96">
@@ -254,7 +269,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                 <PieChart>
                   <Pie
                     data={costBreakdown}
-                    dataKey="cost"
+                    dataKey={chartCostKey}
                     nameKey="name"
                     cx="70%"
                     cy="50%"
@@ -276,7 +291,11 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                           padding: '8px 12px',
                         }}>
                           <p className="text-sm font-medium">{entry.name}</p>
-                          <p className="text-sm text-muted-foreground">{formatCost(entry.value as number)} DIEM</p>
+                          <p className="text-sm text-muted-foreground">
+                            {chartCurrency === 'USD'
+                              ? formatCurrency(entry.value as number)
+                              : `${formatFixedNumber(entry.value as number, 4)} DIEM`}
+                          </p>
                         </div>
                       )
                     }}
@@ -308,7 +327,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
               <LineChart data={dailyChartData}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                 <XAxis dataKey="date" className="text-xs" />
-                <YAxis yAxisId="left" className="text-xs" tickFormatter={formatNumber} />
+                <YAxis yAxisId="left" className="text-xs" tickFormatter={formatCompactNumber} />
                 <YAxis yAxisId="right" orientation="right" className="text-xs" tickFormatter={(v) => `${v.toFixed(2)}`} />
                 <Tooltip
                   contentStyle={{
@@ -355,6 +374,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                   <th className="text-right py-2 px-3 font-medium">Requests</th>
                   <th className="text-right py-2 px-3 font-medium">Tokens</th>
                   <th className="text-right py-2 px-3 font-medium">Cost</th>
+                  {hasBreakdowns && <th className="text-left py-2 px-3 font-medium">Cost Breakdown</th>}
                   <th className="text-right py-2 px-3 font-medium">Avg Latency</th>
                 </tr>
               </thead>
@@ -364,9 +384,39 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                     <td className="py-2 px-3 font-medium" title={model.fullName}>
                       {model.name}
                     </td>
-                    <td className="text-right py-2 px-3">{formatNumber(model.requests)}</td>
-                    <td className="text-right py-2 px-3">{formatNumber(model.tokens)}</td>
-                    <td className="text-right py-2 px-3">{formatCost(model.cost)}</td>
+                    <td className="text-right py-2 px-3">{formatCompactNumber(model.requests)}</td>
+                    <td className="text-right py-2 px-3">{formatCompactNumber(model.tokens)}</td>
+                    <td className="text-right py-2 px-3">
+                      <div className="space-y-0.5">
+                        {model.costUsd > 0 && <div>{formatCurrency(model.costUsd)}</div>}
+                        {model.costDiem > 0 && <div>{formatFixedNumber(model.costDiem, 4)} DIEM</div>}
+                        {model.costBundledCredits > 0 && <div>{formatFixedNumber(model.costBundledCredits, 4)} bundled</div>}
+                        {model.costUsd <= 0 && model.costDiem <= 0 && model.costBundledCredits <= 0 && <div>—</div>}
+                      </div>
+                    </td>
+                    {hasBreakdowns && (
+                      <td className="py-2 px-3 text-xs text-muted-foreground">
+                        {model.breakdown.length > 0 ? (
+                          <div className="space-y-1">
+                            {model.breakdown.map((breakdown, breakdownIndex) => {
+                              const amounts = [
+                                breakdown.usd !== 0 ? formatCurrency(breakdown.usd) : null,
+                                breakdown.diem !== 0 ? `${formatFixedNumber(breakdown.diem, 4)} DIEM` : null,
+                                breakdown.units !== 0 ? `${formatCompactNumber(breakdown.units)} units` : null,
+                              ].filter(Boolean)
+                              return (
+                                <div key={`${breakdown.type}-${breakdownIndex}`}>
+                                  <span className="font-medium text-foreground">
+                                    {BREAKDOWN_LABELS[breakdown.type.toLowerCase()] || breakdown.type}
+                                  </span>
+                                  {amounts.length > 0 ? `: ${amounts.join(' · ')}` : ''}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ) : '—'}
+                      </td>
+                    )}
                     <td className="text-right py-2 px-3">
                       {model.avgResponseTime > 0
                         ? `${(model.avgResponseTime / 1000).toFixed(2)}s`

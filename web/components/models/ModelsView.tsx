@@ -244,14 +244,14 @@ export function ModelsView() {
       : 'text'
 
   const modelTypeForTable: ModelType = useMemo(() => {
-    if (typeFilter !== 'all' && ['text', 'image', 'video', 'tts', 'asr', 'embedding', 'upscale', 'inpaint'].includes(typeFilter)) {
+    if (typeFilter !== 'all' && ['text', 'image', 'video', 'tts', 'asr', 'embedding', 'upscale', 'inpaint', 'music'].includes(typeFilter)) {
       return typeFilter as ModelType
     }
     // If only one type is present in the filtered results, use it for table columns
     const resultTypes = new Set(filteredModels.map((m) => m.type || m.model_type).filter(Boolean) as string[])
     if (resultTypes.size === 1) {
       const onlyType = Array.from(resultTypes)[0]
-      if (['text', 'image', 'video', 'tts', 'asr', 'embedding', 'upscale', 'inpaint'].includes(onlyType)) {
+      if (['text', 'image', 'video', 'tts', 'asr', 'embedding', 'upscale', 'inpaint', 'music'].includes(onlyType)) {
         return onlyType as ModelType
       }
     }
@@ -609,6 +609,7 @@ function ModelListItem({ model }: { model: Model }) {
       case 'image':
         return 'bg-purple-500/10 text-purple-500 border-purple-500/20'
       case 'audio':
+      case 'music':
         return 'bg-orange-500/10 text-orange-500 border-orange-500/20'
       default:
         return 'bg-gray-500/10 text-gray-500 border-gray-500/20'

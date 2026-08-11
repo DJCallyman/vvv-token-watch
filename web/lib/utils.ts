@@ -6,12 +6,14 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(value: number, currency: string = 'USD'): string {
+  const roundedValue = Number(value.toFixed(2))
+
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,
-    maximumFractionDigits: 4,
-  }).format(value)
+    maximumFractionDigits: 2,
+  }).format(roundedValue === 0 ? 0 : roundedValue)
 }
 
 export function formatNumber(value: number, decimals: number = 2): string {
@@ -69,6 +71,7 @@ export function getTypeColor(type: string): string {
     text: 'bg-chart-1/10 text-chart-1 border-chart-1/20',
     image: 'bg-chart-5/10 text-chart-5 border-chart-5/20',
     audio: 'bg-chart-3/10 text-chart-3 border-chart-3/20',
+    music: 'bg-chart-4/10 text-chart-4 border-chart-4/20',
     video: 'bg-chart-2/10 text-chart-2 border-chart-2/20',
   }
   return typeMap[type?.toLowerCase()] || 'bg-muted text-muted-foreground border-muted'

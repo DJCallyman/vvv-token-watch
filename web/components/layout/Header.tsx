@@ -58,7 +58,7 @@ export function Header() {
             <div className="text-right hidden md:block">
               <p className="text-xs text-muted-foreground">DIEM Balance</p>
               <p className="font-semibold text-foreground">
-                {formatNumber(balance.diem, 2)}
+                {formatNumber(balance.diem, 4)}
               </p>
             </div>
             <div className="text-right hidden md:block">
