@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Model } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { formatNumber } from '@/lib/utils'
+import { formatCurrency, formatNumber } from '@/lib/utils'
 import { ChevronDown, ChevronUp, Cpu, Zap, Clock, DollarSign, AlertTriangle } from 'lucide-react'
 import { cn, getTypeColor } from '@/lib/utils'
 
@@ -12,11 +12,20 @@ interface ModelCardProps {
   model: Model
 }
 
+function getUsdPrice(price: unknown): number | null {
+  if (typeof price === 'number') return price
+  if (typeof price === 'object' && price !== null && 'usd' in price && typeof price.usd === 'number') {
+    return price.usd
+  }
+  return null
+}
+
 export function ModelCard({ model }: ModelCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   const modelSpec = model.model_spec || model.spec || {}
   const flatModel = model as unknown as Record<string, unknown>
+  const modelType = (model.type || model.model_type || '').toLowerCase()
   const contextLength = modelSpec.availableContextTokens || flatModel.context_window as number | undefined
   const maxTokens = modelSpec.maxCompletionTokens || model.spec?.max_output_tokens
   const pricing = modelSpec.pricing || {
@@ -26,6 +35,15 @@ export function ModelCard({ model }: ModelCardProps) {
     cache_write: flatModel.cache_write_price_usd != null ? { usd: flatModel.cache_write_price_usd } : undefined,
     generation: flatModel.generation_price_usd != null ? { usd: flatModel.generation_price_usd } : undefined,
   }
+  const inputPricing = pricing.input ?? (flatModel.input_price_usd != null ? { usd: flatModel.input_price_usd } : undefined)
+  const outputPricing = pricing.output ?? (flatModel.output_price_usd != null ? { usd: flatModel.output_price_usd } : undefined)
+  const cacheInputPricing = pricing.cache_input ?? (flatModel.cache_input_price_usd != null ? { usd: flatModel.cache_input_price_usd } : undefined)
+  const inputPriceUsd = getUsdPrice(inputPricing)
+  const cacheInputPriceUsd = getUsdPrice(cacheInputPricing)
+  const supportsCache = Boolean(flatModel.supports_cache) || cacheInputPriceUsd !== null
+  const cacheDiscountPercent = modelType === 'text' && supportsCache && inputPriceUsd !== null && cacheInputPriceUsd !== null && inputPriceUsd > 0 && cacheInputPriceUsd >= 0 && cacheInputPriceUsd < inputPriceUsd
+    ? (1 - cacheInputPriceUsd / inputPriceUsd) * 100
+    : null
 
   const traitsRaw = modelSpec.traits || model.spec?.traits || {}
   const traits = Array.isArray(traitsRaw) ? traitsRaw : Object.keys(traitsRaw)
@@ -150,7 +168,7 @@ export function ModelCard({ model }: ModelCardProps) {
 
         {expanded && (
           <div className="mt-4 pt-4 border-t border-border space-y-4">
-            {(pricing.input || pricing.output) ? (
+            {(inputPricing || outputPricing) ? (
               <div>
                 <div className="flex items-center gap-2 mb-2">
                   <DollarSign className="w-4 h-4 text-muted-foreground" />
@@ -160,26 +178,34 @@ export function ModelCard({ model }: ModelCardProps) {
                   <div className="rounded-lg bg-muted/50 p-2">
                     <p className="text-xs text-muted-foreground">Input</p>
                     <p className="font-medium">
-                      {pricing.input != null
-                        ? typeof pricing.input === 'object' && 'usd' in pricing.input
-                          ? `$${Number(pricing.input.usd ?? 0).toFixed(2)}`
-                          : String(pricing.input)
+                      {inputPricing != null
+                        ? typeof inputPricing === 'object' && 'usd' in inputPricing
+                          ? `$${Number(inputPricing.usd ?? 0).toFixed(2)}`
+                          : String(inputPricing)
                         : '—'}
                     </p>
                   </div>
                   <div className="rounded-lg bg-muted/50 p-2">
                     <p className="text-xs text-muted-foreground">Output</p>
                     <p className="font-medium">
-                      {pricing.output != null
-                        ? typeof pricing.output === 'object' && 'usd' in pricing.output
-                          ? `$${Number(pricing.output.usd ?? 0).toFixed(2)}`
-                          : String(pricing.output)
+                      {outputPricing != null
+                        ? typeof outputPricing === 'object' && 'usd' in outputPricing
+                          ? `$${Number(outputPricing.usd ?? 0).toFixed(2)}`
+                          : String(outputPricing)
                         : '—'}
                     </p>
                   </div>
                 </div>
               </div>
             ) : null}
+
+            {cacheDiscountPercent !== null && cacheInputPriceUsd !== null && (
+              <div className="rounded-lg bg-muted/50 p-2 text-xs">
+                <span className="text-muted-foreground">Prompt cache read: </span>
+                <span className="font-medium">{formatCurrency(cacheInputPriceUsd)} / 1M</span>
+                <span className="ml-2 text-success">{cacheDiscountPercent.toFixed(1)}% below input</span>
+              </div>
+            )}
 
             {capabilityKeys.length > 0 && (
               <div>

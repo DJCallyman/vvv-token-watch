@@ -76,8 +76,8 @@ describe('Header — success', () => {
 
   it('renders DIEM numeric balance', () => {
     render(<Header />)
-    // formatNumber(45.5, 2) → "45.50"
-    expect(screen.getByText('45.50')).toBeInTheDocument()
+    // formatNumber(45.5, 4) → "45.5000"
+    expect(screen.getByText('45.5000')).toBeInTheDocument()
   })
 
   it('renders USD Balance label', () => {

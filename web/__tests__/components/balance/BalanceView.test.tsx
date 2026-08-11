@@ -78,6 +78,24 @@ describe('BalanceView — success', () => {
     expect(els.length).toBeGreaterThanOrEqual(1)
   })
 
+  it('rounds sub-cent USD balance and consumption to zero', () => {
+    mockUseBalance.mockReturnValue({
+      data: { ...balanceData, usd: -0.0002 },
+      isLoading: false,
+      isError: false,
+    } as any)
+    mockUseEpochUsage.mockReturnValue({
+      data: { ...epochData, usd: 0.0012 },
+      isLoading: false,
+      isError: false,
+    } as any)
+
+    render(<BalanceView />)
+
+    expect(screen.getAllByText('$0.00').length).toBeGreaterThanOrEqual(2)
+    expect(screen.queryByText('-$0.00')).not.toBeInTheDocument()
+  })
+
   it('renders Epoch Information card when next_epoch_begins is present', () => {
     render(<BalanceView />)
     expect(screen.getByText('Epoch Information')).toBeInTheDocument()

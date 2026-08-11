@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from backend.api.routes.analytics import clean_model_name, detect_model_type
+from backend.api.routes.analytics import clean_model_name, detect_model_type, process_usage_data
 
 
 @pytest.mark.parametrize(
@@ -31,6 +31,7 @@ from backend.api.routes.analytics import clean_model_name, detect_model_type
         # Video
         ("kling-v3-pro-text-to-video-duration-rate-1080p", "kling-v3-pro"),
         ("grok-imagine-text-to-video-resolution-720p", "grok-imagine"),
+        ("wan-2-7-enhanced-text-to-video-duration-rate-720p", "wan-2-7-enhanced"),
         # Music
         ("elevenlabs-music-duration-based-60s", "elevenlabs-music"),
         ("minimax-music-v2-fixed", "minimax-music-v2"),
@@ -72,3 +73,33 @@ def test_detect_model_type_embedding_before_llm() -> None:
 def test_detect_model_type_video_priority() -> None:
     sku = "kling-v3-pro-text-to-video-duration-rate-anything"
     assert detect_model_type(sku) == "video"
+
+
+def test_process_usage_data_keeps_wan_variants_separate() -> None:
+    entries = [
+        {
+            "sku": "wan-2-7-llm-input-mtoken",
+            "amount": -1.0,
+            "currency": "USD",
+            "inferenceDetails": {"requestId": "base-request", "promptTokens": 10},
+        },
+        {
+            "sku": "wan-2-7-llm-output-mtoken",
+            "amount": -2.0,
+            "currency": "USD",
+            "inferenceDetails": {"requestId": "base-request", "completionTokens": 20},
+        },
+        {
+            "sku": "wan-2-7-enhanced-llm-input-mtoken",
+            "amount": -3.0,
+            "currency": "USD",
+            "inferenceDetails": {"requestId": "enhanced-request", "promptTokens": 10},
+        },
+    ]
+
+    model_data = process_usage_data(entries)
+
+    assert model_data["wan-2-7"]["cost_usd"] == 3.0
+    assert model_data["wan-2-7"]["requests"] == 1
+    assert model_data["wan-2-7-enhanced"]["cost_usd"] == 3.0
+    assert model_data["wan-2-7-enhanced"]["requests"] == 1

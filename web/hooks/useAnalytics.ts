@@ -3,8 +3,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 
+export interface ModelBreakdown {
+  type: string
+  usd: number
+  diem: number
+  units: number
+}
+
 export interface ModelAnalytics {
-  requests: number
+  requests?: number | null
   tokens: number
   prompt_tokens: number
   completion_tokens: number
@@ -12,8 +19,10 @@ export interface ModelAnalytics {
   // BUG-05: separated costs (preferred over the mixed 'cost')
   cost_usd?: number
   cost_diem?: number
-  avg_response_time_ms: number
+  cost_bundled_credits?: number
+  avg_response_time_ms?: number | null
   model_type: string
+  breakdown?: ModelBreakdown[]
 }
 
 export interface ModelRecommendation {

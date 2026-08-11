@@ -6,7 +6,7 @@ export interface ColumnDefinition {
   tooltip?: string
 }
 
-export type ModelType = 'text' | 'image' | 'video' | 'tts' | 'asr' | 'embedding' | 'upscale' | 'inpaint' | 'all'
+export type ModelType = 'text' | 'image' | 'video' | 'tts' | 'asr' | 'embedding' | 'upscale' | 'inpaint' | 'music' | 'all'
 
 export const TEXT_COLUMNS: ColumnDefinition[] = [
   { key: 'model', header: 'Model', minWidth: 160, sortable: true },
@@ -106,6 +106,7 @@ const COLUMN_CONFIGS: Record<ModelType, ColumnDefinition[]> = {
   embedding: EMBEDDING_COLUMNS,
   upscale: UPSCALE_COLUMNS,
   inpaint: INPAINT_COLUMNS,
+  music: DEFAULT_COLUMNS,
   all: DEFAULT_COLUMNS,
 }
 

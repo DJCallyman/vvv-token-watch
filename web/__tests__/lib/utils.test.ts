@@ -32,10 +32,9 @@ describe('formatCurrency', () => {
     expect(formatCurrency(0)).toBe('$0.00')
   })
 
-  it('formats small values with enough decimal places', () => {
-    // minimumFractionDigits=2, maximumFractionDigits=4
-    const result = formatCurrency(0.0012)
-    expect(result).toBe('$0.0012')
+  it('rounds values below one cent to zero', () => {
+    expect(formatCurrency(0.0012)).toBe('$0.00')
+    expect(formatCurrency(-0.0002)).toBe('$0.00')
   })
 
   it('formats an AUD amount', () => {
@@ -44,9 +43,9 @@ describe('formatCurrency', () => {
     // en-US locale uses A$ or AU$, just check numeric contents
   })
 
-  it('rounds to 4 decimal places maximum', () => {
+  it('rounds to 2 decimal places maximum', () => {
     const result = formatCurrency(1.123456)
-    expect(result).toBe('$1.1235')
+    expect(result).toBe('$1.12')
   })
 })
 
