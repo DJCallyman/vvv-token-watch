@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { api } from '@/lib/api'
 
 interface Props {
@@ -73,10 +74,12 @@ export function InfographicPanel({ runId }: Props) {
 
       {imageB64 && (
         <div className="mt-3 rounded-md overflow-hidden border border-border">
-          {/* eslint-disable-next-line @next/next/no-img-element -- Generated base64 data URL; Next/Image requires a loader for this content. */}
-          <img
+          <Image
             src={`data:image/png;base64,${imageB64}`}
             alt="Benchmark infographic"
+            width={1600}
+            height={900}
+            unoptimized
             className="w-full h-auto"
           />
         </div>
