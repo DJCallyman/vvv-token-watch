@@ -8,8 +8,9 @@ import {
   saveColumnPreferences,
   ModelType,
 } from './columnConfig'
-import { X, RotateCcw } from 'lucide-react'
+import { RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Button, Dialog, DialogContent, DialogTitle } from '@/components/ui'
 
 interface ColumnSelectorProps {
   isOpen: boolean
@@ -50,19 +51,11 @@ export function ColumnSelector({ isOpen, onClose, modelType, onColumnsChange }: 
     onColumnsChange?.(empty)
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div className="bg-background border border-border rounded-lg shadow-lg w-full max-w-md max-h-[80vh] overflow-hidden">
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="p-0">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="font-semibold">Select Columns</h3>
-          <button
-            onClick={onClose}
-            className="p-1 rounded hover:bg-muted transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <DialogTitle className="font-semibold">Select Columns</DialogTitle>
         </div>
         
         <div className="p-4 overflow-y-auto max-h-[60vh]">
@@ -105,21 +98,23 @@ export function ColumnSelector({ isOpen, onClose, modelType, onColumnsChange }: 
         </div>
         
         <div className="flex items-center justify-between p-4 border-t border-border bg-muted/30">
-          <button
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
             onClick={resetToDefaults}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md hover:bg-muted transition-colors"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             Reset to Defaults
-          </button>
-          <button
+          </Button>
+          <Button
+            type="button"
             onClick={onClose}
-            className="px-4 py-1.5 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
           >
             Done
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

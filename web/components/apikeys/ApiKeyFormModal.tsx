@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { useState } from 'react'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button, Input, Select } from '@/components/ui'
 import type {
   APIKeyUsage,
   ApiKeyCreatePayload,
@@ -61,14 +62,6 @@ export function ApiKeyFormModal({
   })
   const [expiresAt, setExpiresAt] = useState<string>(existing?.expires_at ?? '')
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !submitting) onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, submitting])
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmedDescription = description.trim()
@@ -95,29 +88,16 @@ export function ApiKeyFormModal({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="apikey-form-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
-    >
+    <Dialog open onOpenChange={(open) => !open && !submitting && onClose()}>
+      <DialogContent aria-labelledby="apikey-form-title" className="p-0">
       <form
         onSubmit={handleSubmit}
         className="w-full max-w-lg rounded-lg border border-border bg-card shadow-lg"
       >
         <div className="flex items-center justify-between border-b border-border p-4">
-          <h2 id="apikey-form-title" className="text-lg font-semibold">
+          <DialogTitle id="apikey-form-title" className="text-lg font-semibold">
             {mode === 'create' ? 'Create API key' : 'Edit API key'}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close dialog"
-            disabled={submitting}
-            className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          </DialogTitle>
         </div>
 
         <div className="space-y-4 p-4">
@@ -125,7 +105,7 @@ export function ApiKeyFormModal({
             <label className="text-sm font-medium text-foreground" htmlFor="apikey-description">
               Description <span className="text-destructive">*</span>
             </label>
-            <input
+            <Input
               id="apikey-description"
               required
               minLength={1}
@@ -134,7 +114,7 @@ export function ApiKeyFormModal({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="e.g. CI runner, mobile-app, dev laptop"
               autoFocus
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="mt-1"
             />
             <p className="text-xs text-muted-foreground mt-1">
               {description.length}/64 characters
@@ -191,7 +171,7 @@ export function ApiKeyFormModal({
                 >
                   USD
                 </label>
-                <input
+                <Input
                   id="apikey-limit-usd"
                   type="number"
                   min={0}
@@ -203,7 +183,7 @@ export function ApiKeyFormModal({
                       usd: e.target.value === '' ? null : Number(e.target.value),
                     })
                   }
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="mt-1"
                 />
               </div>
               <div>
@@ -213,7 +193,7 @@ export function ApiKeyFormModal({
                 >
                   DIEM
                 </label>
-                <input
+                <Input
                   id="apikey-limit-diem"
                   type="number"
                   min={0}
@@ -225,7 +205,7 @@ export function ApiKeyFormModal({
                       diem: e.target.value === '' ? null : Number(e.target.value),
                     })
                   }
-                  className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="mt-1"
                 />
               </div>
             </div>
@@ -236,11 +216,11 @@ export function ApiKeyFormModal({
               >
                 Reset period
               </label>
-              <select
+              <Select
                 id="apikey-limit-period"
                 value={limitPeriod}
                 onChange={(e) => setLimitPeriod(e.target.value as LimitPeriod | '')}
-                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="mt-1"
               >
                 <option value="">No limit</option>
                 {PERIODS.map((p) => (
@@ -248,7 +228,7 @@ export function ApiKeyFormModal({
                     {p.label}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           </fieldset>
 
@@ -259,14 +239,14 @@ export function ApiKeyFormModal({
             >
               Expires (optional)
             </label>
-            <input
+            <Input
               id="apikey-expires"
               type="date"
               value={
                 expiresAt ? new Date(expiresAt).toISOString().slice(0, 10) : ''
               }
               onChange={(e) => setExpiresAt(e.target.value)}
-              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="mt-1"
             />
             <p className="text-xs text-muted-foreground mt-1">
               Leave blank for no expiry.
@@ -275,27 +255,27 @@ export function ApiKeyFormModal({
         </div>
 
         <div className="flex justify-end gap-2 border-t border-border p-4">
-          <button
+          <Button
+            variant="outline"
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="rounded-md border border-border px-4 py-2 text-sm hover:bg-accent disabled:opacity-50"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
             disabled={submitting || !description.trim()}
-            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
           >
             {submitting
               ? 'Saving…'
               : mode === 'create'
                 ? 'Create key'
                 : 'Save changes'}
-          </button>
+          </Button>
         </div>
       </form>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

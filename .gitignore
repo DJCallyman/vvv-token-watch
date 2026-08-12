@@ -39,6 +39,8 @@ build/
 *.tmp
 *.log
 *log.*
+!web/components/ui/dialog.tsx
+!web/components/ui/alert-dialog.tsx
 archive
 crash-dump.log
 

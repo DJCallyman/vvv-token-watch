@@ -47,6 +47,8 @@ export function Header() {
         <Badge
           variant={isError ? 'destructive' : isLoading ? 'secondary' : 'success'}
           className="gap-1"
+          aria-live="polite"
+          aria-atomic="true"
         >
           <Activity className="w-3 h-3" />
           {isError ? 'Disconnected' : isLoading ? 'Connecting' : 'Connected'}

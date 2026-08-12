@@ -574,10 +574,20 @@ export function ModelsComparisonTable({
                   column.sortable && "cursor-pointer hover:text-foreground select-none"
                 )}
                 style={{ minWidth: column.minWidth }}
-                onClick={() => column.sortable && handleSort(column.key)}
                 title={column.tooltip}
+                aria-sort={column.sortable && sortConfig.key === column.key
+                  ? sortConfig.direction === 'asc' ? 'ascending' : 'descending'
+                  : column.sortable ? 'none' : undefined}
               >
-                <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={!column.sortable}
+                  onClick={() => column.sortable && handleSort(column.key)}
+                  className={cn(
+                    'flex items-center gap-1 text-left font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    column.sortable ? 'cursor-pointer hover:text-foreground' : 'cursor-default',
+                  )}
+                >
                   {column.header}
                   {column.sortable && (
                     <span className="text-xs ml-1">
@@ -592,7 +602,7 @@ export function ModelsComparisonTable({
                       )}
                     </span>
                   )}
-                </div>
+                </button>
               </th>
             ))}
           </tr>
