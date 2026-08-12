@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import get_settings
 from backend.database import init_db, engine
 from backend.limiter import limiter
-from backend.api.routes import usage, balance, prices, models, health, analytics, benchmark, onchain, alerts, api_keys, characters
+from backend.api.routes import usage, balance, prices, models, health, analytics, benchmark, onchain, alerts, api_keys, characters, news, insights, assistant
 from backend.api.deps import verify_auth
 
 settings = get_settings()
@@ -126,6 +126,9 @@ app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"]
 app.include_router(benchmark.router, prefix="/api", tags=["benchmark"], dependencies=[Depends(verify_auth)])
 app.include_router(onchain.router, prefix="/api", tags=["onchain"], dependencies=[Depends(verify_auth)])
 app.include_router(alerts.router, prefix="/api", tags=["alerts"], dependencies=[Depends(verify_auth)])
+app.include_router(news.router, prefix="/api", tags=["news"], dependencies=[Depends(verify_auth)])
+app.include_router(insights.router, prefix="/api", tags=["insights"], dependencies=[Depends(verify_auth)])
+app.include_router(assistant.router, prefix="/api", tags=["assistant"], dependencies=[Depends(verify_auth)])
 
 
 @app.get("/")

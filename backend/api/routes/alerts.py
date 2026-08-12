@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import logging
+import asyncio
+import json
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.database import get_db
+from backend.database import AsyncSessionLocal, get_db
+from backend.models.db import AlertEvent
+from sqlalchemy import func, select
+from sse_starlette.sse import EventSourceResponse
 from backend.limiter import limiter
 from backend.services import alert_engine
 
@@ -199,3 +204,29 @@ async def evaluate_alerts(
     except Exception:
         logger.exception("Failed to evaluate alerts")
         raise HTTPException(500, "Failed to evaluate alerts")
+
+
+@router.get("/alerts/stream")
+async def stream_alert_events(request: Request):
+    """Stream alert events created after the connection opens."""
+    async def events():
+        async with AsyncSessionLocal() as db:
+            cursor = await db.scalar(select(func.max(AlertEvent.id))) or 0
+        yield {"data": json.dumps({"type": "ready", "cursor": cursor})}
+        try:
+            while not await request.is_disconnected():
+                async with AsyncSessionLocal() as db:
+                    rows = (await db.execute(
+                        select(AlertEvent).where(AlertEvent.id > cursor).order_by(AlertEvent.id.asc())
+                    )).scalars().all()
+                for row in rows:
+                    cursor = row.id
+                    yield {"data": json.dumps({"type": "event", **_event_dict(row)})}
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.exception("Alert SSE stream failed")
+            yield {"data": json.dumps({"type": "error", "message": str(exc)})}
+
+    return EventSourceResponse(events())

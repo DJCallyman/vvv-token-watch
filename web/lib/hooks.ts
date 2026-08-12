@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type GetCharactersParams, type TraitModelType } from '@/lib/api'
+import { useEffect } from 'react'
 
 // ---------------------------------------------------------------------------
 // Benchmark hooks
@@ -202,6 +203,15 @@ export function useOnchainBalance(address: string | null) {
   })
 }
 
+export function useOnchainTransfers(address: string | null, blocks = 10000) {
+  return useQuery({
+    queryKey: ['onchainTransfers', address, blocks],
+    queryFn: () => api.getOnchainTransfers(address!, blocks),
+    enabled: !!address,
+    staleTime: 60_000,
+  })
+}
+
 export function useAlerts(enabledOnly = false) {
   return useQuery({
     queryKey: ['alerts', enabledOnly],
@@ -224,6 +234,36 @@ export function useAlertEvents(unacknowledgedOnly = false) {
     queryFn: () => api.getAlertEvents(unacknowledgedOnly),
     refetchInterval: 15_000,
   })
+}
+
+export function useAlertStream() {
+  const queryClient = useQueryClient()
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof EventSource === 'undefined') return
+    let source: EventSource | null = null
+    let retry: ReturnType<typeof setTimeout> | undefined
+    let stopped = false
+    const connect = () => {
+      if (stopped) return
+      source = new EventSource('/api/alerts/stream')
+      source.onmessage = (event) => {
+        try {
+          if (JSON.parse(event.data).type === 'event') queryClient.invalidateQueries({ queryKey: ['alertEvents'] })
+        } catch { /* Ignore malformed stream events. */ }
+      }
+      source.onerror = () => { source?.close(); retry = setTimeout(connect, 5000) }
+    }
+    connect()
+    return () => { stopped = true; source?.close(); if (retry) clearTimeout(retry) }
+  }, [queryClient])
+}
+
+export function useNews() {
+  return useQuery({ queryKey: ['news'], queryFn: () => api.getNews(), staleTime: 10 * 60_000, refetchInterval: 15 * 60_000 })
+}
+
+export function useNewsArticle(url: string | null) {
+  return useQuery({ queryKey: ['newsArticle', url], queryFn: () => api.getNewsArticle(url!), enabled: !!url, staleTime: 60 * 60_000 })
 }
 
 export interface Model {
@@ -303,4 +343,3 @@ export interface ModelSpec {
   supportsStyleReferences?: boolean
   supportsStyleReferenceStrength?: boolean
 }
-
