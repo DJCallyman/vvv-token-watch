@@ -37,18 +37,21 @@ COPY --from=frontend-builder /app/web/.next/standalone ./web/
 COPY --from=frontend-builder /app/web/.next/static ./web/.next/static
 COPY --from=frontend-builder /app/web/public ./web/public
 
-# Create non-root user and ensure data directory is writable
+# Create non-root user and ensure data directory is writable.
+# /data is the volume mount target in both docker-compose and the Unraid
+# template — keeping it at the root (not under /app) ensures the persistent
+# volume is used regardless of the orchestration layer.
 RUN useradd -m -u 1001 appuser && \
-    mkdir -p /app/data /app/data/logs /app/data/benchmark_results && \
-    chown -R appuser:appuser /app
+    mkdir -p /data /data/logs /data/benchmark_results && \
+    chown -R appuser:appuser /app /data
 
 # Environment variables
 ENV PYTHONUNBUFFERED=1
 ENV BACKEND_PORT=8000
 ENV FRONTEND_PORT=3000
-ENV DATA_DIR=/app/data
-ENV LOG_FILE_PATH=/app/data/logs/app.log
-ENV BENCHMARK_RESULTS_DIR=/app/data/benchmark_results
+ENV DATA_DIR=/data
+ENV LOG_FILE_PATH=/data/logs/app.log
+ENV BENCHMARK_RESULTS_DIR=/data/benchmark_results
 
 # Expose port
 EXPOSE 3000

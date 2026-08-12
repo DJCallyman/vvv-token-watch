@@ -2,7 +2,7 @@
 set -e
 
 # Ensure data directories exist
-mkdir -p "${DATA_DIR:-/app/data}/logs" "${BENCHMARK_RESULTS_DIR:-/app/data/benchmark_results}"
+mkdir -p "${DATA_DIR:-/data}/logs" "${BENCHMARK_RESULTS_DIR:-/data/benchmark_results}"
 
 # Start the backend server (run from /app so 'backend.*' imports resolve)
 cd /app

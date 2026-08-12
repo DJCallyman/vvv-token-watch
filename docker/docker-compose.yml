@@ -16,7 +16,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - BACKEND_URL=http://localhost:8000
     volumes:
-      - app_data:/app/data
+      - app_data:/data
     depends_on:
       postgres:
         condition: service_healthy
