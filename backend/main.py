@@ -35,14 +35,36 @@ os.makedirs(os.path.dirname(settings.LOG_FILE_PATH) or ".", exist_ok=True)
 
 log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
 log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+log_formatter = logging.Formatter(log_format)
 
 # Console handler
 console_handler = logging.StreamHandler()
-console_handler.setFormatter(logging.Formatter(log_format))
+console_handler.setFormatter(log_formatter)
 
 # File handler (persistent across restarts)
 file_handler = logging.FileHandler(settings.LOG_FILE_PATH)
-file_handler.setFormatter(logging.Formatter(log_format))
+file_handler.setFormatter(log_formatter)
+
+# Uvicorn configures logging before importing the application, so
+# logging.basicConfig() may be a no-op. Configure the root and Uvicorn
+# loggers explicitly to ensure application and access logs reach the file.
+root_logger = logging.getLogger()
+root_logger.setLevel(log_level)
+file_path = os.path.abspath(settings.LOG_FILE_PATH)
+
+if not any(
+    isinstance(handler, logging.FileHandler)
+    and os.path.abspath(handler.baseFilename) == file_path
+    for handler in root_logger.handlers
+):
+    root_logger.addHandler(file_handler)
+
+if not any(
+    isinstance(handler, logging.StreamHandler)
+    and not isinstance(handler, logging.FileHandler)
+    for handler in root_logger.handlers
+):
+    root_logger.addHandler(console_handler)
 
 logging.basicConfig(
     level=log_level,
@@ -51,9 +73,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Apply LOG_LEVEL to uvicorn loggers for consistent verbosity
-logging.getLogger("uvicorn").setLevel(log_level)
-logging.getLogger("uvicorn.access").setLevel(log_level)
-logging.getLogger("uvicorn.error").setLevel(log_level)
+for logger_name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
+    uvicorn_logger = logging.getLogger(logger_name)
+    uvicorn_logger.setLevel(log_level)
+    uvicorn_logger.propagate = False
+    if not any(
+        isinstance(handler, logging.FileHandler)
+        and os.path.abspath(handler.baseFilename) == file_path
+        for handler in uvicorn_logger.handlers
+    ):
+        uvicorn_logger.addHandler(file_handler)
 
 
 @asynccontextmanager
