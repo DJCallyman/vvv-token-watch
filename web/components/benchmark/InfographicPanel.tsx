@@ -73,6 +73,7 @@ export function InfographicPanel({ runId }: Props) {
 
       {imageB64 && (
         <div className="mt-3 rounded-md overflow-hidden border border-border">
+          {/* eslint-disable-next-line @next/next/no-img-element -- Generated base64 data URL; Next/Image requires a loader for this content. */}
           <img
             src={`data:image/png;base64,${imageB64}`}
             alt="Benchmark infographic"

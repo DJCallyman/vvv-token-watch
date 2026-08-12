@@ -6,7 +6,7 @@ import logging
 import re
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.config import Settings, get_settings
 from backend.core.cache import TtlCache
@@ -25,6 +25,7 @@ _SEL_TOTAL_SUPPLY = "0x18160ddd"
 _SEL_DECIMALS = "0x313ce567"
 _SEL_BALANCE_OF = "0x70a08231"
 _SEL_SYMBOL = "0x95d89b41"
+_TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 
 _ADDR_RE = re.compile(r"^0x[a-fA-F0-9]{40}$")
 
@@ -90,6 +91,61 @@ async def _eth_call(client: VeniceAPIClient, to: str, data: str) -> str:
     if not isinstance(result, str):
         raise HTTPException(502, f"Unexpected eth_call result: {result!r}")
     return result
+
+
+def _topic_address(topic: str) -> str:
+    return "0x" + topic[-40:]
+
+
+@router.get("/onchain/transfers")
+async def get_onchain_transfers(
+    address: str = Query(...),
+    blocks: int = Query(10000, ge=100, le=100000),
+    client: VeniceAPIClient = Depends(get_venice_client),
+):
+    """Return recent VVV ERC-20 transfers involving a Base wallet."""
+    if not _ADDR_RE.match(address):
+        raise HTTPException(400, "Invalid EVM address")
+    normalized = address.lower()
+    cache_key = f"transfers:{normalized}:{blocks}"
+    cached = _cache.get(cache_key)
+    if cached is not None:
+        return cached
+    try:
+        latest = _decode_uint(await _rpc(client, "eth_blockNumber", []))
+        from_block = max(0, latest - blocks)
+        padded = _pad_address(normalized)
+        logs = await _rpc(client, "eth_getLogs", [{
+            "address": VVV_TOKEN,
+            "fromBlock": hex(from_block),
+            "toBlock": hex(latest),
+            "topics": [_TRANSFER_TOPIC, None, None],
+        }])
+        if not isinstance(logs, list):
+            raise HTTPException(502, "Unexpected transfer log response")
+        meta = await _fetch_vvv_erc20_meta(client)
+        scale = 10 ** meta["decimals"]
+        transfers = []
+        for log in logs:
+            topics = log.get("topics") or []
+            if len(topics) < 3 or (padded not in (topics[1][-64:].lower(), topics[2][-64:].lower())):
+                continue
+            raw = _decode_uint(log.get("data", "0x0"))
+            sender = _topic_address(topics[1])
+            recipient = _topic_address(topics[2])
+            transfers.append({
+                "from": sender, "to": recipient, "value": str(raw), "value_human": raw / scale,
+                "tx_hash": log.get("transactionHash"), "block_number": log.get("blockNumber"),
+                "log_index": log.get("logIndex"), "direction": "in" if recipient == normalized else "out",
+            })
+        result = {"network": NETWORK, "address": address, "token_address": VVV_TOKEN, "transfers": transfers, "count": len(transfers), "from_block": hex(from_block), "to_block": hex(latest)}
+        _cache.set(cache_key, result, ttl=60)
+        return result
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Failed to fetch on-chain transfers")
+        raise HTTPException(500, "Failed to fetch on-chain transfers")
 
 
 async def _fetch_vvv_erc20_meta(client: VeniceAPIClient) -> Dict[str, int]:

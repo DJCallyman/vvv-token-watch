@@ -1,8 +1,9 @@
 'use client'
 
-import { useBalance, useUnacknowledgedAlertEvents } from '@/lib/hooks'
+import { useAlertStream, useBalance, useUnacknowledgedAlertEvents } from '@/lib/hooks'
 import { formatCurrency, formatNumber } from '@/lib/utils'
-import { Activity, Bell, LogOut, Moon, RefreshCw, Sun } from 'lucide-react'
+import { Activity, Bell, LogOut, Menu, Moon, RefreshCw, Sun } from 'lucide-react'
+import { useSidebarDrawer } from './SidebarDrawerContext'
 import { Badge } from '@/components/ui/badge'
 import { useTheme } from '@/components/ThemeProvider'
 import { useQueryClient } from '@tanstack/react-query'
@@ -12,9 +13,11 @@ import Link from 'next/link'
 export function Header() {
   const { data: balance, isLoading, isError, dataUpdatedAt } = useBalance()
   const { data: alertEvents } = useUnacknowledgedAlertEvents()
+  useAlertStream()
   const { theme, toggleTheme } = useTheme()
   const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
+  const { toggle } = useSidebarDrawer()
 
   const unacked = alertEvents?.count ?? 0
   const lastUpdated = dataUpdatedAt
@@ -38,6 +41,9 @@ export function Header() {
   return (
     <header className="h-16 border-b border-border bg-card px-4 sm:px-6 flex items-center justify-between gap-4">
       <div className="flex items-center gap-3">
+        <button type="button" onClick={toggle} className="md:hidden rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Open navigation">
+          <Menu className="w-5 h-5" />
+        </button>
         <Badge
           variant={isError ? 'destructive' : isLoading ? 'secondary' : 'success'}
           className="gap-1"

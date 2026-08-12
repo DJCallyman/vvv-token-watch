@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { useOnchainSupply, useOnchainStaking, useOnchainBalance } from '@/lib/hooks'
+import { useOnchainSupply, useOnchainStaking, useOnchainBalance, useOnchainTransfers } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatNumber } from '@/lib/utils'
-import { Blocks, Coins, Landmark, Search } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, Blocks, Coins, ExternalLink, Landmark, Search } from 'lucide-react'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 export function OnChainView() {
   const { data: supply, isLoading: supplyLoading, isError: supplyError } = useOnchainSupply()
@@ -12,6 +13,8 @@ export function OnChainView() {
   const [address, setAddress] = useState('')
   const [lookup, setLookup] = useState<string | null>(null)
   const { data: balance, isLoading: balLoading, isError: balError } = useOnchainBalance(lookup)
+  const [blocks, setBlocks] = useState(10000)
+  const { data: transfers, isLoading: transfersLoading, isError: transfersError } = useOnchainTransfers(lookup, blocks)
 
   return (
     <div className="space-y-8">
@@ -145,6 +148,38 @@ export function OnChainView() {
           )}
         </CardContent>
       </Card>
+      {lookup && (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <div>
+              <CardTitle>Recent Transfers</CardTitle>
+              <CardDescription>VVV transfers involving this wallet</CardDescription>
+            </div>
+            <select value={blocks} onChange={(e) => setBlocks(Number(e.target.value))} className="rounded-md border border-input bg-background px-2 py-1 text-sm" aria-label="Transfer block range">
+              <option value="1000">1K blocks</option>
+              <option value="10000">10K blocks</option>
+              <option value="50000">50K blocks</option>
+            </select>
+          </CardHeader>
+          <CardContent>
+            {transfersLoading && <div className="animate-pulse text-muted-foreground">Loading transfers…</div>}
+            {transfersError && <div className="text-destructive text-sm">Failed to load transfers</div>}
+            {!transfersLoading && !transfersError && transfers?.transfers.length === 0 && <p className="text-sm text-muted-foreground">No transfers found in this range.</p>}
+            {!!transfers?.transfers.length && (
+              <Table>
+                <TableHeader><TableRow><TableHead>Direction</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Amount</TableHead><TableHead>Transaction</TableHead></TableRow></TableHeader>
+                <TableBody>{transfers.transfers.map((tx) => <TableRow key={`${tx.tx_hash}-${tx.log_index}`}>
+                  <TableCell>{tx.direction === 'in' ? <ArrowDownLeft className="text-success" aria-label="Incoming" /> : <ArrowUpRight className="text-destructive" aria-label="Outgoing" />}</TableCell>
+                  <TableCell className="font-mono text-xs">{tx.from.slice(0, 8)}…</TableCell>
+                  <TableCell className="font-mono text-xs">{tx.to.slice(0, 8)}…</TableCell>
+                  <TableCell>{formatNumber(tx.value_human, 4)} VVV</TableCell>
+                  <TableCell>{tx.tx_hash && <a className="inline-flex items-center gap-1 text-primary hover:underline" href={`https://basescan.org/tx/${tx.tx_hash}`} target="_blank" rel="noreferrer">{tx.tx_hash.slice(0, 8)}…<ExternalLink className="w-3 h-3" /></a>}</TableCell>
+                </TableRow>)}</TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

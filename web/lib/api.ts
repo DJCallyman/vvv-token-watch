@@ -520,6 +520,27 @@ export interface OnchainBalance {
   decimals: number
 }
 
+export interface OnchainTransfer {
+  from: string
+  to: string
+  value: string
+  value_human: number
+  tx_hash: string | null
+  block_number: string | null
+  log_index: string | null
+  direction: 'in' | 'out'
+}
+
+export interface OnchainTransfersResponse {
+  network: string
+  address: string
+  token_address: string
+  transfers: OnchainTransfer[]
+  count: number
+  from_block: string
+  to_block: string
+}
+
 export interface AlertConfig {
   id: number
   name: string
@@ -540,6 +561,10 @@ export interface AlertEvent {
   value: number
   acknowledged: boolean
 }
+
+export interface NewsArticle { title: string; url: string | null; snippet: string; date?: string | null; source?: string | null }
+export interface NewsResponse { articles: NewsArticle[]; count: number; source?: string }
+export interface MarketAnalysis { summary: string; sentiment: 'bullish' | 'bearish' | 'neutral' | string; key_events: string[]; risks: string[]; confidence: number; sources: string[] }
 
 export interface AlertConfigCreate {
   name: string
@@ -635,6 +660,10 @@ export const api = {
     return fetchAPI<OnchainBalance>(`/api/onchain/balance/${encodeURIComponent(address)}`)
   },
 
+  async getOnchainTransfers(address: string, blocks = 10000): Promise<OnchainTransfersResponse> {
+    return fetchAPI<OnchainTransfersResponse>(`/api/onchain/transfers?address=${encodeURIComponent(address)}&blocks=${blocks}`)
+  },
+
   async getRateLimitsLog(): Promise<unknown> {
     return fetchAPI<unknown>('/api/rate-limits/log')
   },
@@ -684,6 +713,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ metrics }),
     })
+  },
+
+  async getNews(refresh = false): Promise<NewsResponse> {
+    return fetchAPI<NewsResponse>(`/api/news${refresh ? '?refresh=true' : ''}`)
+  },
+  async getNewsArticle(url: string): Promise<{ url: string; title: string; content: string }> {
+    return fetchAPI<{ url: string; title: string; content: string }>(`/api/news/article?url=${encodeURIComponent(url)}`)
+  },
+  async analyzeMarket(prices: Record<string, unknown> = {}, usage: Record<string, unknown> = {}): Promise<{ analysis: MarketAnalysis; articles: NewsArticle[] }> {
+    return fetchAPI<{ analysis: MarketAnalysis; articles: NewsArticle[] }>('/api/insights/analyze', { method: 'POST', body: JSON.stringify({ prices, usage }) })
+  },
+  async queryAssistant(query: string, history: Array<{ role: string; content: string }> = []): Promise<{ answer: string; tool_calls: unknown[] }> {
+    return fetchAPI<{ answer: string; tool_calls: unknown[] }>('/api/assistant/query', { method: 'POST', body: JSON.stringify({ query, history }) })
   },
 
   // Benchmark endpoints
