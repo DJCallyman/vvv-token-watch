@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect } from 'react'
-import { X, Star, Users, ExternalLink, Cpu } from 'lucide-react'
+import { Star, Users, ExternalLink, Cpu } from 'lucide-react'
 import type { Character } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui'
 import { cn } from '@/lib/utils'
 
 export interface CharacterDetailDrawerProps {
@@ -12,15 +12,6 @@ export interface CharacterDetailDrawerProps {
 }
 
 export function CharacterDetailDrawer({ character, onClose }: CharacterDetailDrawerProps) {
-  useEffect(() => {
-    if (!character) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [character, onClose])
-
   if (!character) return null
 
   const {
@@ -41,29 +32,20 @@ export function CharacterDetailDrawer({ character, onClose }: CharacterDetailDra
   } = character
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="character-drawer-title"
-      className="fixed inset-0 z-50 flex justify-end bg-background/80 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-lg h-full overflow-y-auto bg-card border-l border-border shadow-xl"
-        onClick={(e) => e.stopPropagation()}
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        aria-labelledby="character-drawer-title"
+        closeLabel="Close drawer"
+        className="left-auto right-0 top-0 h-full max-h-full w-full max-w-lg translate-x-0 translate-y-0 rounded-none border-y-0 border-r-0 p-0"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) onClose()
+        }}
       >
+        <div className="h-full overflow-y-auto">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-card/95 backdrop-blur-sm p-4">
-          <h2 id="character-drawer-title" className="text-lg font-semibold truncate">
+          <DialogTitle id="character-drawer-title" className="truncate text-lg font-semibold">
             {name}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close drawer"
-            className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          </DialogTitle>
         </div>
 
         {photoUrl && (
@@ -148,7 +130,7 @@ export function CharacterDetailDrawer({ character, onClose }: CharacterDetailDra
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent',
+                'inline-flex h-10 items-center gap-1.5 rounded-md border border-input px-4 py-2 text-sm font-medium hover:bg-accent',
               )}
             >
               <ExternalLink className="w-4 h-4" />
@@ -156,8 +138,9 @@ export function CharacterDetailDrawer({ character, onClose }: CharacterDetailDra
             </a>
           )}
         </div>
-      </div>
-    </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

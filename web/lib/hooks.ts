@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type GetCharactersParams, type TraitModelType } from '@/lib/api'
 import { useEffect } from 'react'
+import { toast } from 'sonner'
 
 // ---------------------------------------------------------------------------
 // Benchmark hooks
@@ -89,7 +90,9 @@ export function useCreateAPIKey() {
     mutationFn: api.createAPIKey,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['apiKeysUsage'] })
+      toast.success('API key created')
     },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Failed to create API key'),
   })
 }
 
@@ -100,7 +103,9 @@ export function useUpdateAPIKey() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['apiKeysUsage'] })
       queryClient.invalidateQueries({ queryKey: ['apiKeyDetail', variables.id] })
+      toast.success('API key updated')
     },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Failed to update API key'),
   })
 }
 
@@ -110,7 +115,9 @@ export function useDeleteAPIKey() {
     mutationFn: (id: string) => api.deleteAPIKey(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['apiKeysUsage'] })
+      toast.success('API key deleted')
     },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Failed to delete API key'),
   })
 }
 

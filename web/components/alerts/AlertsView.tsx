@@ -7,6 +7,7 @@ import { api, type AlertConfigCreate } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Bell, Check, Plus, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 const METRIC_OPTIONS = [
   { value: 'diem_usage_percent', label: 'DIEM usage %' },
@@ -45,6 +46,7 @@ export function AlertsView() {
       await api.createAlert(form)
       setForm((f) => ({ ...f, name: '' }))
       refresh()
+      toast.success('Alert created')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create alert')
     } finally {
@@ -56,6 +58,7 @@ export function AlertsView() {
     try {
       await api.deleteAlert(id)
       refresh()
+      toast.success('Alert deleted')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete alert')
     }
@@ -65,6 +68,7 @@ export function AlertsView() {
     try {
       await api.acknowledgeAlertEvent(id)
       refresh()
+      toast.success('Alert acknowledged')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to acknowledge event')
     }
@@ -80,7 +84,7 @@ export function AlertsView() {
       </div>
 
       {error && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -88,7 +92,7 @@ export function AlertsView() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2" aria-live="polite">
               <Plus className="w-5 h-5" />
               Create Alert
             </CardTitle>

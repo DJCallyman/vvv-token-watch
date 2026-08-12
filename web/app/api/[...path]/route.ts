@@ -47,7 +47,9 @@ async function handler(req: NextRequest) {
 
   // Set XFF to the direct peer IP so the backend rate limiter derives a
   // stable client identity that the caller cannot spoof.
-  const peerIp = req.ip || '127.0.0.1'
+  // NextRequest no longer exposes `ip` in Next 15. The proxy's direct peer is
+  // intentionally used as the fallback rather than trusting a browser header.
+  const peerIp = req.headers.get('x-real-ip') || req.headers.get('cf-connecting-ip') || '127.0.0.1'
   headers.set('x-forwarded-for', peerIp)
 
   // Inject the real backend credential server-side. This value never

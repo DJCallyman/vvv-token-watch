@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState } from 'react'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { SidebarDrawerProvider } from '@/components/layout/SidebarDrawerContext'
+import { Toaster } from 'sonner'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -20,7 +21,10 @@ export function Providers({ children }: { children: React.ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <SidebarDrawerProvider>{children}</SidebarDrawerProvider>
+        <SidebarDrawerProvider>
+          {children}
+          <Toaster position="bottom-right" richColors closeButton />
+        </SidebarDrawerProvider>
       </ThemeProvider>
     </QueryClientProvider>
   )

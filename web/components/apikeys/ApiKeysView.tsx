@@ -29,6 +29,7 @@ import { ApiKeyFormModal } from './ApiKeyFormModal'
 import { DeleteKeyConfirm } from './DeleteKeyConfirm'
 import { formatDate } from '@/lib/utils'
 import { cn } from '@/lib/utils'
+import { Button, Dialog, DialogContent, DialogTitle, Input } from '@/components/ui'
 
 type SortMode = 'name' | 'usage' | 'recent'
 
@@ -390,21 +391,16 @@ function SecretDisplayModal({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="secret-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm"
-    >
-      <div className="w-full max-w-lg rounded-lg border border-border bg-card p-6 shadow-lg">
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent aria-labelledby="secret-title" className="max-w-lg">
         <div className="flex items-start gap-3">
           <div className="rounded-full bg-warning/10 p-2 text-warning">
             <AlertTriangle className="w-5 h-5" />
           </div>
           <div className="flex-1 space-y-2">
-            <h2 id="secret-title" className="text-lg font-semibold">
+            <DialogTitle id="secret-title" className="text-lg font-semibold">
               Save this API key now
-            </h2>
+            </DialogTitle>
             <p className="text-sm text-muted-foreground">
               Venice only shows the full secret once. Copy it to a secure
               password manager before closing this dialog.
@@ -421,20 +417,19 @@ function SecretDisplayModal({
             API key secret
           </label>
           <div className="flex items-stretch gap-2">
-            <input
+            <Input
               readOnly
               value={secret.apiKey}
-              className="flex-1 rounded-md border border-input bg-muted px-3 py-2 font-mono text-sm"
+              className="flex-1 bg-muted font-mono"
               onFocus={(e) => e.currentTarget.select()}
               aria-label="API key secret"
             />
-            <button
+            <Button
               type="button"
+              variant="outline"
+              size="sm"
               onClick={onCopy}
-              className={cn(
-                'inline-flex items-center gap-1 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent',
-                copied && 'bg-success/10 border-success text-success',
-              )}
+              className={copied ? 'border-success bg-success/10 text-success' : undefined}
             >
               {copied ? (
                 <>
@@ -445,19 +440,18 @@ function SecretDisplayModal({
                   <Copy className="w-4 h-4" /> Copy
                 </>
               )}
-            </button>
+            </Button>
           </div>
         </div>
         <div className="mt-6 flex justify-end">
-          <button
+          <Button
             type="button"
             onClick={onClose}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
             I&apos;ve saved the key
-          </button>
+          </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
