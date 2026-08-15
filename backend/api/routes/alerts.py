@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import AsyncSessionLocal, get_db
 from backend.models.db import AlertEvent
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sse_starlette.sse import EventSourceResponse
 from backend.limiter import limiter
 from backend.services import alert_engine
@@ -210,15 +211,35 @@ async def evaluate_alerts(
 async def stream_alert_events(request: Request):
     """Stream alert events created after the connection opens."""
     async def events():
-        async with AsyncSessionLocal() as db:
-            cursor = await db.scalar(select(func.max(AlertEvent.id))) or 0
-        yield {"data": json.dumps({"type": "ready", "cursor": cursor})}
+        cursor = 0
+        ready = False
         try:
             while not await request.is_disconnected():
-                async with AsyncSessionLocal() as db:
-                    rows = (await db.execute(
-                        select(AlertEvent).where(AlertEvent.id > cursor).order_by(AlertEvent.id.asc())
-                    )).scalars().all()
+                rows = []
+                ready_event = None
+                try:
+                    async with AsyncSessionLocal() as db:
+                        if not ready:
+                            cursor = await db.scalar(select(func.max(AlertEvent.id))) or 0
+                            ready = True
+                            ready_event = {"data": json.dumps({"type": "ready", "cursor": cursor})}
+                        else:
+                            rows = (await db.execute(
+                                select(AlertEvent)
+                                .where(AlertEvent.id > cursor)
+                                .order_by(AlertEvent.id.asc())
+                            )).scalars().all()
+                except SQLAlchemyError as exc:
+                    logger.warning("Alert SSE database query failed; retrying: %s", exc)
+                    yield {"data": json.dumps({
+                        "type": "error",
+                        "message": "Alert database is temporarily unavailable",
+                    })}
+                    await asyncio.sleep(5)
+                    continue
+
+                if ready_event:
+                    yield ready_event
                 for row in rows:
                     cursor = row.id
                     yield {"data": json.dumps({"type": "event", **_event_dict(row)})}

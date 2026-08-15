@@ -1,6 +1,13 @@
+import asyncio
+import logging
+
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
 from backend.config import get_settings
+
+
+DATABASE_INIT_ATTEMPTS = 5
+DATABASE_INIT_RETRY_DELAY_SECONDS = 2.0
 
 settings = get_settings()
 
@@ -31,23 +38,36 @@ async def get_db() -> AsyncSession:
             await session.close()
 
 
-async def init_db():
-    """Create tables if they do not exist.
-
-    Best-effort: logs and continues if the database is unreachable so the
-    rest of the API (Venice/CoinGecko proxies) can still serve traffic.
-    """
-    import logging
-
+async def init_db(
+    *,
+    attempts: int = DATABASE_INIT_ATTEMPTS,
+    retry_delay: float = DATABASE_INIT_RETRY_DELAY_SECONDS,
+) -> bool:
+    """Create missing tables and report whether schema setup succeeded."""
     # Import models so they register on Base.metadata before create_all.
     import backend.models.db  # noqa: F401
 
     logger = logging.getLogger(__name__)
-    try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-        logger.info("Database tables ready")
-    except Exception:
-        logger.exception(
-            "Failed to initialize database (history/alerts features will be unavailable)"
-        )
+    attempts = max(1, attempts)
+    retry_delay = max(0.0, retry_delay)
+
+    for attempt in range(1, attempts + 1):
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database tables ready")
+            return True
+        except Exception as exc:
+            if attempt == attempts:
+                logger.exception("Failed to initialize database schema")
+                return False
+            logger.warning(
+                "Database initialization attempt %s/%s failed; retrying in %.1fs: %s",
+                attempt,
+                attempts,
+                retry_delay,
+                exc,
+            )
+            await asyncio.sleep(retry_delay)
+
+    return False
