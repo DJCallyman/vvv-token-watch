@@ -48,8 +48,17 @@ async def test_first_request_omits_cursor_uses_filters() -> None:
         ],
     )
     entries = await bp.walk_billing_usage_history(
-        client, "2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"
+        client,
+        "2025-01-01T00:00:00Z",
+        "2025-01-02T00:00:00Z",
+        page_size=123,
     )
+    assert client.calls[0][2] == {
+        "pageSize": 123,
+        "startTimestamp": "2025-01-01T00:00:00Z",
+        "endTimestamp": "2025-01-02T00:00:00Z",
+    }
+    assert client.calls[1][2] == {"cursor": "c2"}
     assert entries == [{"entry": 1}, {"entry": 2}]
 
 
