@@ -59,6 +59,11 @@ async def init_db(
             return True
         except Exception as exc:
             if attempt == attempts:
+                if "permission denied for schema" in str(exc):
+                    logger.error(
+                        "The DATABASE_URL role cannot create tables in schema public. "
+                        "Grant it USAGE and CREATE on schema public as a PostgreSQL administrator."
+                    )
                 logger.exception("Failed to initialize database schema")
                 return False
             logger.warning(

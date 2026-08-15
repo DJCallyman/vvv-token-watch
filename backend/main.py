@@ -89,7 +89,10 @@ for logger_name in ("uvicorn", "uvicorn.access", "uvicorn.error"):
 async def lifespan(app: FastAPI):
     logger.info("Starting VVV Token Watch API...")
     if not await init_db():
-        raise RuntimeError("Database schema initialization failed")
+        raise RuntimeError(
+            "Database schema initialization failed. Verify DATABASE_URL and grant "
+            "the configured PostgreSQL role USAGE and CREATE on schema public."
+        )
     logger.info("Database initialized")
 
     # Build the model cache lazily, once per process, so /api/models does
