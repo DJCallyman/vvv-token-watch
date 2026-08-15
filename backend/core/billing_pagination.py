@@ -71,8 +71,9 @@ async def walk_billing_usage_history(
 ) -> List[Dict[str, Any]]:
     """Walk /billing/usage-history to exhaustion with cursor pagination.
 
-    Filters must be supplied only on the first request (with a fresh cursor);
-    the API rejects them on continuation requests. Raises
+    Filters and page size are supplied only on the first request (with a fresh
+    cursor); the API rejects any parameters other than the cursor on
+    continuation requests. Raises
     UsageHistoryUnavailable on 403/404/410 so the caller can fall back to
     /billing/usage, and surfaces other errors via the underlying httpx
     exception so the caller can map them to 502/504.
@@ -84,10 +85,10 @@ async def walk_billing_usage_history(
 
     page = 0
     while page < effective_pages:
-        params: Dict[str, Any] = {"pageSize": effective_size}
         if cursor:
-            params["cursor"] = cursor
+            params: Dict[str, Any] = {"cursor": cursor}
         else:
+            params = {"pageSize": effective_size}
             params["startTimestamp"] = start_datetime
             params["endTimestamp"] = end_datetime
             if currency:
