@@ -7,7 +7,7 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from backend.api.routes.ai_common import extract_chat_text, get_client, normalize_search
 from backend.config import Settings, get_settings
@@ -24,7 +24,15 @@ class InsightRequest(BaseModel):
 
 @router.post("/insights/analyze")
 @limiter.limit("10/hour")
-async def analyze(request: Request, body: InsightRequest, settings: Settings = Depends(get_settings)):
+async def analyze(request: Request, settings: Settings = Depends(get_settings)):
+    try:
+        raw_body = await request.json()
+        body = InsightRequest.model_validate(raw_body if isinstance(raw_body, dict) else {})
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid JSON body: {exc}") from exc
+
     client = get_client(settings)
     try:
         search = await client.post_json("/augment/search", data={"query": "VVV DIEM Venice AI crypto latest", "limit": 10}, timeout=30)
