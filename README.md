@@ -38,6 +38,26 @@ docker compose up -d
 
 Open `http://<host>:3000`.
 
+#### PostgreSQL permissions
+
+The backend creates its tables during startup. The PostgreSQL role in
+`DATABASE_URL` must be allowed to use and create objects in the `public`
+schema. This is normally automatic when the role creates the database, but
+external PostgreSQL installations may create the database with a different
+owner. Run this once as a PostgreSQL administrator, replacing the role and
+database names with the values in `DATABASE_URL`:
+
+```sql
+GRANT USAGE, CREATE ON SCHEMA public TO vvvwatch;
+```
+
+For a PostgreSQL Docker container, the equivalent command is:
+
+```bash
+docker exec -it <postgres-container> psql -U <admin-user> -d <database> \
+	-c "GRANT USAGE, CREATE ON SCHEMA public TO vvvwatch;"
+```
+
 #### Unraid
 Import `unraid/vvv-token-watch.xml` via the Community Applications template manager. Fill in the variables in the template — no `.env` file needed.
 
