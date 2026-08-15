@@ -16,7 +16,7 @@ WORKDIR /app
 
 # Install system dependencies including Node.js 20
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
+    curl gosu \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
@@ -63,7 +63,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Start script
 COPY docker/start.sh /start.sh
 RUN chmod +x /start.sh
-
-USER appuser
 
 CMD ["/start.sh"]
