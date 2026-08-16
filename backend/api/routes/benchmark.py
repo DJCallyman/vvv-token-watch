@@ -32,6 +32,7 @@ from backend.models.schemas import (
     BenchmarkEstimateParams,
     BenchmarkEstimateResponse,
     BenchmarkStartParams,
+    _DEFAULT_BENCHMARK_TESTS,
 )
 from backend.limiter import limiter
 from sse_starlette.sse import EventSourceResponse
@@ -309,11 +310,13 @@ def _estimate_cost(
     tests: list[str],
     iterations: int,
     results_dir: Path,
-) -> tuple[int, float, int, list[str]]:
-    """Return (estimated_calls, estimated_usd, skipped_test_slots, warnings)."""
+    judge_model: Optional[dict] = None,
+) -> tuple[int, float, float, int, list[str]]:
+    """Return (calls, total USD, judge USD, skipped slots, warnings)."""
     historical = _load_historical_completion_estimates(results_dir)
     total_calls = 0
     total_usd = 0.0
+    judge_usd = 0.0
     skipped = 0
     warnings: list[str] = []
 
@@ -344,7 +347,19 @@ def _estimate_cost(
                     f"{model_id} always reasons; {tid} estimate uses a ceiling and may be low."
                 )
 
-    return total_calls, total_usd, skipped, warnings
+    if judge_model:
+        pricing = judge_model.get("model_spec", {}).get("pricing", {})
+        judge_input = (pricing.get("input") or {}).get("usd") or 0.0
+        judge_output = (pricing.get("output") or {}).get("usd") or 0.0
+        judge_iterations = min(iterations, 5)
+        judge_calls = sum(1 for tid in ("T5", "T8") if tid in tests) * judge_iterations
+        total_calls += judge_calls
+        judge_usd = judge_calls * (
+            (400 * judge_input + 256 * judge_output) / 1_000_000
+        )
+        total_usd += judge_usd
+
+    return total_calls, total_usd, judge_usd, skipped, warnings
 
 
 async def _resolve_models_and_estimate(
@@ -355,7 +370,7 @@ async def _resolve_models_and_estimate(
     validation and cost ceiling that /benchmark/estimate does (T-RS-1).
     """
     privacy = params.privacy
-    tests = params.tests or list(_ALL_TESTS)
+    tests = params.tests or list(_DEFAULT_BENCHMARK_TESTS)
 
     raw = await _fetch_and_filter_text_models(api_key)
     raw = _filter_by_privacy(raw, privacy)
@@ -382,8 +397,21 @@ async def _resolve_models_and_estimate(
         raise HTTPException(400, "No models match the selected privacy filter")
 
     models = sorted(models, key=lambda m: m.get("id", ""))
-    calls, usd, skipped, warnings = _estimate_cost(models, tests, params.iterations, _results_dir())
-    return models, tests, privacy, calls, usd, skipped, warnings
+    judge_definition = None
+    if params.judge:
+        judge_id = params.judge_model or settings.BENCHMARK_JUDGE_MODEL
+        judge_definition = by_id.get(judge_id)
+        if judge_definition is None:
+            raise HTTPException(400, f"Judge model '{judge_id}' is not a qualifying text model")
+
+    calls, usd, judge_usd, skipped, warnings = _estimate_cost(
+        models,
+        tests,
+        params.iterations,
+        _results_dir(),
+        judge_model=judge_definition,
+    )
+    return models, tests, privacy, calls, usd, judge_usd, skipped, warnings
 
 
 # ---------------------------------------------------------------------------
@@ -484,7 +512,7 @@ async def estimate_benchmark(request: Request):
         raise HTTPException(400, "No Venice API key configured in settings")
 
     try:
-        models, tests, privacy, calls, usd, skipped, warnings = await _resolve_models_and_estimate(
+        models, tests, privacy, calls, usd, judge_usd, skipped, warnings = await _resolve_models_and_estimate(
             api_key, params
         )
     except httpx.HTTPStatusError as exc:
@@ -516,6 +544,8 @@ async def estimate_benchmark(request: Request):
         privacy=privacy,
         estimated_calls=calls,
         estimated_usd=round(usd, 6),
+        judge_cost_usd=round(judge_usd, 6),
+        judge_model=(params.judge_model or settings.BENCHMARK_JUDGE_MODEL) if params.judge else None,
         skipped_tests_note=note_skip,
         note=note,
     ).model_dump()
@@ -561,7 +591,7 @@ async def start_benchmark(request: Request):
     # same check /benchmark/estimate performs) and enforce a hard cost
     # ceiling before spending any money (SEC-05/SEC-06).
     try:
-        models, tests, privacy, calls, usd, skipped, warnings = await _resolve_models_and_estimate(
+        models, tests, privacy, calls, usd, judge_usd, skipped, warnings = await _resolve_models_and_estimate(
             api_key, params
         )
     except httpx.HTTPStatusError as exc:
@@ -594,6 +624,9 @@ async def start_benchmark(request: Request):
         "--tests", ",".join(tests),
         "--models", ",".join(model_ids),
     ]
+    if params.judge:
+        cmd.append("--judge")
+        cmd.extend(["--judge-model", params.judge_model or settings.BENCHMARK_JUDGE_MODEL])
 
     # Pass secrets via environment, not argv, so they never appear in
     # `ps`/`/proc/<pid>/cmdline` (SEC-07). Only pass the admin key when

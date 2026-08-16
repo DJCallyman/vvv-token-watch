@@ -2,18 +2,12 @@
 
 import { useState, useMemo } from 'react'
 import { BenchmarkRunDetail, BenchmarkModelResult } from '@/lib/api'
+import { BENCHMARK_TESTS } from '@/lib/benchmark-tests'
 
-const TEST_IDS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8']
-const TEST_LABELS: Record<string, string> = {
-  T1: 'Latency',
-  T2: 'Tools',
-  T3: 'Schema',
-  T4: 'Instruct',
-  T5: 'Reason',
-  T6: 'Context',
-  T7: 'Consist.',
-  T8: 'Concise',
-}
+const TEST_IDS = BENCHMARK_TESTS.map((test) => test.id)
+const TEST_LABELS = Object.fromEntries(
+  BENCHMARK_TESTS.map((test) => [test.id, test.label]),
+)
 
 type SortKey = 'composite_score' | 'data_coverage' | 'pricing_input_usd' | 'pricing_output_usd' | 'value_score' | 'actual_cost' | 'billed_usd' | string
 

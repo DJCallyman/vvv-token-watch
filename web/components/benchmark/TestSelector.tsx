@@ -1,17 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-
-const TESTS = [
-  { id: 'T1', name: 'Latency', desc: 'Time-to-first-token and throughput' },
-  { id: 'T2', name: 'Tool Calling', desc: 'Function call with valid JSON arguments' },
-  { id: 'T3', name: 'Structured Output', desc: 'JSON schema adherence (person record)' },
-  { id: 'T4', name: 'Instruction Following', desc: 'Follow strict output format constraints' },
-  { id: 'T5', name: 'Reasoning Quality', desc: 'Multi-step logic puzzle (river crossing)' },
-  { id: 'T6', name: 'Context Coherence', desc: 'Multi-turn memory retention' },
-  { id: 'T7', name: 'Consistency', desc: 'Same answer across repeated identical prompts' },
-  { id: 'T8', name: 'Conciseness', desc: 'Response within a specified word limit' },
-]
+import { BENCHMARK_TESTS } from '@/lib/benchmark-tests'
 
 interface Props {
   selected: string[]
@@ -27,7 +16,7 @@ export function TestSelector({ selected, onChange }: Props) {
     }
   }
 
-  const selectAll = () => onChange(TESTS.map((t) => t.id))
+  const selectAll = () => onChange(BENCHMARK_TESTS.map((t) => t.id))
   const selectNone = () => onChange([])
 
   return (
@@ -40,7 +29,7 @@ export function TestSelector({ selected, onChange }: Props) {
         </div>
       </div>
       <div className="grid grid-cols-2 gap-1.5">
-        {TESTS.map((t) => (
+        {BENCHMARK_TESTS.map((t) => (
           <label key={t.id} className="flex items-start gap-2 cursor-pointer group rounded-md p-1.5 hover:bg-muted/20 transition-colors">
             <input
               type="checkbox"
@@ -58,7 +47,7 @@ export function TestSelector({ selected, onChange }: Props) {
           </label>
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">{selected.length} of {TESTS.length} selected</p>
+      <p className="text-xs text-muted-foreground">{selected.length} of {BENCHMARK_TESTS.length} selected</p>
     </div>
   )
 }

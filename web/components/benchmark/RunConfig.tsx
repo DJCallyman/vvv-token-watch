@@ -4,20 +4,25 @@ import { useState } from 'react'
 import { ModelSelector } from './ModelSelector'
 import { TestSelector } from './TestSelector'
 import { api, BenchmarkEstimateResponse, BenchmarkStartParams } from '@/lib/api'
+import { DEFAULT_BENCHMARK_TEST_IDS } from '@/lib/benchmark-tests'
+import { useBenchmarkModels } from '@/lib/hooks'
 
 interface Props {
   onStart: (params: BenchmarkStartParams) => void
   isRunning: boolean
 }
 
-const ALL_TESTS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8']
+const DEFAULT_JUDGE_MODEL = 'zai-org-glm-5-2'
 
 export function RunConfig({ onStart, isRunning }: Props) {
+  const { data: benchmarkModels } = useBenchmarkModels()
   const [selectedModels, setSelectedModels] = useState<string[] | null>(null) // null = all
-  const [selectedTests, setSelectedTests] = useState<string[]>(ALL_TESTS)
+  const [selectedTests, setSelectedTests] = useState<string[]>(DEFAULT_BENCHMARK_TEST_IDS)
   const [iterations, setIterations] = useState(10)
   const [workers, setWorkers] = useState(4)
   const [privacy, setPrivacy] = useState<'both' | 'private' | 'anonymized'>('both')
+  const [judgeEnabled, setJudgeEnabled] = useState(false)
+  const [judgeModel, setJudgeModel] = useState(DEFAULT_JUDGE_MODEL)
 
   const [estimate, setEstimate] = useState<BenchmarkEstimateResponse | null>(null)
   const [pendingParams, setPendingParams] = useState<BenchmarkStartParams | null>(null)
@@ -34,8 +39,10 @@ export function RunConfig({ onStart, isRunning }: Props) {
     iterations,
     workers,
     privacy,
-    tests: selectedTests.length === ALL_TESTS.length ? undefined : selectedTests,
+    tests: selectedTests.length === DEFAULT_BENCHMARK_TEST_IDS.length ? undefined : selectedTests,
     models: selectedModels ?? undefined,
+    judge: judgeEnabled,
+    judge_model: judgeEnabled ? judgeModel : undefined,
   })
 
   const invalidateEstimate = () => {
@@ -164,6 +171,46 @@ export function RunConfig({ onStart, isRunning }: Props) {
             ))}
           </div>
         </div>
+
+        <div className="border-t border-border pt-4 space-y-2">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={judgeEnabled}
+              onChange={(e) => {
+                setJudgeEnabled(e.target.checked)
+                invalidateEstimate()
+              }}
+              className="w-4 h-4 rounded border-border accent-primary"
+            />
+            <span className="text-sm font-medium text-foreground">Use LLM judge for reasoning and conciseness</span>
+          </label>
+          {judgeEnabled && (
+            <div className="pl-6 space-y-1.5">
+              <label htmlFor="benchmark-judge-model" className="text-xs font-medium text-muted-foreground uppercase tracking-wide block">
+                Judge model
+              </label>
+              <select
+                id="benchmark-judge-model"
+                value={judgeModel}
+                onChange={(e) => {
+                  setJudgeModel(e.target.value)
+                  invalidateEstimate()
+                }}
+                className="w-full max-w-md bg-muted/30 border border-border rounded-md text-sm px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                {!benchmarkModels?.models.some((model) => model.id === DEFAULT_JUDGE_MODEL) && (
+                  <option value={DEFAULT_JUDGE_MODEL}>GLM 5.2 ({DEFAULT_JUDGE_MODEL})</option>
+                )}
+                {(benchmarkModels?.models ?? []).map((model) => (
+                  <option key={model.id} value={model.id}>
+                    {model.display_name || model.id} ({model.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
       </div>
 
       {estimateError && (
@@ -201,6 +248,11 @@ export function RunConfig({ onStart, isRunning }: Props) {
               <p className="font-semibold text-amber-400">
                 ~${estimate.estimated_usd.toFixed(4)} USD
               </p>
+              {(estimate.judge_cost_usd ?? 0) > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Includes ~${(estimate.judge_cost_usd ?? 0).toFixed(4)} judge cost
+                </p>
+              )}
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wide">Workers</p>
