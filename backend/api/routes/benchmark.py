@@ -55,8 +55,13 @@ _TOKEN_ESTIMATES = {
     "T6": (150, 40),  # multi-turn: ~3 messages
     "T7": (25, 15),
     "T8": (40, 60),
+    "T9": (80, 256),
+    "T10": (28000, 64),
+    "T11": (80, 64),
 }
-_ALL_TESTS = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]
+_ALL_TESTS = [
+    "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11"
+]
 
 # Models that always generate reasoning tokens regardless of max_tokens or
 # reasoning controls. Estimates for these models should use historical averages.

@@ -16,12 +16,19 @@ Stdout protocol:
 from __future__ import annotations
 
 import argparse
+import ast
 import asyncio
 import json
 import math
 import os
 import re
+try:
+    import resource
+except ImportError:
+    resource = None
 import statistics
+import subprocess
+import tempfile
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -90,6 +97,9 @@ DEFAULT_COMPLETION_ESTIMATES = {
     "T6": 128 * 3,
     "T7": 32,
     "T8": 128,
+    "T9": 256,
+    "T10": 64,
+    "T11": 64,
 }
 
 
@@ -198,6 +208,15 @@ def _prompt_estimate_for_test(tid: str) -> int:
         return _estimate_message_tokens(messages)
     if tid == "T8":
         messages = [{"role": "user", "content": T8_PROMPT}]
+        return _estimate_message_tokens(messages)
+    if tid == "T9":
+        messages = [{"role": "user", "content": T9_PROMPT}]
+        return _estimate_message_tokens(messages)
+    if tid == "T10":
+        messages = [{"role": "user", "content": T10_PROMPT}]
+        return _estimate_message_tokens(messages)
+    if tid == "T11":
+        messages = [{"role": "user", "content": T11_PROMPT}]
         return _estimate_message_tokens(messages)
     return 50
 
@@ -1344,6 +1363,231 @@ async def test_t8(
 
 
 # ---------------------------------------------------------------------------
+# T9 - Coding
+# ---------------------------------------------------------------------------
+
+T9_PROMPT = (
+    "Write a Python function named fib that returns the nth Fibonacci number "
+    "using memoization. n=0 returns 0, n=1 returns 1. Return only the code, "
+    "with no explanation."
+)
+
+
+def _extract_python_code(text: str) -> str:
+    fenced = re.search(r"```(?:python)?\s*(.*?)```", text or "", re.DOTALL | re.IGNORECASE)
+    code = fenced.group(1) if fenced else text
+    start = code.find("def fib")
+    return code[start:] if start >= 0 else code.strip()
+
+
+def _code_is_allowed(code: str) -> bool:
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return False
+    blocked_names = {"eval", "exec", "compile", "open", "__import__", "input"}
+    blocked_attributes = {"system", "popen", "run", "call", "check_output"}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            return False
+        if isinstance(node, ast.Name) and node.id in blocked_names:
+            return False
+        if isinstance(node, ast.Attribute) and node.attr in blocked_attributes:
+            return False
+    return any(isinstance(node, ast.FunctionDef) and node.name == "fib" for node in tree.body)
+
+
+def _limit_code_process() -> None:
+    if resource is None:
+        return
+    try:
+        resource.setrlimit(resource.RLIMIT_CPU, (2, 2))
+    except (OSError, ValueError):
+        pass
+    try:
+        resource.setrlimit(resource.RLIMIT_AS, (256 * 1024 * 1024, 256 * 1024 * 1024))
+    except (OSError, ValueError):
+        pass
+
+
+def _run_fib_code(code: str) -> tuple[Optional[dict], Optional[str]]:
+    if not _code_is_allowed(code):
+        return None, "code rejected by safety validation"
+    harness = (
+        "\n_results = [fib(0), fib(1), fib(10), fib(20)]\n"
+        "print(_results)\n"
+    )
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", encoding="utf-8") as handle:
+            handle.write(code)
+            handle.write(harness)
+            handle.flush()
+            completed = subprocess.run(
+                [sys.executable, "-I", handle.name],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+                preexec_fn=_limit_code_process if resource is not None else None,
+            )
+    except subprocess.TimeoutExpired:
+        return None, "execution timed out"
+    except OSError as exc:
+        return None, str(exc)
+    if completed.returncode != 0:
+        return None, completed.stderr[:300] or "execution failed"
+    try:
+        values = json.loads(completed.stdout.strip().replace("'", '"'))
+    except (json.JSONDecodeError, ValueError):
+        return None, "invalid harness output"
+    if not isinstance(values, list) or len(values) != 4:
+        return None, "invalid Fibonacci output"
+    return {
+        "values": values,
+        "memoized": bool(re.search(r"cache|memo|lru_cache", code, re.IGNORECASE)),
+    }, None
+
+
+def _score_coding(result: Optional[dict]) -> float:
+    if not result:
+        return 0.0
+    values = result.get("values", [])
+    score = 0.0
+    if len(values) >= 2 and values[:2] == [0, 1]:
+        score += 0.4
+    if len(values) >= 3 and values[2] == 55:
+        score += 0.3
+    if len(values) >= 4 and values[3] == 6765:
+        score += 0.2
+    if result.get("memoized"):
+        score += 0.1
+    return min(1.0, score)
+
+
+async def test_t9(client: httpx.AsyncClient, model_id: str, iterations: int) -> dict:
+    scores: list[float] = []
+    latencies: list[float] = []
+    prompt_toks: list[float] = []
+    completion_toks: list[float] = []
+    request_ids: list[str] = []
+    sample_responses: list[str] = []
+    errors = 0
+    for _ in range(iterations):
+        result = await chat_completion(
+            client, model_id, [{"role": "user", "content": T9_PROMPT}], max_tokens=256
+        )
+        if result.get("request_id"):
+            request_ids.append(result["request_id"])
+        if not result.get("ok"):
+            errors += 1
+            continue
+        latencies.append(result["latency_ms"])
+        prompt, completion = _usage_tokens(result["usage"])
+        prompt_toks.append(prompt)
+        completion_toks.append(completion)
+        sample_responses.append(result["content"])
+        executed, error = await asyncio.to_thread(_run_fib_code, _extract_python_code(result["content"]))
+        scores.append(_score_coding(executed))
+        if error:
+            log(f"  [{model_id}] T9 execution: {error}")
+    return aggregate_runs(
+        scores, latencies, [], [], prompt_toks, completion_toks, errors,
+        request_ids=request_ids, sample_responses=sample_responses,
+    )
+
+
+# ---------------------------------------------------------------------------
+# T10 - Long context
+# ---------------------------------------------------------------------------
+
+T10_NEEDLE = "The secret access code is 7-3-9-2-ALPHA."
+T10_PROMPT = (
+    "Read the document and answer the question.\n\n"
+    + ("This is background context with no relevant code. " * 2200)
+    + "\n"
+    + T10_NEEDLE
+    + "\n"
+    + ("Continue reviewing the background context carefully. " * 2200)
+    + "\n\nWhat is the secret access code? Reply with only the code."
+)
+
+
+async def test_t10(
+    client: httpx.AsyncClient, model_id: str, model_meta: dict, iterations: int
+) -> dict:
+    if model_meta.get("context_length", 0) < 8000:
+        return empty_category(skipped=True, runs_skip=iterations)
+    scores: list[float] = []
+    latencies: list[float] = []
+    prompt_toks: list[float] = []
+    completion_toks: list[float] = []
+    request_ids: list[str] = []
+    sample_responses: list[str] = []
+    errors = 0
+    for _ in range(iterations):
+        result = await chat_completion(
+            client, model_id, [{"role": "user", "content": T10_PROMPT}], max_tokens=64
+        )
+        if result.get("request_id"):
+            request_ids.append(result["request_id"])
+        if not result.get("ok"):
+            errors += 1
+            continue
+        latencies.append(result["latency_ms"])
+        prompt, completion = _usage_tokens(result["usage"])
+        prompt_toks.append(prompt)
+        completion_toks.append(completion)
+        response = result["content"]
+        sample_responses.append(response)
+        normalized = re.sub(r"[^a-z0-9]", "", response.lower())
+        scores.append(1.0 if "7392alpha" in normalized else 0.0)
+    return aggregate_runs(
+        scores, latencies, [], [], prompt_toks, completion_toks, errors,
+        request_ids=request_ids, sample_responses=sample_responses,
+    )
+
+
+# ---------------------------------------------------------------------------
+# T11 - Multilingual
+# ---------------------------------------------------------------------------
+
+T11_PROMPT = (
+    "次の論理パズルを解いてください。AはBより背が高い。"
+    "BはCより背が高い。一番背が高いのは誰ですか？名前だけ答えてください。"
+)
+
+
+async def test_t11(client: httpx.AsyncClient, model_id: str, iterations: int) -> dict:
+    scores: list[float] = []
+    latencies: list[float] = []
+    prompt_toks: list[float] = []
+    completion_toks: list[float] = []
+    request_ids: list[str] = []
+    sample_responses: list[str] = []
+    errors = 0
+    for _ in range(iterations):
+        result = await chat_completion(
+            client, model_id, [{"role": "user", "content": T11_PROMPT}], max_tokens=64
+        )
+        if result.get("request_id"):
+            request_ids.append(result["request_id"])
+        if not result.get("ok"):
+            errors += 1
+            continue
+        latencies.append(result["latency_ms"])
+        prompt, completion = _usage_tokens(result["usage"])
+        prompt_toks.append(prompt)
+        completion_toks.append(completion)
+        response = result["content"].strip()
+        sample_responses.append(response)
+        scores.append(1.0 if re.search(r"\bA\b", response, re.IGNORECASE) else 0.0)
+    return aggregate_runs(
+        scores, latencies, [], [], prompt_toks, completion_toks, errors,
+        request_ids=request_ids, sample_responses=sample_responses,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Per-model orchestration
 # ---------------------------------------------------------------------------
 
@@ -1370,6 +1614,12 @@ async def run_test(
         return await test_t7(client, model_id, iterations)
     if tid == "T8":
         return await test_t8(client, model_id, iterations)
+    if tid == "T9":
+        return await test_t9(client, model_id, iterations)
+    if tid == "T10":
+        return await test_t10(client, model_id, model_meta, iterations)
+    if tid == "T11":
+        return await test_t11(client, model_id, iterations)
     return empty_category(skipped=True)
 
 
