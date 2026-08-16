@@ -294,6 +294,7 @@ export interface BenchmarkCategory {
   tokens_per_sec_mean: number | null
   tokens_completion_mean: number | null
   tokens_prompt_mean: number | null
+  judge_scores?: Array<{ score: number; reasoning?: string }> 
 }
 
 export interface BenchmarkModelCosts {
@@ -327,6 +328,8 @@ export interface BenchmarkModelResult {
   actual_billed?: BenchmarkActualBilled
   composite_score: number | null
   data_coverage: number | null
+  judge_enabled?: boolean
+  judge_model?: string | null
 }
 
 export interface BenchmarkRunDetail {

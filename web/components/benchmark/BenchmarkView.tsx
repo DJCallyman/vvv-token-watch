@@ -9,6 +9,7 @@ import { CostOverlay } from './CostOverlay'
 import { RunConfig } from './RunConfig'
 import { BenchmarkProgress } from './BenchmarkProgress'
 import { InfographicPanel } from './InfographicPanel'
+import { downloadBenchmarkFile } from '@/lib/benchmark-export'
 
 type Tab = 'results' | 'run'
 
@@ -99,16 +100,30 @@ export function BenchmarkView() {
               isLoading={runsLoading}
             />
             {runDetail && (
-              <button
-                onClick={() => setShowCostOverlay((v) => !v)}
-                className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
-                  showCostOverlay
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-card text-muted-foreground border-border hover:text-foreground'
-                }`}
-              >
-                {showCostOverlay ? 'Hide Value Analysis' : 'Value Analysis'}
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => downloadBenchmarkFile(runDetail, 'csv')}
+                  className="text-xs px-3 py-1.5 rounded-md border bg-card text-muted-foreground border-border hover:text-foreground transition-colors"
+                >
+                  Export CSV
+                </button>
+                <button
+                  onClick={() => downloadBenchmarkFile(runDetail, 'md')}
+                  className="text-xs px-3 py-1.5 rounded-md border bg-card text-muted-foreground border-border hover:text-foreground transition-colors"
+                >
+                  Export Markdown
+                </button>
+                <button
+                  onClick={() => setShowCostOverlay((v) => !v)}
+                  className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
+                    showCostOverlay
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-card text-muted-foreground border-border hover:text-foreground'
+                  }`}
+                >
+                  {showCostOverlay ? 'Hide Value Analysis' : 'Value Analysis'}
+                </button>
+              </div>
             )}
           </div>
 
@@ -128,6 +143,14 @@ export function BenchmarkView() {
           {runDetail && (
             <>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                {runDetail.models.some((model) => model.judge_enabled) && (
+                  <div className="flex items-center gap-2 rounded-md border border-emerald-800/60 bg-emerald-950/30 px-2.5 py-1">
+                    <span className="text-emerald-300">LLM judge used</span>
+                    <span className="font-mono text-foreground">
+                      {runDetail.models.find((model) => model.judge_enabled)?.judge_model ?? 'configured model'}
+                    </span>
+                  </div>
+                )}
                 {runDetail.total_cost_usd != null && (
                   <div className="flex items-center gap-2">
                     <span>List cost:</span>

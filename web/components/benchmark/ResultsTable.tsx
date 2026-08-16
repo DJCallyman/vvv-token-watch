@@ -144,6 +144,11 @@ const getSortValue = (model: BenchmarkModelResult): number | string => {
         <p className="text-sm text-muted-foreground">
           {runDetail.model_count} models · click column headers to sort
         </p>
+        {runDetail.models.some((model) => model.judge_enabled) && (
+          <span className="text-xs text-emerald-300 border border-emerald-800/60 rounded px-2 py-1">
+            T5/T8 judged by {runDetail.models.find((model) => model.judge_enabled)?.judge_model ?? 'LLM judge'}
+          </span>
+        )}
         <button
           onClick={() => setShowCosts((v) => !v)}
           className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
