@@ -36,7 +36,9 @@ import httpx
 
 VENICE_BASE = "https://api.venice.ai/api/v1"
 REQUEST_TIMEOUT_S = 60.0
-ALL_TESTS = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]
+DEFAULT_JUDGE_MODEL = "zai-org-glm-5-2"
+ALL_TESTS = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11"]
+DEFAULT_TESTS = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]
 
 # Composite score weights (must sum to 1.0)
 WEIGHTS = {
@@ -198,6 +200,54 @@ def _prompt_estimate_for_test(tid: str) -> int:
         messages = [{"role": "user", "content": T8_PROMPT}]
         return _estimate_message_tokens(messages)
     return 50
+
+
+def _parse_judge_score(text: str) -> Optional[float]:
+    match = re.search(r"\{.*\}", text or "", re.DOTALL)
+    if not match:
+        return None
+    try:
+        score = float(json.loads(match.group(0)).get("score"))
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return None
+    return max(0.0, min(1.0, score))
+
+
+async def _judge_response(
+    client: httpx.AsyncClient,
+    judge_model: str,
+    test_id: str,
+    response: str,
+) -> Optional[dict]:
+    if test_id == "T5":
+        rubric = (
+            "Does the response correctly solve the fox, chicken, and grain river "
+            "crossing puzzle? Score from 0 to 1 using: all items end safely (0.4), "
+            "minimum seven crossings (0.3), and clear numbered steps (0.3)."
+        )
+    else:
+        rubric = (
+            "Is the response an accurate explanation of a hash table in 50 words "
+            "or fewer? Score from 0 to 1 using: correctness (0.5), word limit "
+            "compliance (0.3), and clarity (0.2)."
+        )
+    prompt = (
+        f"{rubric}\nReturn only JSON with numeric field score and string field "
+        f"reasoning.\n\nResponse to evaluate:\n{response}"
+    )
+    result = await chat_completion(
+        client,
+        judge_model,
+        [{"role": "user", "content": prompt}],
+        max_tokens=256,
+        temperature=0.0,
+    )
+    if not result.get("ok"):
+        return None
+    score = _parse_judge_score(result.get("content", ""))
+    if score is None:
+        return None
+    return {"score": score, "reasoning": result.get("content", "")}
 
 # ---------------------------------------------------------------------------
 # Logging helpers (stdout is consumed by SSE)
@@ -1548,6 +1598,8 @@ async def run_model_benchmark(
     tests: list[str],
     iterations: int,
     semaphore: asyncio.Semaphore,
+    judge_enabled: bool = False,
+    judge_model: str = DEFAULT_JUDGE_MODEL,
 ) -> dict:
     model_meta = extract_model_meta(model)
     model_id = model_meta["id"]
@@ -1576,6 +1628,22 @@ async def run_model_benchmark(
                     f"err={cat['runs_error']}"
                 )
 
+        if judge_enabled:
+            for tid in ("T5", "T8"):
+                cat = categories.get(tid)
+                if not cat or cat.get("skipped"):
+                    continue
+                judge_scores = []
+                for response in cat.get("sample_responses", []):
+                    judged = await _judge_response(client, judge_model, tid, response)
+                    if judged is not None:
+                        judge_scores.append(judged)
+                if judge_scores:
+                    cat["judge_scores"] = judge_scores
+                    cat["score_effective"] = statistics.mean(
+                        item["score"] for item in judge_scores
+                    )
+
         composite, coverage = compute_composite(categories)
         costs = compute_costs(
             categories,
@@ -1590,6 +1658,8 @@ async def run_model_benchmark(
             "model_id": model_id,
             "model_meta": model_meta,
             "categories": categories,
+            "judge_enabled": judge_enabled,
+            "judge_model": judge_model if judge_enabled else None,
             "costs": costs,
             "composite_score": composite,
             "data_coverage": coverage,
@@ -1680,6 +1750,16 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         default=None,
         help="Comma-separated model IDs (default: all qualifying)",
     )
+    p.add_argument(
+        "--judge",
+        action="store_true",
+        help="Enable LLM judging for supported benchmark tests",
+    )
+    p.add_argument(
+        "--judge-model",
+        default=DEFAULT_JUDGE_MODEL,
+        help=f"Model used for LLM judging (default: {DEFAULT_JUDGE_MODEL})",
+    )
     return p.parse_args(argv)
 
 
@@ -1690,7 +1770,7 @@ async def async_main(args: argparse.Namespace) -> int:
         log("ERROR: --api-key or VENICE_API_KEY env var is required")
         return 1
 
-    tests = ALL_TESTS
+    tests = DEFAULT_TESTS
     if args.tests:
         tests = [t.strip().upper() for t in args.tests.split(",") if t.strip()]
         unknown = [t for t in tests if t not in ALL_TESTS]
@@ -1742,6 +1822,18 @@ async def async_main(args: argparse.Namespace) -> int:
             log("ERROR: No models to benchmark")
             return 1
 
+        if args.judge:
+            qualifying_ids = {m.get("id") for m in all_models}
+            if args.judge_model not in qualifying_ids:
+                log(
+                    f"WARNING: Judge model {args.judge_model} is not in the "
+                    f"qualifying catalog; falling back to {DEFAULT_JUDGE_MODEL}."
+                )
+                args.judge_model = DEFAULT_JUDGE_MODEL
+            if args.judge_model not in qualifying_ids:
+                log(f"ERROR: Judge model {args.judge_model} is unavailable")
+                return 1
+
         log(f"Selected {len(models)} model(s): {', '.join(m.get('id','?') for m in models)}")
 
         run_start = datetime.now(timezone.utc)
@@ -1765,7 +1857,13 @@ async def async_main(args: argparse.Namespace) -> int:
         async def _wrap(model: dict) -> dict:
             nonlocal completed
             result = await run_model_benchmark(
-                client, model, tests, args.iterations, semaphore
+                client,
+                model,
+                tests,
+                args.iterations,
+                semaphore,
+                judge_enabled=args.judge,
+                judge_model=args.judge_model,
             )
             completed += 1
             progress(completed, total, result["model_id"])

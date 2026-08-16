@@ -366,6 +366,8 @@ export interface BenchmarkStartParams {
   iterations: number
   workers: number
   privacy: 'both' | 'private' | 'anonymized'
+  judge?: boolean
+  judge_model?: string
 }
 
 export interface BenchmarkEstimateResponse {
@@ -377,6 +379,8 @@ export interface BenchmarkEstimateResponse {
   privacy: string
   estimated_calls: number
   estimated_usd: number
+  judge_cost_usd?: number
+  judge_model?: string | null
   skipped_tests_note?: string | null
   note: string
 }

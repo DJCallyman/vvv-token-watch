@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # Billing reconciliation needs the admin key (billing scope); disabled by
     # default so benchmark runs only need an inference-scoped key.
     BENCHMARK_ENABLE_BILLING_RECONCILIATION: bool = False
+    # Default model for optional benchmark judging. Deliberately avoids the
+    # API text:default trait, which is not suitable for judging.
+    BENCHMARK_JUDGE_MODEL: str = "zai-org-glm-5-2"
 
     # When false (default), interactive API docs (/docs, /redoc, /openapi.json)
     # are disabled. Set true only for local development.

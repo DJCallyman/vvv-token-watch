@@ -67,7 +67,10 @@ class DailyAnalyticsResponse(BaseModel):
     source: str = "billing/usage"
 
 
-_ALL_BENCHMARK_TESTS = ("T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8")
+_ALL_BENCHMARK_TESTS = (
+    "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11"
+)
+_DEFAULT_BENCHMARK_TESTS = ("T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8")
 _MAX_MODELS_PER_BENCHMARK_RUN = 50
 
 
@@ -77,6 +80,8 @@ class BenchmarkStartParams(BaseModel):
     iterations: int = Field(default=10, ge=1, le=100)
     workers: int = Field(default=4, ge=1, le=16)
     privacy: Literal["both", "private", "anonymized"] = "both"
+    judge: bool = False
+    judge_model: Optional[str] = None
 
     @field_validator("tests")
     @classmethod
@@ -118,6 +123,8 @@ class BenchmarkEstimateResponse(BaseModel):
     privacy: str
     estimated_calls: int
     estimated_usd: float
+    judge_cost_usd: float = 0.0
+    judge_model: Optional[str] = None
     skipped_tests_note: Optional[str] = None
     note: str = "Estimate uses rough token counts; actual cost may vary."
 
