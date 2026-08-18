@@ -1,26 +1,26 @@
 # VVV Token Watch
 
-Web-based monitoring tool for Venice AI API usage, account balance, and cryptocurrency prices (VVV & DIEM tokens).
+VVV Token Watch monitors Venice AI API usage, account balance, and VVV and DIEM prices.
 
-Built with a **FastAPI** backend and **Next.js** frontend, packaged as a single Docker image for self-hosted deployment (Unraid, docker-compose, etc.).
+The application uses a **FastAPI** backend and a **Next.js** frontend. A single Docker image contains both applications for self-hosted deployment with Unraid or Docker Compose.
 
 ---
 
 ## Features
 
-- **Account balance** — Remaining DIEM/USD credit, epoch reset time, and consumption status
-- **Epoch usage** — DIEM/USD consumed since the current epoch started (net of refunds/cancellations)
-- **API key leaderboard** — 7-day trailing usage per key
-- **Price tracking** — VVV and DIEM live prices via CoinGecko, with portfolio value
-- **Model catalog** — Browse Venice AI models with capabilities, pricing, and deprecation status
-- **Usage analytics** — Per-model and per-key spend breakdowns
-- **Real-time refresh** — Configurable polling intervals
+- **Account balance** — Shows remaining DIEM and USD credit, the epoch reset time, and consumption status.
+- **Epoch usage** — Shows DIEM and USD use since the current epoch started. The calculation nets refunds and cancellations.
+- **API key leaderboard** — Shows trailing seven-day use for each key.
+- **Price tracking** — Gets current VVV and DIEM prices from CoinGecko and calculates portfolio value.
+- **Model catalog** — Shows Venice AI models, capabilities, prices, and deprecation status.
+- **Usage analytics** — Shows spending by model and API key.
+- **Real-time refresh** — Uses configurable polling intervals.
 
 ---
 
 ## Web App
 
-FastAPI backend + Next.js frontend, packaged as a single Docker image. Designed for self-hosted deployment (Unraid, docker-compose, etc.).
+The FastAPI backend and Next.js frontend run from one Docker image. You can deploy the image with Unraid or Docker Compose.
 
 ### Architecture
 
@@ -40,18 +40,18 @@ Open `http://<host>:3000`.
 
 #### PostgreSQL permissions
 
-The backend creates its tables during startup. The PostgreSQL role in
-`DATABASE_URL` must be allowed to use and create objects in the `public`
-schema. This is normally automatic when the role creates the database, but
-external PostgreSQL installations may create the database with a different
-owner. Run this once as a PostgreSQL administrator, replacing the role and
+The backend creates its tables at startup. The PostgreSQL role in
+`DATABASE_URL` must have permission to use the `public` schema and create
+objects in it. PostgreSQL normally grants this permission to the database
+owner. An external PostgreSQL installation can use a different owner. Run
+this command once as a PostgreSQL administrator. Replace the role and
 database names with the values in `DATABASE_URL`:
 
 ```sql
 GRANT USAGE, CREATE ON SCHEMA public TO vvvwatch;
 ```
 
-For a PostgreSQL Docker container, the equivalent command is:
+For a PostgreSQL Docker container, run this command:
 
 ```bash
 docker exec -it <postgres-container> psql -U <admin-user> -d <database> \
@@ -59,20 +59,20 @@ docker exec -it <postgres-container> psql -U <admin-user> -d <database> \
 ```
 
 #### Unraid
-Import `unraid/vvv-token-watch.xml` via the Community Applications template manager. Fill in the variables in the template — no `.env` file needed.
+Import `unraid/vvv-token-watch.xml` through the Community Applications template manager. Set the variables in the template. You do not need an `.env` file.
 
 ### Local Development (hot-reload)
 
-Runs Next.js dev server and uvicorn with `--reload` directly on your machine. Only PostgreSQL runs in Docker.
+The script runs the Next.js development server and uvicorn with `--reload` on your machine. Only PostgreSQL runs in Docker.
 
-**Prerequisites:** Docker, Python venv with `backend/requirements.txt` installed, Node.js.
+**Prerequisites:** Docker, a Python virtual environment with `backend/requirements.txt` installed, and Node.js.
 
 ```bash
 source venv/bin/activate
 ./dev.sh
 ```
 
-First run will prompt for your API keys and create a local `.env`. Subsequent runs use the saved file.
+The first run asks for your API keys and creates a local `.env` file. Later runs use this file.
 
 | Service   | URL                          |
 |-----------|------------------------------|
@@ -80,43 +80,43 @@ First run will prompt for your API keys and create a local `.env`. Subsequent ru
 | Backend   | http://localhost:8000        |
 | API docs  | http://localhost:8000/docs   |
 
-Stop with **Ctrl+C** — all processes and the Postgres container are cleaned up automatically.
+Press **Ctrl+C** to stop all processes and remove the PostgreSQL container.
 
 ### Environment Variables
 
 | Variable | Required | Description |
 |---|---|---|
-| `VENICE_ADMIN_KEY` | ✅ | Venice Admin API key (not Inference Only) |
-| `APP_PASSWORD` | ✅ | Shared password protecting the web UI and API. Generate with `openssl rand -hex 24`. The app refuses to start without it unless `ALLOW_INSECURE_NO_AUTH=true`. |
-| `ALLOW_INSECURE_NO_AUTH` | — | Explicit opt-in to run without authentication (default: `false`). Not recommended. |
+| `VENICE_ADMIN_KEY` | Required | Venice Admin API key, not an Inference Only key. |
+| `APP_PASSWORD` | Required | Shared password for the web UI and API. Generate it with `openssl rand -hex 24`. The application does not start without this value unless `ALLOW_INSECURE_NO_AUTH=true`. |
+| `ALLOW_INSECURE_NO_AUTH` | Optional | Set to `true` to run without authentication. The default is `false`. |
 | `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `COINGECKO_API_KEY` | — | CoinGecko API key (free tier if omitted) |
-| `COINGECKO_HOLDING_AMOUNT` | — | Your VVV holdings (default: 2750) |
-| `DIEM_HOLDING_AMOUNT` | — | Your DIEM holdings (default: 0) |
-| `COINGECKO_TOKEN_ID` | — | CoinGecko ID for VVV (default: `venice-token`) |
-| `DIEM_TOKEN_ID` | — | CoinGecko ID for DIEM (default: `diem`) |
-| `COINGECKO_CURRENCIES` | — | Currencies to fetch (default: `usd,aud`) |
-| `LOG_LEVEL` | — | `INFO` or `DEBUG` (default: `INFO`) |
-| `DEBUG` | — | Enables `/docs`, `/redoc`, `/openapi.json` (default: `false`) |
-| `EPOCH_LENGTH_HOURS` | — | Venice billing epoch length in hours, used to compute epoch_start from `nextEpochBegins` (default: `24`) |
-| `SNAPSHOT_INTERVAL_SECONDS` | — | Cadence (seconds) used for the doc-comment describing the request-path snapshot write cadence. Snapshots are recorded by request-path pollers; no background poller is currently shipped. (default: `300`) |
-| `SNAPSHOT_RETENTION_DAYS` | — | Retention window for `usage_snapshots` and `price_snapshots` rows; older rows are purged on each snapshot write and at startup (default: `90`) |
-| `SESSION_SECURE_COOKIE` (frontend) | — | When `true`, the session cookie is set with `Secure`. Defaults to `NODE_ENV === "production"`. Set explicitly for plaintext HTTP deployments. |
+| `COINGECKO_API_KEY` | Optional | CoinGecko API key. The free tier is used when this value is empty. |
+| `COINGECKO_HOLDING_AMOUNT` | Optional | VVV holdings. The default is `2750`. |
+| `DIEM_HOLDING_AMOUNT` | Optional | DIEM holdings. The default is `0`. |
+| `COINGECKO_TOKEN_ID` | Optional | CoinGecko ID for VVV. The default is `venice-token`. |
+| `DIEM_TOKEN_ID` | Optional | CoinGecko ID for DIEM. The default is `diem`. |
+| `COINGECKO_CURRENCIES` | Optional | Currencies to fetch. The default is `usd,aud`. |
+| `LOG_LEVEL` | Optional | `INFO` or `DEBUG`. The default is `INFO`. |
+| `DEBUG` | Optional | Enables `/docs`, `/redoc`, and `/openapi.json`. The default is `false`. |
+| `EPOCH_LENGTH_HOURS` | Optional | Billing epoch length in hours. The application uses this value to calculate `epoch_start` from `nextEpochBegins`. The default is `24`. |
+| `SNAPSHOT_INTERVAL_SECONDS` | Optional | Interval in seconds for request-path snapshot writes. Request-path pollers record snapshots. The application does not include a background poller. The default is `300`. |
+| `SNAPSHOT_RETENTION_DAYS` | Optional | Retention period for `usage_snapshots` and `price_snapshots` rows. The application removes older rows during each snapshot write and at startup. The default is `90`. |
+| `SESSION_SECURE_COOKIE` (frontend) | Optional | When `true`, sets the session cookie with `Secure`. The default is `NODE_ENV === "production"`. Set this value for plaintext HTTP deployments. |
 
-> **Admin key required:** Regular inference keys return 401 on `/billing/usage`. Create an Admin key at https://venice.ai/settings/api.
-> **Use a separate inference key:** Set `VENICE_API_KEY` to a distinct inference-only key rather than reusing `VENICE_ADMIN_KEY`, so public endpoints never expose admin-level credentials.
+> **Admin key required:** Regular inference keys return 401 for `/billing/usage`. Create an Admin key at https://venice.ai/settings/api.
+> **Use a separate inference key:** Set `VENICE_API_KEY` to a separate inference-only key. Do not reuse `VENICE_ADMIN_KEY`. This keeps admin credentials out of public endpoints.
 
 ---
 
 ## Configuration (.env)
 
-See [.env.example](.env.example) for all available options with descriptions.
+See [.env.example](.env.example) for all available options and descriptions.
 
 ---
 
 ## Testing
 
-Backend (pytest, from the repo root):
+Run the backend tests with pytest from the repository root:
 ```bash
 cd backend
 pip install -r requirements.txt
@@ -124,7 +124,7 @@ PYTHONPATH=. pytest tests/ -v
 PYTHONPATH=. pytest tests/<file>.py -v   # single file
 ```
 
-Frontend (Jest):
+Run the frontend tests with Jest:
 ```bash
 cd web
 npm install        # one-time
@@ -138,18 +138,18 @@ npm run test:coverage
 ## API Reference
 
 ### Venice AI
-- `GET /api/v1/api_keys/rate_limits` — current epoch balance and reset time
-- `GET /api/v1/billing/usage` — itemised billing transactions
-- `GET /api/v1/billing/usage-analytics` — aggregated usage by date, model, and key
-- `GET /api/v1/billing/balance` — account balance and consumption currency
-- `GET /api/v1/api_keys` — API keys with 7-day trailing usage
-- `GET /api/v1/models` — model catalog with deprecation info
+- `GET /api/v1/api_keys/rate_limits` — current epoch balance and reset time.
+- `GET /api/v1/billing/usage` — itemized billing transactions.
+- `GET /api/v1/billing/usage-analytics` — usage grouped by date, model, and key.
+- `GET /api/v1/billing/balance` — account balance and consumption currency.
+- `GET /api/v1/api_keys` — API keys with trailing seven-day usage.
+- `GET /api/v1/models` — model catalog with deprecation information.
 
 ### Web App Endpoints
 - `GET /api/health`
 - `GET /api/balance`
-- `GET /api/usage/daily` — epoch usage (net of refunds)
-- `GET /api/usage/keys` — per-key usage
+- `GET /api/usage/daily` — epoch usage after refunds.
+- `GET /api/usage/keys` — usage for each key.
 - `GET /api/prices`
 - `GET /api/models`
 - `GET /api/analytics/models`
@@ -163,4 +163,4 @@ MIT — see [LICENSE](LICENSE) for details.
 
 ---
 
-*Not affiliated with Venice AI. Independent monitoring tool.*
+*This project is not affiliated with Venice AI. It is an independent monitoring tool.*

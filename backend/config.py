@@ -55,6 +55,9 @@ class Settings(BaseSettings):
     # Shared app password for personal/self-hosted auth. Required unless
     # ALLOW_INSECURE_NO_AUTH is explicitly set to true.
     APP_PASSWORD: Optional[str] = None
+    # Read from the shared .env by the Next.js frontend; accepted here so the
+    # backend can use the same configuration file without rejecting it.
+    SESSION_SECURE_COOKIE: Optional[bool] = None
     # Explicit opt-in to run without authentication (NOT recommended).
     ALLOW_INSECURE_NO_AUTH: bool = False
     # Comma-separated CORS origins. Defaults to the local Next.js dev/prod origin.

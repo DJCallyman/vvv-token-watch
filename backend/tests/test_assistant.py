@@ -44,11 +44,19 @@ async def test_query_assistant_accepts_json_body(
             FakeResponse(
                 json_data={
                     "choices": [
-                        {"message": {"content": "Your balance is healthy."}}
+                        {
+                            "message": {
+                                "content": "Your current DIEM balance is 123.45 and USD balance is 6.78."
+                            }
+                        }
                     ]
                 }
             )
         ],
+    )
+    client.queue(
+        "/billing/balance",
+        [FakeResponse(json_data={"data": {"balances": {"DIEM": 123.45, "USD": 6.78}}})],
     )
     monkeypatch.setattr(assistant_routes, "get_client", lambda settings: client)
 
@@ -57,9 +65,7 @@ async def test_query_assistant_accepts_json_body(
         settings=object(),
     )
 
-    assert result["answer"] == "Your balance is healthy."
-    assert client.calls[0][1] == "/chat/completions"
-    assert client.calls[0][3]["messages"][-1] == {
-        "role": "user",
-        "content": "What is my balance?",
-    }
+    assert result["answer"] == "Your current balance is 123.45 DIEM and 6.78 USD."
+    assert [call[1] for call in client.calls] == [
+        "/billing/balance",
+    ]

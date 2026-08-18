@@ -43,7 +43,7 @@ build/
 !web/components/ui/alert-dialog.tsx
 archive
 crash-dump.log
-
+benchmark*.json
 
 # Runtime data files
 usage_history.json
@@ -91,3 +91,7 @@ backend/**/__pycache__/
 # Test and coverage reports
 /review
 /data/benchmark_results
+
+# Other dev files
+plan.md
+enhancement*.md
