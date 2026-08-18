@@ -7,7 +7,7 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from backend.api.routes.ai_common import extract_chat_text, get_client
 from backend.config import Settings, get_settings
@@ -24,7 +24,17 @@ class AssistantRequest(BaseModel):
 
 @router.post("/assistant/query")
 @limiter.limit("30/hour")
-async def query_assistant(request: Request, body: AssistantRequest, settings: Settings = Depends(get_settings)):
+async def query_assistant(request: Request, settings: Settings = Depends(get_settings)):
+    try:
+        raw_body = await request.json()
+        body = AssistantRequest.model_validate(
+            raw_body if isinstance(raw_body, dict) else {}
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Invalid JSON body: {exc}") from exc
+
     client = get_client(settings)
     tools = [{"type": "function", "function": {"name": name, "description": description, "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}} for name, description in {
         "get_balance": "Get current DIEM and USD balance.",
