@@ -9,8 +9,11 @@ import pytest
 from backend.core import usage_tracker as usage_tracker_module
 from backend.core.usage_tracker import (
     UsageTracker,
+    APIKeyUsage,
+    UsageMetrics,
     _net_usage_from_analytics,
 )
+from backend.api.routes import usage as usage_routes
 from backend.tests.conftest import FakeResponse, FakeVeniceAPIClient
 
 
@@ -40,6 +43,35 @@ def test_net_usage_from_analytics_sums_documented_date_totals() -> None:
         "usd": 2.0,
         "bundled_credits": 0.0,
     }
+
+
+@pytest.mark.asyncio
+async def test_api_keys_usage_includes_last_used_at(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeUsageTracker:
+        def __init__(self, api_key: str, client: FakeVeniceAPIClient) -> None:
+            pass
+
+        async def fetch_api_keys_with_daily_usage(self) -> list[APIKeyUsage]:
+            return [
+                APIKeyUsage(
+                    id="key-1",
+                    name="Test key",
+                    usage=UsageMetrics(diem=1.0, usd=0.5),
+                    created_at="2026-01-01T00:00:00Z",
+                    is_active=True,
+                    last_used_at="2026-08-18T12:34:56Z",
+                )
+            ]
+
+    monkeypatch.setattr(usage_routes, "UsageTracker", FakeUsageTracker)
+    client = FakeVeniceAPIClient()
+    client.api_key = "test"  # type: ignore[attr-defined]
+
+    result = await usage_routes.get_api_keys_usage(
+        client=client,
+    )
+
+    assert result["keys"][0]["last_used_at"] == "2026-08-18T12:34:56Z"
 
 
 @pytest.mark.asyncio
