@@ -1,11 +1,8 @@
-"""Shared SlowAPI limiter instance.
+"""Store the shared SlowAPI limiter.
 
-Kept in its own module so route files can decorate endpoints without
-circular imports through backend.main.
-
-SEC-09: proxy-aware key function. When the direct peer is a configured
-trusted proxy, the first value of X-Forwarded-For is used as the client
-identity for rate limiting. Never trust XFF from untrusted peers.
+Route files use this module to avoid circular imports through
+``backend.main``. The client key uses ``X-Forwarded-For`` only when the
+direct peer is a trusted proxy. It never trusts this header from other peers.
 """
 
 from __future__ import annotations
@@ -25,10 +22,9 @@ logger = logging.getLogger(__name__)
 def get_client_ip(request: Request) -> str:
     """Return a stable client identifier for rate limiting.
 
-    - If the direct peer IP is in TRUSTED_PROXY_IPS, use the first
-      (leftmost) value from the X-Forwarded-For header.
-    - Otherwise fall back to the direct peer IP (get_remote_address).
-    - Never trust X-Forwarded-For from an untrusted direct peer.
+    Use the first ``X-Forwarded-For`` value when the direct peer is trusted.
+    Otherwise, use the direct peer address. Never trust this header from an
+    untrusted peer.
     """
     try:
         settings = get_settings()

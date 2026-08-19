@@ -106,15 +106,12 @@ async def evaluate_alerts(
     db: AsyncSession,
     metrics: Dict[str, float],
 ) -> List[AlertEvent]:
-    """Evaluate enabled alert configs against a metrics map.
+    """Evaluate enabled alert configurations against the metrics map.
 
-    metrics keys examples:
-      diem_usage_percent, usd_usage_percent, diem_balance, usd_balance,
-      vvv_price_usd, diem_price_usd
-
-    BUG-01: deduplicates to prevent flooding. At most one unacknowledged event
-    per alert_config_id. Additionally respects ALERT_COOLDOWN_SECONDS to avoid
-    immediate re-trigger after acknowledge.
+    The map can contain ``diem_usage_percent``, ``usd_usage_percent``,
+    ``diem_balance``, ``usd_balance``, ``vvv_price_usd``, and
+    ``diem_price_usd``. Create at most one unacknowledged event per alert.
+    Also apply ``ALERT_COOLDOWN_SECONDS`` after an acknowledgment.
     """
     configs = await list_alert_configs(db, enabled_only=True)
     created: List[AlertEvent] = []

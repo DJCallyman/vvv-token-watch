@@ -131,9 +131,8 @@ async def get_usage_history(
 ):
     """Fetch billing usage history.
 
-    Prefers /billing/usage-history (cursor-paginated, no rate limit) and
-    falls back to /billing/usage for legacy accounts. The `currency` filter
-    accepts USD, DIEM, or BUNDLED_CREDITS.
+    Use ``/billing/usage-history`` first. Use ``/billing/usage`` for legacy
+    accounts. The ``currency`` filter accepts USD, DIEM, or BUNDLED_CREDITS.
     """
     try:
         # Try the new endpoint first.
@@ -202,7 +201,7 @@ async def get_usage_history_trends(
     limit: int = Query(500, ge=1, le=5000),
     db: AsyncSession = Depends(get_db),
 ):
-    """Return persisted usage snapshots for trend charts."""
+    """Return stored usage snapshots for trend charts."""
     try:
         points = await get_usage_trends(db, scope=scope, limit=limit)
         return {"scope": scope, "count": len(points), "data": points}

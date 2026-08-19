@@ -1,7 +1,7 @@
-"""Persist usage snapshots for historical trend charts.
+"""Store and query usage snapshots for trend charts.
 
-BUG-04: request-path writes now dedupe (skip identical consecutive values)
-and trigger retention purge based on SNAPSHOT_RETENTION_DAYS.
+Skip identical consecutive values and purge snapshots older than
+``SNAPSHOT_RETENTION_DAYS``.
 """
 
 from __future__ import annotations
@@ -43,9 +43,9 @@ async def record_usage_snapshot(
     next_epoch: Optional[str] = None,
     target_date: Optional[str] = None,
 ) -> Optional[UsageSnapshot]:
-    """Record a usage snapshot with dedupe + retention (BUG-04).
+    """Record a usage snapshot and purge old snapshots.
 
-    Returns the inserted row, or None if a duplicate (identical values) was skipped.
+    Return the new row. Return ``None`` when the values match the last row.
     """
     settings = get_settings()
 
@@ -101,11 +101,10 @@ async def get_usage_trends(
     limit: int = 500,
     since: Optional[datetime] = None,
 ) -> List[Dict[str, Any]]:
-    """Return the most recent `limit` snapshots for the given scope.
+    """Return the newest ``limit`` snapshots for a scope.
 
-    BUG-03 fix: we order DESC + LIMIT to get the newest rows, then reverse
-    so the caller receives ascending order (suitable for charts). An optional
-    `since` filter can be used for scope-aware windows.
+    Return the selected rows in ascending order for charts. Apply ``since``
+    when the caller needs a scope-specific time window.
     """
     stmt = select(UsageSnapshot).where(UsageSnapshot.scope == scope)
     if since is not None:

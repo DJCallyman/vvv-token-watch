@@ -44,13 +44,12 @@ export function CharacterCard({ character, onClick }: CharacterCardProps) {
     >
       <div className="relative aspect-square w-full overflow-hidden bg-muted">
         {photoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- External CDN URL; Next/Image requires loader config we don't wire up here.
+          // eslint-disable-next-line @next/next/no-img-element -- Image is served by the same-origin API proxy.
           <img
-            src={photoUrl}
+            src={`/api/characters/${encodeURIComponent(slug)}/photo`}
             alt={name}
             className="h-full w-full object-cover transition-transform group-hover:scale-105"
             loading="lazy"
-            referrerPolicy="no-referrer"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-4xl font-medium text-muted-foreground">
