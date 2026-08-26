@@ -44,12 +44,16 @@ import httpx
 VENICE_BASE = "https://api.venice.ai/api/v1"
 REQUEST_TIMEOUT_S = 60.0
 DEFAULT_JUDGE_MODEL = "zai-org-glm-5-2"
-ALL_TESTS = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11"]
-DEFAULT_TESTS = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"]
+ALL_TESTS = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12"]
+DEFAULT_TESTS = ["T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T12"]
 
 # Composite score weights (must sum to 1.0)
+# T1 is pure latency (TTFT); T12 is dedicated throughput. Splitting the old
+# T1 latency+throughput blend into two tests keeps the total weight on
+# speed-related behaviour the same (0.10) while measuring each dimension
+# independently.
 WEIGHTS = {
-    "T1": 0.10,
+    "T1": 0.05,
     "T2": 0.15,
     "T3": 0.15,
     "T4": 0.10,
@@ -57,6 +61,7 @@ WEIGHTS = {
     "T6": 0.10,
     "T7": 0.10,
     "T8": 0.15,
+    "T12": 0.05,
 }
 
 def _estimate_tokens(text: str) -> int:
@@ -100,6 +105,7 @@ DEFAULT_COMPLETION_ESTIMATES = {
     "T9": 256,
     "T10": 64,
     "T11": 64,
+    "T12": 256,
 }
 
 
@@ -217,6 +223,9 @@ def _prompt_estimate_for_test(tid: str) -> int:
         return _estimate_message_tokens(messages)
     if tid == "T11":
         messages = [{"role": "user", "content": T11_PROMPT}]
+        return _estimate_message_tokens(messages)
+    if tid == "T12":
+        messages = [{"role": "user", "content": T12_PROMPT}]
         return _estimate_message_tokens(messages)
     return 50
 
@@ -758,14 +767,12 @@ async def test_t1(
         completion_toks.append(completion)
         sample_responses.append(result["content"])
 
-        # Score: inverse latency, normalized. 200ms → ~1.0, 5000ms → ~0.04
+        # Score: pure latency (TTFT). 200ms → 1.0, 5000ms → 0.04.
+        # Throughput is measured separately by T12; mixing it into T1 let
+        # verbose models inflate their tokens/sec and overwhelm a poor TTFT.
         # Use TTFT when available (more meaningful), else total latency.
         ref = ttft if ttft is not None else latency
         score = min(1.0, max(0.0, 200.0 / max(ref, 1.0)))
-        # Blend with throughput if available
-        if tps is not None:
-            tps_score = min(1.0, tps / 80.0)  # 80 tok/s ≈ perfect
-            score = 0.6 * score + 0.4 * tps_score
         scores.append(score)
 
     return aggregate_runs(
@@ -1588,6 +1595,75 @@ async def test_t11(client: httpx.AsyncClient, model_id: str, iterations: int) ->
 
 
 # ---------------------------------------------------------------------------
+# T12 — Throughput (tokens per second)
+# ---------------------------------------------------------------------------
+# Dedicated throughput test. Uses a prompt that elicits a predictable,
+# near-constant-length response so that tokens/sec reflects streaming speed
+# rather than verbosity. The response is scored on tokens/sec normalised to
+# 80 tok/s ≈ perfect, matching the original T1 throughput component.
+#
+# This was split out of T1 (which is now pure TTFT/latency) because blending
+# throughput into T1 let verbose models inflate their token count and
+# overwhelm a poor latency score on a test labelled "Latency".
+
+T12_PROMPT = (
+    "List the numbers 1 through 20, one per line, with no other text."
+)
+
+
+async def test_t12(client: httpx.AsyncClient, model_id: str, iterations: int) -> dict:
+    scores: list[float] = []
+    latencies: list[float] = []
+    ttfts: list[float] = []
+    tps_list: list[float] = []
+    prompt_toks: list[float] = []
+    completion_toks: list[float] = []
+    request_ids: list[str] = []
+    sample_responses: list[str] = []
+    errors = 0
+
+    messages = [{"role": "user", "content": T12_PROMPT}]
+
+    for _ in range(iterations):
+        result = await chat_completion_stream(
+            client, model_id, messages, max_tokens=256
+        )
+        if result.get("request_id"):
+            request_ids.append(result["request_id"])
+        if not result["ok"] or not result["content"].strip():
+            errors += 1
+            continue
+
+        latency = result["latency_ms"]
+        ttft = result.get("ttft_ms")
+        prompt, completion = _usage_tokens(result["usage"])
+        if completion <= 0:
+            completion = float(len(result["content"].split()))
+        tps = _tps(completion, latency)
+
+        latencies.append(latency)
+        if ttft is not None:
+            ttfts.append(ttft)
+        if tps is not None:
+            tps_list.append(tps)
+        prompt_toks.append(prompt)
+        completion_toks.append(completion)
+        sample_responses.append(result["content"])
+
+        # Score: throughput normalised to 80 tok/s ≈ perfect.
+        if tps is not None:
+            scores.append(min(1.0, tps / 80.0))
+        else:
+            scores.append(0.0)
+
+    return aggregate_runs(
+        scores, latencies, ttfts, tps_list, prompt_toks, completion_toks, errors,
+        request_ids=request_ids,
+        sample_responses=sample_responses,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Per-model orchestration
 # ---------------------------------------------------------------------------
 
@@ -1620,6 +1696,8 @@ async def run_test(
         return await test_t10(client, model_id, model_meta, iterations)
     if tid == "T11":
         return await test_t11(client, model_id, iterations)
+    if tid == "T12":
+        return await test_t12(client, model_id, iterations)
     return empty_category(skipped=True)
 
 

@@ -1,6 +1,6 @@
 import type { BenchmarkRunDetail } from './api'
 
-const TEST_IDS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11']
+const TEST_IDS = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12']
 
 function csvCell(value: unknown): string {
   const text = value == null ? '' : String(value)

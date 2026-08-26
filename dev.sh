@@ -18,6 +18,7 @@ error()   { echo -e "${RED}[dev]${NC} $*"; exit 1; }
 command -v docker  >/dev/null 2>&1 || error "Docker is required but not installed."
 command -v uvicorn >/dev/null 2>&1 || error "uvicorn not found. Run: pip install -r backend/requirements.txt"
 command -v npm     >/dev/null 2>&1 || error "npm is required but not installed."
+docker info >/dev/null 2>&1 || error "Docker Desktop is not ready. Start Docker Desktop and wait for the engine to become ready, then run ./dev.sh again."
 
 # ── create .env if missing (values come from your Unraid template) ─────────────
 if [[ ! -f ".env" ]]; then
@@ -78,7 +79,8 @@ PIDS=()
 cleanup() {
     echo ""
     info "Shutting down..."
-    for pid in "${PIDS[@]}"; do
+    for pid in "${PIDS[@]-}"; do
+        [[ -n "$pid" ]] || continue
         kill "$pid" 2>/dev/null || true
     done
     docker compose -f docker-compose.dev.yml down --timeout 5 2>/dev/null || true
@@ -90,13 +92,27 @@ trap cleanup EXIT INT TERM
 for port in 8000 3000; do
     pids=$(lsof -ti :$port 2>/dev/null || true)
     if [[ -n "$pids" ]]; then
-        warn "Port $port in use — killing leftover process(es): $(echo $pids | tr '\n' ' ')"
-        kill -9 $pids 2>/dev/null || true
+        # Docker Desktop publishes container ports via its own forwarding
+        # process. Killing it crashes the engine — stop the container instead.
+        docker_pids=$(pgrep -f 'com\.docker' 2>/dev/null || true)
+        docker_owned=$(comm -12 <(echo "$pids" | sort -u) <(echo "$docker_pids" | sort -u) || true)
+        if [[ -n "$docker_owned" ]]; then
+            warn "Port $port is published by a Docker container — stopping it via Docker."
+            docker ps --filter "publish=$port" --format '{{.Names}}' | while read -r cname; do
+                [[ -n "$cname" ]] && docker stop "$cname" >/dev/null 2>&1 || true
+            done
+        else
+            warn "Port $port in use — killing leftover process(es): $(echo $pids | tr '\n' ' ')"
+            kill -9 $pids 2>/dev/null || true
+        fi
         # wait until port is actually released
         for i in $(seq 1 10); do
             lsof -ti :$port >/dev/null 2>&1 || break
             sleep 0.5
         done
+        if lsof -ti :$port >/dev/null 2>&1; then
+            error "Port $port is still in use after cleanup — stop whatever holds it and retry."
+        fi
     fi
 done
 

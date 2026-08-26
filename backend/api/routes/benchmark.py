@@ -58,9 +58,10 @@ _TOKEN_ESTIMATES = {
     "T9": (80, 256),
     "T10": (28000, 64),
     "T11": (80, 64),
+    "T12": (20, 256),
 }
 _ALL_TESTS = [
-    "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11"
+    "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12"
 ]
 
 # Models that always generate reasoning tokens regardless of max_tokens or
@@ -808,6 +809,10 @@ _TEST_SHORT = {
     "T6": "Context Coherence",
     "T7": "Consistency",
     "T8": "Conciseness",
+    "T9": "Coding",
+    "T10": "Long Context",
+    "T11": "Multilingual",
+    "T12": "Throughput",
 }
 
 
@@ -844,11 +849,24 @@ def _build_infographic_prompt(models: list[dict]) -> str:
         if worst_tid else ""
     )
 
+    # Build the category list dynamically from the tests actually present in
+    # the results, so the infographic description stays in sync with whatever
+    # test suite was run (e.g. T1–T8+T12, or a single-test diagnostic run).
+    present_tids = sorted(category_scores.keys())
+    category_names = [
+        _TEST_SHORT.get(tid, tid) for tid in present_tids
+    ]
+    if len(category_names) >= 2:
+        categories_str = ", ".join(category_names[:-1]) + f", and {category_names[-1]}"
+    elif category_names:
+        categories_str = category_names[0]
+    else:
+        categories_str = "various performance categories"
+
     return (
         f"A professional dark-mode 4K benchmark infographic titled 'Venice AI Text Model Benchmark'. "
-        f"Shows results for {len(models)} AI language models across 8 performance categories: "
-        f"Latency, Tool Calling, Structured Output, Instruction Following, Reasoning Quality, "
-        f"Context Coherence, Consistency, and Conciseness. "
+        f"Shows results for {len(models)} AI language models across {len(category_names)} "
+        f"performance categories: {categories_str}. "
         f"Top 5 models by composite score:\n{top_lines}\n"
         f"{weakest_note} "
         f"Color scheme: dark navy background, indigo accent bars, green for high scores, "

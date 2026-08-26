@@ -80,12 +80,16 @@ async def walk_billing_usage_history(
     """
     entries: List[Dict[str, Any]] = []
     cursor: Optional[str] = None
+    seen_cursors: set[str] = set()
     effective_pages = max_pages if max_pages is not None else settings.API_MAX_PAGES
     effective_size = page_size if page_size is not None else settings.API_PAGE_SIZE
 
     page = 0
     while page < effective_pages:
         if cursor:
+            if cursor in seen_cursors:
+                raise RuntimeError("billing/usage-history returned a repeated cursor")
+            seen_cursors.add(cursor)
             params: Dict[str, Any] = {"cursor": cursor}
         else:
             params = {"pageSize": effective_size}

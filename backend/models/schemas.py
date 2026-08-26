@@ -68,9 +68,9 @@ class DailyAnalyticsResponse(BaseModel):
 
 
 _ALL_BENCHMARK_TESTS = (
-    "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11"
+    "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12"
 )
-_DEFAULT_BENCHMARK_TESTS = ("T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8")
+_DEFAULT_BENCHMARK_TESTS = ("T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T12")
 _MAX_MODELS_PER_BENCHMARK_RUN = 50
 
 
