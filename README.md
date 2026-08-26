@@ -31,12 +31,20 @@ browser → Next.js (port 3000) → /api/* rewrites → FastAPI (port 8000) → 
 ### Production (Docker)
 
 ```bash
-cd docker
-cp .env.example .env   # fill in VENICE_ADMIN_KEY etc.
-docker compose up -d
+cp .env.example .env
+# Set VENICE_ADMIN_KEY and DB_PASSWORD in .env.
+# For an isolated local deployment, you may also set:
+# ALLOW_INSECURE_NO_AUTH=true
+docker compose -f docker/docker-compose.yml up -d --build
 ```
 
 Open `http://<host>:3000`.
+
+`DB_PASSWORD` is required by the production Compose PostgreSQL service. It is
+used to build the default `DATABASE_URL`; set both values if you use a custom
+database connection. `APP_PASSWORD` may be empty only when
+`ALLOW_INSECURE_NO_AUTH=true`. The application, not Compose, enforces that
+authentication rule.
 
 #### PostgreSQL permissions
 
@@ -87,8 +95,9 @@ Press **Ctrl+C** to stop all processes and remove the PostgreSQL container.
 | Variable | Required | Description |
 |---|---|---|
 | `VENICE_ADMIN_KEY` | Required | Venice Admin API key, not an Inference Only key. |
-| `APP_PASSWORD` | Required | Shared password for the web UI and API. Generate it with `openssl rand -hex 24`. The application does not start without this value unless `ALLOW_INSECURE_NO_AUTH=true`. |
+| `APP_PASSWORD` | Conditional | Shared password for the web UI and API. Generate it with `openssl rand -hex 24`. Required unless `ALLOW_INSECURE_NO_AUTH=true`. |
 | `ALLOW_INSECURE_NO_AUTH` | Optional | Set to `true` to run without authentication. The default is `false`. |
+| `DB_PASSWORD` | Docker only | PostgreSQL password required by `docker/docker-compose.yml`. Local development via `./dev.sh` uses its own development database settings. |
 | `DATABASE_URL` | ✅ | PostgreSQL connection string |
 | `COINGECKO_API_KEY` | Optional | CoinGecko API key. The free tier is used when this value is empty. |
 | `COINGECKO_HOLDING_AMOUNT` | Optional | VVV holdings. The default is `2750`. |

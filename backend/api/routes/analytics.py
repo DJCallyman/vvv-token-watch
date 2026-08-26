@@ -2,6 +2,7 @@
 Analytics API routes for model usage and performance metrics.
 """
 
+import asyncio
 import logging
 import re
 from typing import Dict, List, Any, Optional
@@ -14,11 +15,11 @@ from backend.core.venice_api_client import VeniceAPIClient
 from backend.config import get_settings, Settings
 from backend.core.billing_pagination import (
     BillingUsageDeprecated,
-    UsageHistoryUnavailable,
     fetch_usage_analytics_optional,
-    walk_billing_usage_history,
-    walk_billing_usage_legacy,
 )
+from backend.core.cache import TtlCache
+from backend.core.billing_sync import sync_billing_entries, load_billing_entries
+from backend.database import AsyncSessionLocal
 from backend.models.schemas import (
     AnalyticsResponse,
     DailyAnalyticsResponse,
@@ -31,6 +32,73 @@ from backend.models.schemas import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Single-flight lock so concurrent /models and /daily requests share one sync.
+# The sync fetches only new entries since the last sync (typically 0–1 pages).
+_sync_lock = asyncio.Lock()
+
+# Short-lived cache of the sync result so a rapid burst of requests
+# (e.g. /models + /daily fired together) doesn't each hit the DB.
+_sync_cache = TtlCache(max_size=4)
+_SYNC_CACHE_TTL = 30.0  # seconds
+
+
+def _analytics_window(days: int) -> tuple[datetime, datetime]:
+    """Analytics window for the given number of days."""
+    end = datetime.now(timezone.utc)
+    return end - timedelta(days=days), end
+
+
+async def get_billing_entries_from_db(
+    client: VeniceAPIClient,
+    days: int,
+) -> tuple[List[Dict[str, Any]], str]:
+    """Sync new billing entries to the DB, then load the window from the DB.
+
+    Returns (entries, source). The sync fetches only entries newer than the
+    newest stored timestamp, so after the initial load this is near-instant.
+    Both /models and /daily share the same sync via the single-flight lock.
+    The sync is global (not per-days) — it always fetches new entries since
+    the last sync, regardless of which time window the caller wants.
+    """
+    # The sync cache is global — once synced, any days window loads from DB
+    cache_key = "sync:global"
+    cached = _sync_cache.get(cache_key)
+    if cached is not None:
+        # Sync was done recently, just load from DB
+        start, end = _analytics_window(days)
+        async with AsyncSessionLocal() as session:
+            entries = await load_billing_entries(session, start, end)
+        return entries, 'billing-db'
+
+    async with _sync_lock:
+        # Re-check after acquiring the lock
+        cached = _sync_cache.get(cache_key)
+        if cached is not None:
+            start, end = _analytics_window(days)
+            async with AsyncSessionLocal() as session:
+                entries = await load_billing_entries(session, start, end)
+            return entries, 'billing-db'
+
+        # Sync new entries from the Venice API to the database
+        async with AsyncSessionLocal() as session:
+            new_count = await sync_billing_entries(session, client)
+
+        # Mark sync as done so subsequent requests skip the API
+        _sync_cache.set(cache_key, True, ttl=_SYNC_CACHE_TTL)
+
+        # Load the requested window from the database
+        start, end = _analytics_window(days)
+        async with AsyncSessionLocal() as session:
+            entries = await load_billing_entries(session, start, end)
+
+        logger.info(
+            "Analytics: synced %d new entries, loaded %d from DB for %d-day window",
+            new_count, len(entries), days,
+        )
+
+        _sync_cache.set(cache_key, entries, ttl=_SYNC_CACHE_TTL)
+        return entries, 'billing-db'
 
 
 def get_venice_client(settings: Settings = Depends(get_settings)) -> VeniceAPIClient:
@@ -329,6 +397,98 @@ def generate_recommendations(model_data: Dict[str, Dict]) -> List[Dict[str, str]
 # ---------------------------------------------------------------------------
 
 
+def build_analytics_model_response(
+    analytics: Dict[str, Any],
+    days: int,
+) -> AnalyticsResponse:
+    model_usage: Dict[str, ModelAnalytics] = {}
+    total_tokens = 0
+    total_cost = 0.0
+
+    for model in analytics.get('byModel', []):
+        name = model.get('modelName', 'unknown')
+        cost_usd = float(model.get('totalUsd', 0))
+        cost_diem = float(model.get('totalDiem', 0))
+        cost = cost_usd + cost_diem
+        units = int(model.get('totalUnits', 0))
+        breakdown = [
+            ModelBreakdown(
+                type=b.get('type', 'unknown'),
+                usd=float(b.get('usd', 0)),
+                diem=float(b.get('diem', 0)),
+                units=int(b.get('units', 0)),
+            )
+            for b in model.get('breakdown', [])
+        ]
+        model_usage[name] = ModelAnalytics(
+            requests=None,
+            tokens=units,
+            prompt_tokens=sum(b.units for b in breakdown if (b.type or '').lower() == 'input'),
+            completion_tokens=sum(b.units for b in breakdown if (b.type or '').lower() == 'output'),
+            cost=cost,
+            cost_usd=cost_usd,
+            cost_diem=cost_diem,
+            avg_response_time_ms=None,
+            model_type=(model.get('modelType') or 'other').lower(),
+            breakdown=breakdown,
+        )
+        total_tokens += units
+        total_cost += cost
+
+    recommendations = generate_recommendations({
+        name: {
+            'tokens': model.tokens,
+            'cost': model.cost,
+            'avg_response_time_ms': model.avg_response_time_ms,
+            'model_type': model.model_type,
+        }
+        for name, model in model_usage.items()
+    })
+
+    return AnalyticsResponse(
+        model_usage=model_usage,
+        total_requests=0,
+        total_tokens=total_tokens,
+        total_cost=total_cost,
+        period_days=days,
+        recommendations=[ModelRecommendation(**r) for r in recommendations],
+        source='billing/usage-analytics',
+    )
+
+
+def build_analytics_daily_response(
+    analytics: Dict[str, Any],
+    days: int,
+) -> DailyAnalyticsResponse:
+    daily_usage = []
+    for entry in analytics.get('byDate', []):
+        usd = entry.get('USD', entry.get('usd', entry.get('totalUsd', 0)))
+        diem = entry.get('DIEM', entry.get('diem', entry.get('totalDiem', 0)))
+        try:
+            usd_f = float(usd or 0)
+        except (TypeError, ValueError):
+            usd_f = 0.0
+        try:
+            diem_f = float(diem or 0)
+        except (TypeError, ValueError):
+            diem_f = 0.0
+        daily_usage.append(
+            DailyUsage(
+                date=entry.get('date', ''),
+                requests=None,
+                tokens=None,
+                cost=usd_f + diem_f,
+                cost_usd=usd_f,
+                cost_diem=diem_f,
+            )
+        )
+    return DailyAnalyticsResponse(
+        daily_usage=daily_usage,
+        period_days=days,
+        source='billing/usage-analytics',
+    )
+
+
 @router.get("/models", response_model=AnalyticsResponse)
 async def get_model_analytics(
     days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
@@ -337,85 +497,20 @@ async def get_model_analytics(
 ):
     """
     Get model usage analytics including requests, tokens, costs, and performance.
-    Uses /billing/usage-analytics when available, falling back to manual pagination
-    of /billing/usage.
+    Uses per-request billing history when available, falling back to aggregated
+    analytics and then legacy billing pagination.
     """
     try:
-        end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=days)
-
-        analytics = await fetch_usage_analytics_optional(client, start_date, end_date)
-        if analytics:
-            logger.info("Analytics /models using /billing/usage-analytics")
-            model_usage: Dict[str, ModelAnalytics] = {}
-            total_requests = 0
-            total_tokens = 0
-            total_cost = 0.0
-
-            for model in analytics.get('byModel', []):
-                name = model.get('modelName', 'unknown')
-                cost_usd = float(model.get('totalUsd', 0))
-                cost_diem = float(model.get('totalDiem', 0))
-                # BUG-05: do not mix; keep separate. Legacy 'cost' is the sum for compat only.
-                cost = cost_usd + cost_diem
-                units = int(model.get('totalUnits', 0))
-                breakdown = [
-                    ModelBreakdown(
-                        type=b.get('type', 'unknown'),
-                        usd=float(b.get('usd', 0)),
-                        diem=float(b.get('diem', 0)),
-                        units=int(b.get('units', 0)),
-                    )
-                    for b in model.get('breakdown', [])
-                ]
-                model_usage[name] = ModelAnalytics(
-                    requests=None,  # BUG-08: usage-analytics does not expose request counts
-                    tokens=units,
-                    prompt_tokens=sum(b.units for b in breakdown if (b.type or '').lower() == 'input'),
-                    completion_tokens=sum(b.units for b in breakdown if (b.type or '').lower() == 'output'),
-                    cost=cost,
-                    cost_usd=cost_usd,
-                    cost_diem=cost_diem,
-                    avg_response_time_ms=None,  # BUG-08: not provided by this source
-                    model_type=(model.get('modelType') or 'other').lower(),
-                    breakdown=breakdown,
-                )
-                total_tokens += units
-                total_cost += cost  # legacy mixed total (documented)
-
-            recommendations = generate_recommendations({
-                name: {
-                    'tokens': m.tokens,
-                    'cost': m.cost,
-                    'avg_response_time_ms': m.avg_response_time_ms,
-                    'model_type': m.model_type,
-                }
-                for name, m in model_usage.items()
-            })
-
-            return AnalyticsResponse(
-                model_usage=model_usage,
-                total_requests=total_requests,
-                total_tokens=total_tokens,
-                total_cost=total_cost,
-                period_days=days,
-                recommendations=[ModelRecommendation(**r) for r in recommendations],
-                source='billing/usage-analytics',
-            )
-
-        billing_source = 'billing/usage-history'
-        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
         try:
-            usage_entries = await walk_billing_usage_history(
-                client, start_str, end_str
-            )
-        except UsageHistoryUnavailable:
-            usage_entries = await walk_billing_usage_legacy(
-                client, start_str, end_str, sort_order='desc'
-            )
-            billing_source = 'billing/usage'
-        logger.info(f"Analytics /models fetched {len(usage_entries)} billing entries for last {days} day(s) via {billing_source}")
+            usage_entries, billing_source = await get_billing_entries_from_db(client, days)
+        except BillingUsageDeprecated:
+            start_date, end_date = _analytics_window(days)
+            analytics = await fetch_usage_analytics_optional(client, start_date, end_date)
+            if analytics:
+                logger.info("Analytics /models using /billing/usage-analytics fallback")
+                return build_analytics_model_response(analytics, days)
+            raise
+        logger.info(f"Analytics /models loaded {len(usage_entries)} billing entries for last {days} day(s) via {billing_source}")
         
         model_data = process_usage_data(usage_entries)
         
@@ -494,60 +589,20 @@ async def get_daily_analytics(
     Get daily usage trends.
 
     Returns aggregated usage metrics per day for trend analysis.
-    Uses /billing/usage-analytics when available, falling back to manual pagination
-    of /billing/usage.
+    Uses per-request billing history when available, falling back to aggregated
+    analytics and then legacy billing pagination.
     """
     try:
-        end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=days)
-
-        analytics = await fetch_usage_analytics_optional(client, start_date, end_date)
-        if analytics:
-            logger.info("Analytics /daily using /billing/usage-analytics")
-            daily_usage = []
-            for entry in analytics.get('byDate', []):
-                # BUG-08 + BUG-05: do not sum every numeric; prefer explicit usd/diem.
-                # If the payload provides them, use them; otherwise leave at 0 and let
-                # the UI know via source that request/latency/cost details are limited.
-                usd = entry.get('usd') or entry.get('totalUsd') or 0
-                diem = entry.get('diem') or entry.get('totalDiem') or 0
-                try:
-                    usd_f = float(usd)
-                except Exception:
-                    usd_f = 0.0
-                try:
-                    diem_f = float(diem)
-                except Exception:
-                    diem_f = 0.0
-                daily_usage.append(
-                    DailyUsage(
-                        date=entry.get('date', ''),
-                        requests=0,   # not provided by this source
-                        tokens=0,     # not provided by this source
-                        cost=usd_f + diem_f,
-                        cost_usd=usd_f,
-                        cost_diem=diem_f,
-                    )
-                )
-            return DailyAnalyticsResponse(
-                daily_usage=daily_usage,
-                period_days=days,
-                source='billing/usage-analytics',
-            )
-
-        billing_source = 'billing/usage-history'
-        start_str = start_date.strftime('%Y-%m-%dT%H:%M:%SZ')
-        end_str = end_date.strftime('%Y-%m-%dT%H:%M:%SZ')
         try:
-            usage_entries = await walk_billing_usage_history(
-                client, start_str, end_str
-            )
-        except UsageHistoryUnavailable:
-            usage_entries = await walk_billing_usage_legacy(
-                client, start_str, end_str, sort_order='asc'
-            )
-            billing_source = 'billing/usage'
-        logger.info(f"Analytics /daily fetched {len(usage_entries)} billing entries via {billing_source}")
+            usage_entries, billing_source = await get_billing_entries_from_db(client, days)
+        except BillingUsageDeprecated:
+            start_date, end_date = _analytics_window(days)
+            analytics = await fetch_usage_analytics_optional(client, start_date, end_date)
+            if analytics:
+                logger.info("Analytics /daily using /billing/usage-analytics fallback")
+                return build_analytics_daily_response(analytics, days)
+            raise
+        logger.info(f"Analytics /daily loaded {len(usage_entries)} billing entries via {billing_source}")
         
         daily_data: Dict[str, Dict] = {}
         request_tracker: Dict[str, set] = {}

@@ -17,8 +17,12 @@ class Settings(BaseSettings):
     DIEM_TOKEN_ID: str = "diem"
     DIEM_HOLDING_AMOUNT: float = 0.0
     
-    API_PAGE_SIZE: int = 500
-    API_MAX_PAGES: int = 20
+    # Venice billing/usage-history takes ~10s per page regardless of page
+    # size (fixed server-side latency). Use 1000 (the API max) to halve the
+    # number of upstream requests vs 500.
+    API_PAGE_SIZE: int = 1000
+    # A 7-day window has ~18k entries = 19 pages at 1000/page. Allow headroom.
+    API_MAX_PAGES: int = 30
     
     DEFAULT_DAILY_DIEM_LIMIT: float = 100.0
     DEFAULT_DAILY_USD_LIMIT: float = 25.0

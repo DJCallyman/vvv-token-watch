@@ -50,12 +50,11 @@ export function CharacterDetailDrawer({ character, onClose }: CharacterDetailDra
 
         {photoUrl && (
           <div className="aspect-square w-full overflow-hidden bg-muted">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            {/* eslint-disable-next-line @next/next/no-img-element -- Image is served by the same-origin API proxy. */}
             <img
-              src={photoUrl}
+              src={`/api/characters/${encodeURIComponent(slug)}/photo`}
               alt={name}
               className="h-full w-full object-cover"
-              referrerPolicy="no-referrer"
             />
           </div>
         )}

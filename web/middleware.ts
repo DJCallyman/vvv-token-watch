@@ -4,6 +4,7 @@ import { verifySessionToken, SESSION_COOKIE_NAME } from '@/lib/session'
 
 export async function middleware(req: NextRequest) {
   const appPassword = process.env.APP_PASSWORD
+  const allowInsecureNoAuth = process.env.ALLOW_INSECURE_NO_AUTH === 'true'
 
   // Always allow the login page/API and Next internals through.
   if (
@@ -16,7 +17,7 @@ export async function middleware(req: NextRequest) {
   // If APP_PASSWORD isn't configured, the backend itself refuses to start
   // (see backend/main.py SEC-01 fail-closed check) unless the operator
   // explicitly opted into ALLOW_INSECURE_NO_AUTH. Nothing to gate here.
-  if (!appPassword) {
+  if (!appPassword || allowInsecureNoAuth) {
     return NextResponse.next()
   }
 

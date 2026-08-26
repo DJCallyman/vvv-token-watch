@@ -55,7 +55,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
   const [days, setDays] = useState(7)
   const [modelType, setModelType] = useState<string>('all')
   const { data: analytics, isLoading: analyticsLoading, error: analyticsError } = useAnalytics(days)
-  const { data: dailyData, isLoading: dailyLoading } = useDailyAnalytics(days)
+  const { data: dailyData, isLoading: dailyLoading, error: dailyError } = useDailyAnalytics(days)
 
   if (analyticsLoading || dailyLoading) {
     return (
@@ -119,13 +119,13 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
     .map(([name, data]) => ({
       name: name.length > 30 ? name.substring(0, 30) + '...' : name,
       fullName: name,
-      requests: data.requests ?? 0,
+      requests: data.requests,
       tokens: data.tokens,
       cost: data.cost,
       costUsd: data.cost_usd ?? 0,
       costDiem: data.cost_diem ?? 0,
       costBundledCredits: data.cost_bundled_credits ?? 0,
-      avgResponseTime: data.avg_response_time_ms ?? 0,
+      avgResponseTime: data.avg_response_time_ms,
       breakdown: data.breakdown ?? [],
     }))
     .sort((a, b) => b.cost - a.cost)
@@ -138,12 +138,14 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
   const chartCurrency = filteredTotalUsd > 0 ? 'USD' : 'DIEM'
   const chartCostKey = filteredTotalUsd > 0 ? 'costUsd' : 'costDiem'
   const hasBreakdowns = modelData.some((model) => model.breakdown.length > 0)
+  const dailyTotalUsd = dailyData?.daily_usage.reduce((sum, day) => sum + (day.cost_usd ?? 0), 0) ?? 0
+  const dailyChartCurrency = dailyTotalUsd > 0 ? 'USD' : 'DIEM'
+  const dailyHasTokens = dailyData?.daily_usage.some((day) => day.tokens != null) ?? false
 
   const dailyChartData = dailyData?.daily_usage.map((d) => ({
     date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    requests: d.requests,
-    tokens: d.tokens / 1000,
-    cost: d.cost,
+    tokens: d.tokens == null ? undefined : d.tokens / 1000,
+    cost: dailyChartCurrency === 'USD' ? d.cost_usd ?? 0 : d.cost_diem ?? 0,
   })) || []
 
   const formatCompactNumber = (n: number) => {
@@ -190,7 +192,12 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
               <Activity className="w-4 h-4" />
               <span className="text-sm">Total Requests</span>
             </div>
-            <p className="text-2xl font-bold mt-1">{formatCompactNumber(filteredTotalRequests)}</p>
+            <p className="text-2xl font-bold mt-1">
+              {isBillingAnalytics ? '—' : formatCompactNumber(filteredTotalRequests)}
+            </p>
+            {isBillingAnalytics && (
+              <p className="text-[10px] text-muted-foreground">Unavailable from this source</p>
+            )}
           </CardContent>
         </Card>
         <Card>
@@ -322,42 +329,50 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
           <CardTitle className="text-base">Daily Usage Trend</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={dailyChartData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="date" className="text-xs" />
-                <YAxis yAxisId="left" className="text-xs" tickFormatter={formatCompactNumber} />
-                <YAxis yAxisId="right" orientation="right" className="text-xs" tickFormatter={(v) => `${v.toFixed(2)}`} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--background))',
-                    border: '1px solid hsl(var(--border))',
-                    borderRadius: '6px',
-                  }}
-                />
-                <Legend />
-                <Line
-                  yAxisId="left"
-                  type="monotone"
-                  dataKey="tokens"
-                  stroke="hsl(var(--chart-1))"
-                  name="Tokens (K)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="cost"
-                  stroke="hsl(var(--chart-2))"
-                  name="Cost (DIEM)"
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          {dailyError ? (
+            <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
+              Daily trend data is unavailable.
+            </div>
+          ) : (
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={dailyChartData}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="date" className="text-xs" />
+                  <YAxis yAxisId="left" className="text-xs" tickFormatter={formatCompactNumber} />
+                  <YAxis yAxisId="right" orientation="right" className="text-xs" tickFormatter={(v) => `${v.toFixed(2)}`} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '6px',
+                    }}
+                  />
+                  <Legend />
+                  {dailyHasTokens && (
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="tokens"
+                      stroke="hsl(var(--chart-1))"
+                      name="Tokens (K)"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  )}
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="cost"
+                    stroke="hsl(var(--chart-2))"
+                    name={`Cost (${dailyChartCurrency})`}
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -371,11 +386,11 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left py-2 px-3 font-medium">Model</th>
-                  <th className="text-right py-2 px-3 font-medium">Requests</th>
+                  {!isBillingAnalytics && <th className="text-right py-2 px-3 font-medium">Requests</th>}
                   <th className="text-right py-2 px-3 font-medium">Tokens</th>
                   <th className="text-right py-2 px-3 font-medium">Cost</th>
                   {hasBreakdowns && <th className="text-left py-2 px-3 font-medium">Cost Breakdown</th>}
-                  <th className="text-right py-2 px-3 font-medium">Avg Latency</th>
+                  {showRequestLatency && <th className="text-right py-2 px-3 font-medium">Avg Latency</th>}
                 </tr>
               </thead>
               <tbody>
@@ -384,7 +399,11 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                     <td className="py-2 px-3 font-medium" title={model.fullName}>
                       {model.name}
                     </td>
-                    <td className="text-right py-2 px-3">{formatCompactNumber(model.requests)}</td>
+                    {!isBillingAnalytics && (
+                      <td className="text-right py-2 px-3">
+                        {model.requests == null ? '—' : formatCompactNumber(model.requests)}
+                      </td>
+                    )}
                     <td className="text-right py-2 px-3">{formatCompactNumber(model.tokens)}</td>
                     <td className="text-right py-2 px-3">
                       <div className="space-y-0.5">
@@ -417,11 +436,13 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                         ) : '—'}
                       </td>
                     )}
-                    <td className="text-right py-2 px-3">
-                      {model.avgResponseTime > 0
-                        ? `${(model.avgResponseTime / 1000).toFixed(2)}s`
-                        : '—'}
-                    </td>
+                    {showRequestLatency && (
+                      <td className="text-right py-2 px-3">
+                        {model.avgResponseTime != null && model.avgResponseTime > 0
+                          ? `${(model.avgResponseTime / 1000).toFixed(2)}s`
+                          : '—'}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

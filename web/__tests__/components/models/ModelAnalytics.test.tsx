@@ -77,4 +77,61 @@ describe('ModelAnalytics', () => {
     expect(screen.getByText('Input').parentElement).toHaveTextContent('$1.23')
     expect(screen.getByText('Output').parentElement).toHaveTextContent('1.2300 DIEM')
   })
+
+  it('removes unavailable request and latency columns for aggregated analytics', () => {
+    mockUseAnalytics.mockReturnValue({
+      data: {
+        model_usage: {
+          'test-model': {
+            requests: null,
+            tokens: 100,
+            prompt_tokens: 60,
+            completion_tokens: 40,
+            cost: 2,
+            cost_usd: 0,
+            cost_diem: 2,
+            avg_response_time_ms: null,
+            model_type: 'llm',
+          },
+        },
+        total_requests: 0,
+        total_tokens: 100,
+        total_cost: 2,
+        period_days: 7,
+        recommendations: [],
+        source: 'billing/usage-analytics',
+      },
+      isLoading: false,
+      isError: false,
+    } as any)
+    mockUseDailyAnalytics.mockReturnValue({
+      data: {
+        daily_usage: [{ date: '2026-08-18', requests: null, tokens: null, cost: 2, cost_usd: 0, cost_diem: 2 }],
+        period_days: 7,
+        source: 'billing/usage-analytics',
+      },
+      isLoading: false,
+      isError: false,
+    } as any)
+
+    render(<ModelAnalytics />)
+
+    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Requests' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Avg Latency' })).not.toBeInTheDocument()
+  })
+
+  it('keeps model analytics visible when the daily query fails', () => {
+    mockUseDailyAnalytics.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('daily unavailable'),
+    } as any)
+
+    render(<ModelAnalytics />)
+
+    expect(screen.getByText('Model Analytics')).toBeInTheDocument()
+    expect(screen.getByText('Daily trend data is unavailable.')).toBeInTheDocument()
+  })
 })

@@ -11,7 +11,7 @@ export const BENCHMARK_TESTS: BenchmarkTestDefinition[] = [
     id: 'T1',
     name: 'Latency',
     label: 'Latency',
-    desc: 'Time-to-first-token and throughput',
+    desc: 'Time-to-first-token (streaming)',
     defaultOn: true,
   },
   {
@@ -83,6 +83,13 @@ export const BENCHMARK_TESTS: BenchmarkTestDefinition[] = [
     label: 'Multilingual',
     desc: 'Solve a reasoning task in another language',
     defaultOn: false,
+  },
+  {
+    id: 'T12',
+    name: 'Throughput',
+    label: 'Throughput',
+    desc: 'Tokens per second during streaming',
+    defaultOn: true,
   },
 ]
 

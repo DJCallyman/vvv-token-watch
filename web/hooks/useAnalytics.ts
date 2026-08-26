@@ -43,8 +43,8 @@ export interface AnalyticsResponse {
 
 export interface DailyUsage {
   date: string
-  requests: number
-  tokens: number
+  requests: number | null
+  tokens: number | null
   cost: number
   // BUG-05: separated daily costs
   cost_usd?: number

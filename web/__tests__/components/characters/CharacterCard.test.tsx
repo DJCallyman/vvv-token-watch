@@ -66,7 +66,7 @@ describe('CharacterCard', () => {
     render(<CharacterCard character={ALAN} />)
     const img = screen.getByAltText('Alan Watts')
     expect(img).toBeInTheDocument()
-    expect(img.getAttribute('src')).toBe('https://example.com/alan.jpg')
+    expect(img.getAttribute('src')).toBe('/api/characters/alan-watts/photo')
   })
 
   it('renders initials placeholder when no photo', () => {

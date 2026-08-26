@@ -38,6 +38,7 @@ build/
 # Temporary and log files
 *.tmp
 *.log
+*.out
 *log.*
 !web/components/ui/dialog.tsx
 !web/components/ui/alert-dialog.tsx

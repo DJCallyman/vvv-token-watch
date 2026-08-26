@@ -25,8 +25,9 @@ const FORWARDED_AUTH_NOT_ALLOWED = new Set(['authorization'])
 
 async function handler(req: NextRequest) {
   const appPassword = process.env.APP_PASSWORD
+  const allowInsecureNoAuth = process.env.ALLOW_INSECURE_NO_AUTH === 'true'
 
-  if (appPassword) {
+  if (appPassword && !allowInsecureNoAuth) {
     const token = req.cookies.get(SESSION_COOKIE_NAME)?.value
     const valid = await verifySessionToken(token, appPassword)
     if (!valid) {

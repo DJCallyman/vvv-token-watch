@@ -1,7 +1,7 @@
-"""Persist and query price snapshots for historical charts.
+"""Store and query price snapshots for trend charts.
 
-BUG-04: request-path writes now dedupe (skip identical consecutive values)
-and trigger retention purge based on SNAPSHOT_RETENTION_DAYS.
+Skip identical consecutive values and purge snapshots older than
+``SNAPSHOT_RETENTION_DAYS``.
 """
 
 from __future__ import annotations
@@ -41,9 +41,9 @@ async def record_price_snapshot(
     market_cap: Optional[float] = None,
     change_24h: Optional[float] = None,
 ) -> Optional[PriceSnapshot]:
-    """Record a price snapshot with dedupe + retention (BUG-04).
+    """Record a price snapshot and purge old snapshots.
 
-    Returns the inserted row, or None if a duplicate (identical values) was skipped.
+    Return the new row. Return ``None`` when the values match the last row.
     """
     settings = get_settings()
 
@@ -113,11 +113,10 @@ async def get_price_history(
     range_key: str = "7d",
     limit: int = 2000,
 ) -> List[Dict[str, Any]]:
-    """Return the most recent price snapshots for the token within the range window.
+    """Return recent price snapshots for a token and time range.
 
-    BUG-03 fix: order DESC + LIMIT to get newest rows, then reverse to return
-    ascending order for charts. The `since` filter (derived from range) already
-    excludes data older than the window.
+    Return the selected rows in ascending order for charts. The range also
+    excludes snapshots older than the selected window.
     """
     since = datetime.now(timezone.utc) - _range_to_delta(range_key)
     stmt = (

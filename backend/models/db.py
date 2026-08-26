@@ -14,6 +14,8 @@ from sqlalchemy import (
     String,
     Text,
     Index,
+    UniqueConstraint,
+    BigInteger,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -101,6 +103,37 @@ class AlertEvent(Base):
 
     config: Mapped[AlertConfig] = relationship("AlertConfig", back_populates="events")
 
+class BillingEntry(Base):
+    """A single Venice billing ledger entry, persisted for fast analytics.
+
+    Billing data is append-only — entries are never modified or deleted
+    upstream. By storing them locally we avoid re-walking the full history
+    on every analytics request; we only fetch entries newer than the
+    newest stored timestamp.
+    """
+
+    __tablename__ = "billing_entries"
+    __table_args__ = (
+        UniqueConstraint("entry_timestamp", "sku", "request_id", name="uq_billing_entry_natural_key"),
+        Index("ix_billing_entries_ts", "entry_timestamp"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # When the billing event occurred (from the API's "timestamp" field).
+    entry_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    sku: Mapped[str] = mapped_column(String(256), nullable=False)
+    units: Mapped[float] = mapped_column(Float, default=0.0)
+    amount: Mapped[float] = mapped_column(Float, default=0.0)
+    currency: Mapped[str] = mapped_column(String(16), nullable=False)
+    price_per_unit_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    # Inference details (nullable — not all entries have them)
+    request_id: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    inference_execution_time: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # When we stored this entry (for debugging / audit)
+    stored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 # NOTE: A previous incarnation of the project defined a BenchmarkRun ORM model
 # here for persisting in-memory benchmark job metadata across restarts. The
