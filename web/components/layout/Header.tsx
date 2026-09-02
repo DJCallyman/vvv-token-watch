@@ -9,6 +9,7 @@ import { useTheme } from '@/components/ThemeProvider'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import Link from 'next/link'
+import { SettingsDialog } from '@/components/settings/SettingsDialog'
 
 export function Header() {
   const { data: balance, isLoading, isError, dataUpdatedAt } = useBalance()
@@ -99,6 +100,8 @@ export function Header() {
         >
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
+
+        <SettingsDialog />
 
         <button
           type="button"

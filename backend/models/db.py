@@ -135,6 +135,16 @@ class BillingEntry(Base):
     # When we stored this entry (for debugging / audit)
     stored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
+
+class AppSettings(Base):
+    """Deployment-level user settings that override environment defaults."""
+
+    __tablename__ = "app_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    values: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
 # NOTE: A previous incarnation of the project defined a BenchmarkRun ORM model
 # here for persisting in-memory benchmark job metadata across restarts. The
 # model was never wired to a repository; the actual source of truth for runs
