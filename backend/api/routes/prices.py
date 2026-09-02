@@ -10,6 +10,7 @@ from backend.database import get_db
 from backend.limiter import limiter
 from backend.services.price_history_service import get_price_history, record_price_snapshot
 from backend.services import alert_engine
+from backend.services.app_settings import get_effective_settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -50,15 +51,16 @@ async def get_prices(
     db: AsyncSession = Depends(get_db),
 ):
     try:
+        effective = await get_effective_settings(db, settings)
         vvv_data = await fetch_coin_gecko_price(
-            settings.COINGECKO_TOKEN_ID,
-            settings.coingecko_currencies_list,
+            effective["coingecko_token_id"],
+            effective["coingecko_currencies"],
             settings.COINGECKO_API_KEY
         )
 
         diem_data = await fetch_coin_gecko_price(
-            settings.DIEM_TOKEN_ID,
-            settings.coingecko_currencies_list,
+            effective["diem_token_id"],
+            effective["coingecko_currencies"],
             settings.COINGECKO_API_KEY
         )
 
@@ -66,28 +68,28 @@ async def get_prices(
             "vvv": {},
             "diem": {},
             "holdings": {
-                "vvv": settings.COINGECKO_HOLDING_AMOUNT,
-                "diem": settings.DIEM_HOLDING_AMOUNT
+                "vvv": effective["coingecko_holding_amount"],
+                "diem": effective["diem_holding_amount"]
             }
         }
 
-        if settings.COINGECKO_TOKEN_ID in vvv_data:
-            for currency in settings.coingecko_currencies_list:
-                if currency in vvv_data[settings.COINGECKO_TOKEN_ID]:
-                    result["vvv"][currency] = vvv_data[settings.COINGECKO_TOKEN_ID][currency]
+        if effective["coingecko_token_id"] in vvv_data:
+            for currency in effective["coingecko_currencies"]:
+                if currency in vvv_data[effective["coingecko_token_id"]]:
+                    result["vvv"][currency] = vvv_data[effective["coingecko_token_id"]][currency]
 
-        if settings.DIEM_TOKEN_ID in diem_data:
-            for currency in settings.coingecko_currencies_list:
-                if currency in diem_data[settings.DIEM_TOKEN_ID]:
-                    result["diem"][currency] = diem_data[settings.DIEM_TOKEN_ID][currency]
+        if effective["diem_token_id"] in diem_data:
+            for currency in effective["coingecko_currencies"]:
+                if currency in diem_data[effective["diem_token_id"]]:
+                    result["diem"][currency] = diem_data[effective["diem_token_id"]][currency]
 
         if "usd" in result["vvv"]:
             result["portfolio"] = {
-                "vvv_value_usd": settings.COINGECKO_HOLDING_AMOUNT * result["vvv"].get("usd", 0),
-                "diem_value_usd": settings.DIEM_HOLDING_AMOUNT * result["diem"].get("usd", 0),
+                "vvv_value_usd": effective["coingecko_holding_amount"] * result["vvv"].get("usd", 0),
+                "diem_value_usd": effective["diem_holding_amount"] * result["diem"].get("usd", 0),
                 "total_usd": (
-                    settings.COINGECKO_HOLDING_AMOUNT * result["vvv"].get("usd", 0) +
-                    settings.DIEM_HOLDING_AMOUNT * result["diem"].get("usd", 0)
+                    effective["coingecko_holding_amount"] * result["vvv"].get("usd", 0) +
+                    effective["diem_holding_amount"] * result["diem"].get("usd", 0)
                 )
             }
 

@@ -26,7 +26,8 @@ from typing import Optional
 
 import httpx
 from backend.core.venice_api_client import VeniceAPIClient
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import ValidationError
 from backend.models.schemas import (
     BenchmarkEstimateParams,
@@ -38,6 +39,8 @@ from backend.limiter import limiter
 from sse_starlette.sse import EventSourceResponse
 
 from backend.config import get_settings
+from backend.database import get_db
+from backend.services.app_settings import get_effective_settings
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -369,7 +372,7 @@ def _estimate_cost(
 
 
 async def _resolve_models_and_estimate(
-    api_key: str, params: BenchmarkStartParams
+    api_key: str, params: BenchmarkStartParams, effective_settings: dict
 ) -> tuple[list[dict], list[str], str, int, float, int, list[str]]:
     """Resolve the concrete model/test set for a start or estimate request and
     price it out. Shared so /benchmark/start enforces the same privacy/tests
@@ -405,7 +408,7 @@ async def _resolve_models_and_estimate(
     models = sorted(models, key=lambda m: m.get("id", ""))
     judge_definition = None
     if params.judge:
-        judge_id = params.judge_model or settings.BENCHMARK_JUDGE_MODEL
+        judge_id = params.judge_model or effective_settings["benchmark_judge_model"]
         judge_definition = by_id.get(judge_id)
         if judge_definition is None:
             raise HTTPException(400, f"Judge model '{judge_id}' is not a qualifying text model")
@@ -501,7 +504,7 @@ async def list_benchmark_models():
 
 @router.post("/benchmark/estimate")
 @limiter.limit("30/hour")
-async def estimate_benchmark(request: Request):
+async def estimate_benchmark(request: Request, db: AsyncSession = Depends(get_db)):
     """Dry-run cost estimate for a planned benchmark (no job started)."""
     try:
         raw_body = await request.json()
@@ -516,10 +519,11 @@ async def estimate_benchmark(request: Request):
     api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
     if not api_key:
         raise HTTPException(400, "No Venice API key configured in settings")
+    effective_settings = await get_effective_settings(db, settings)
 
     try:
         models, tests, privacy, calls, usd, judge_usd, skipped, warnings = await _resolve_models_and_estimate(
-            api_key, params
+            api_key, params, effective_settings
         )
     except httpx.HTTPStatusError as exc:
         raise HTTPException(502, f"Venice API error: {exc}") from exc
@@ -551,7 +555,7 @@ async def estimate_benchmark(request: Request):
         estimated_calls=calls,
         estimated_usd=round(usd, 6),
         judge_cost_usd=round(judge_usd, 6),
-        judge_model=(params.judge_model or settings.BENCHMARK_JUDGE_MODEL) if params.judge else None,
+        judge_model=(params.judge_model or effective_settings["benchmark_judge_model"]) if params.judge else None,
         skipped_tests_note=note_skip,
         note=note,
     ).model_dump()
@@ -559,7 +563,7 @@ async def estimate_benchmark(request: Request):
 
 @router.post("/benchmark/start")
 @limiter.limit("10/hour")
-async def start_benchmark(request: Request):
+async def start_benchmark(request: Request, db: AsyncSession = Depends(get_db)):
     """Start a benchmark subprocess. Returns a job_id for streaming/status.
 
     Body is parsed manually so SlowAPI's decorator does not break FastAPI body
@@ -575,6 +579,7 @@ async def start_benchmark(request: Request):
 
     api_key = settings.VENICE_API_KEY or settings.VENICE_ADMIN_KEY
     admin_key = settings.VENICE_ADMIN_KEY or settings.VENICE_API_KEY
+    effective_settings = await get_effective_settings(db, settings)
     if not api_key:
         raise HTTPException(400, "No Venice API key configured in settings")
 
@@ -598,7 +603,7 @@ async def start_benchmark(request: Request):
     # ceiling before spending any money (SEC-05/SEC-06).
     try:
         models, tests, privacy, calls, usd, judge_usd, skipped, warnings = await _resolve_models_and_estimate(
-            api_key, params
+            api_key, params, effective_settings
         )
     except httpx.HTTPStatusError as exc:
         raise HTTPException(502, f"Venice API error: {exc}") from exc
@@ -607,11 +612,11 @@ async def start_benchmark(request: Request):
     except Exception as exc:
         raise HTTPException(500, f"Failed to validate benchmark request: {exc}") from exc
 
-    if usd > settings.BENCHMARK_MAX_COST_USD:
+    if usd > effective_settings["benchmark_max_cost_usd"]:
         raise HTTPException(
             422,
             f"Estimated cost ${usd:.2f} exceeds the configured ceiling of "
-            f"${settings.BENCHMARK_MAX_COST_USD:.2f} (BENCHMARK_MAX_COST_USD). "
+            f"${effective_settings['benchmark_max_cost_usd']:.2f}. "
             f"Reduce iterations/models/tests, or raise the ceiling if this is expected.",
         )
 
@@ -632,7 +637,7 @@ async def start_benchmark(request: Request):
     ]
     if params.judge:
         cmd.append("--judge")
-        cmd.extend(["--judge-model", params.judge_model or settings.BENCHMARK_JUDGE_MODEL])
+        cmd.extend(["--judge-model", params.judge_model or effective_settings["benchmark_judge_model"]])
 
     # Pass secrets via environment, not argv, so they never appear in
     # `ps`/`/proc/<pid>/cmdline` (SEC-07). Only pass the admin key when
@@ -640,7 +645,10 @@ async def start_benchmark(request: Request):
     # only needs inference access.
     subprocess_env = dict(os.environ)
     subprocess_env["VENICE_API_KEY"] = api_key
-    if settings.BENCHMARK_ENABLE_BILLING_RECONCILIATION and admin_key:
+    subprocess_env["BENCHMARK_ENABLE_BILLING_RECONCILIATION"] = str(
+        effective_settings["benchmark_enable_billing_reconciliation"]
+    ).lower()
+    if effective_settings["benchmark_enable_billing_reconciliation"] and admin_key:
         subprocess_env["VENICE_ADMIN_KEY"] = admin_key
     else:
         subprocess_env.pop("VENICE_ADMIN_KEY", None)

@@ -67,6 +67,43 @@ class DailyAnalyticsResponse(BaseModel):
     source: str = "billing/usage"
 
 
+class AppSettingsResponse(BaseModel):
+    coingecko_token_id: str
+    coingecko_currencies: List[str]
+    coingecko_holding_amount: float
+    diem_token_id: str
+    diem_holding_amount: float
+    benchmark_max_cost_usd: float
+    benchmark_enable_billing_reconciliation: bool
+    benchmark_judge_model: str
+
+
+class AppSettingsUpdate(BaseModel):
+    coingecko_token_id: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    coingecko_currencies: Optional[List[str]] = Field(default=None, min_length=1, max_length=8)
+    coingecko_holding_amount: Optional[float] = Field(default=None, ge=0, le=1_000_000_000)
+    diem_token_id: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    diem_holding_amount: Optional[float] = Field(default=None, ge=0, le=1_000_000_000)
+    benchmark_max_cost_usd: Optional[float] = Field(default=None, ge=0, le=1_000_000)
+    benchmark_enable_billing_reconciliation: Optional[bool] = None
+    benchmark_judge_model: Optional[str] = Field(default=None, min_length=1, max_length=200)
+
+    @field_validator("coingecko_token_id", "diem_token_id", "benchmark_judge_model")
+    @classmethod
+    def _strip_strings(cls, value: Optional[str]) -> Optional[str]:
+        return value.strip() if value is not None else value
+
+    @field_validator("coingecko_currencies")
+    @classmethod
+    def _validate_currencies(cls, value: Optional[List[str]]) -> Optional[List[str]]:
+        if value is None:
+            return value
+        cleaned = [currency.strip().lower() for currency in value if currency.strip()]
+        if not cleaned or any(len(currency) > 16 for currency in cleaned):
+            raise ValueError("At least one valid currency is required")
+        return list(dict.fromkeys(cleaned))
+
+
 _ALL_BENCHMARK_TESTS = (
     "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8", "T9", "T10", "T11", "T12"
 )

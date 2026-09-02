@@ -179,6 +179,19 @@ export interface PricesData {
   }
 }
 
+export interface AppSettings {
+  coingecko_token_id: string
+  coingecko_currencies: string[]
+  coingecko_holding_amount: number
+  diem_token_id: string
+  diem_holding_amount: number
+  benchmark_max_cost_usd: number
+  benchmark_enable_billing_reconciliation: boolean
+  benchmark_judge_model: string
+}
+
+export type AppSettingsUpdate = Partial<AppSettings>
+
 export interface ModelData {
   id: string
   name?: string
@@ -583,6 +596,21 @@ export interface AlertConfigCreate {
 }
 
 export const api = {
+  async getSettings(): Promise<AppSettings> {
+    return fetchAPI<AppSettings>('/api/settings')
+  },
+
+  async updateSettings(payload: AppSettingsUpdate): Promise<AppSettings> {
+    return fetchAPI<AppSettings>('/api/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  },
+
+  async resetSettings(): Promise<AppSettings> {
+    return fetchAPI<AppSettings>('/api/settings/reset', { method: 'POST' })
+  },
+
   async getBalance(): Promise<BalanceData> {
     return fetchAPI<BalanceData>('/api/balance')
   },

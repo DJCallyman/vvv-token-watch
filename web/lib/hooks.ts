@@ -51,6 +51,44 @@ export function useBalance() {
   })
 }
 
+export function useSettings() {
+  return useQuery({
+    queryKey: ['settings'],
+    queryFn: api.getSettings,
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useUpdateSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.updateSettings,
+    onSuccess: (data) => {
+      queryClient.setQueryData(['settings'], data)
+      queryClient.invalidateQueries({ queryKey: ['prices'] })
+      queryClient.invalidateQueries({ queryKey: ['benchmarkModels'] })
+      queryClient.invalidateQueries({ queryKey: ['balance'] })
+      toast.success('Settings saved')
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Failed to save settings'),
+  })
+}
+
+export function useResetSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.resetSettings,
+    onSuccess: (data) => {
+      queryClient.setQueryData(['settings'], data)
+      queryClient.invalidateQueries({ queryKey: ['prices'] })
+      queryClient.invalidateQueries({ queryKey: ['benchmarkModels'] })
+      queryClient.invalidateQueries({ queryKey: ['balance'] })
+      toast.success('Settings reset to environment defaults')
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Failed to reset settings'),
+  })
+}
+
 export function useDailyUsage(date?: string) {
   return useQuery({
     queryKey: ['dailyUsage', date],

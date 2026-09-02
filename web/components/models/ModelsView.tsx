@@ -17,6 +17,19 @@ type ViewMode = 'grid' | 'list' | 'table'
 type SortMode = 'name' | 'type' | 'context'
 type TabMode = 'browse' | 'analytics'
 
+const MODEL_TYPE_ORDER = [
+  'text',
+  'image',
+  'video',
+  'audio',
+  'tts',
+  'asr',
+  'embedding',
+  'music',
+  'upscale',
+  'inpaint',
+]
+
 interface CapabilityFilter {
   vision: boolean
   functions: boolean
@@ -37,7 +50,7 @@ export function ModelsView() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
   const [traitFilter, setTraitFilter] = useState<string>('all')
-  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [viewMode, setViewMode] = useState<ViewMode>('table')
   const [sortMode, setSortMode] = useState<SortMode>('name')
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [capabilityFilter, setCapabilityFilter] = useState<CapabilityFilter>({
@@ -57,7 +70,20 @@ export function ModelsView() {
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(new Set())
 
   const models = useMemo(() => data?.models || [], [data])
-  const types = useMemo(() => data?.types || [], [data])
+  const types = useMemo(() => {
+    const availableTypes = data?.types || []
+    const priority = new Map(MODEL_TYPE_ORDER.map((type, index) => [type, index]))
+
+    return [...availableTypes].sort((left, right) => {
+      const leftPriority = priority.get(left) ?? MODEL_TYPE_ORDER.length
+      const rightPriority = priority.get(right) ?? MODEL_TYPE_ORDER.length
+
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority
+      }
+      return left.localeCompare(right)
+    })
+  }, [data])
 
   const allTraits = useMemo(() => {
     const traits = new Set<string>()
