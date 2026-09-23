@@ -586,6 +586,16 @@ export interface NewsArticle { title: string; url: string | null; snippet: strin
 export interface NewsResponse { articles: NewsArticle[]; count: number; source?: string }
 export interface MarketAnalysis { summary: string; sentiment: 'bullish' | 'bearish' | 'neutral' | string; key_events: string[]; risks: string[]; confidence: number; sources: string[] }
 
+// Typed judgments from Venice's Jev decision model (POST /decisions, beta).
+export interface DecisionAnswerNoul { type: 'noul'; noul: number }
+export interface DecisionAnswerChoice { type: 'choice'; choice: string; probabilities: Record<string, number>; confidence: number }
+export interface DecisionAnswerScore { type: 'score'; score: number; legend: Record<string, string>; probabilities: Record<string, number>; confidence: number }
+export type DecisionAnswer = DecisionAnswerNoul | DecisionAnswerChoice | DecisionAnswerScore
+export interface DecisionUsage { input_tokens: number; output_tokens: number }
+export interface MarketDecisions { model: string; answers: Record<string, DecisionAnswer>; usage: DecisionUsage }
+/** "ok" | "unavailable" — why typed judgments are absent (Venice beta endpoint may 500). */
+export type DecisionsStatus = 'ok' | 'unavailable' | string
+
 export interface AlertConfigCreate {
   name: string
   alert_type: 'usage_percent' | 'balance_threshold' | 'price_threshold'
@@ -756,8 +766,8 @@ export const api = {
   async getNewsArticle(url: string): Promise<{ url: string; title: string; content: string }> {
     return fetchAPI<{ url: string; title: string; content: string }>(`/api/news/article?url=${encodeURIComponent(url)}`)
   },
-  async analyzeMarket(prices: Record<string, unknown> = {}, usage: Record<string, unknown> = {}): Promise<{ analysis: MarketAnalysis; articles: NewsArticle[] }> {
-    return fetchAPI<{ analysis: MarketAnalysis; articles: NewsArticle[] }>('/api/insights/analyze', { method: 'POST', body: JSON.stringify({ prices, usage }) })
+  async analyzeMarket(prices: Record<string, unknown> = {}, usage: Record<string, unknown> = {}): Promise<{ analysis: MarketAnalysis; articles: NewsArticle[]; decisions: MarketDecisions | null; decisions_status?: DecisionsStatus }> {
+    return fetchAPI<{ analysis: MarketAnalysis; articles: NewsArticle[]; decisions: MarketDecisions | null; decisions_status?: DecisionsStatus }>('/api/insights/analyze', { method: 'POST', body: JSON.stringify({ prices, usage }) })
   },
   async queryAssistant(query: string, history: Array<{ role: string; content: string }> = []): Promise<{ answer: string; tool_calls: unknown[] }> {
     return fetchAPI<{ answer: string; tool_calls: unknown[] }>('/api/assistant/query', { method: 'POST', body: JSON.stringify({ query, history }) })
