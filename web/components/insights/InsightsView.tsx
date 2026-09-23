@@ -206,7 +206,7 @@ export function InsightsView() {
       {analysis && decisions && <TypedJudgmentsCard decisions={decisions} />}
       {analysis && !decisions && decisionsStatus === 'unavailable' && (
         <p className="text-xs text-muted-foreground">
-          Typed judgments unavailable — Venice's beta decision model didn't respond. The briefing above is unaffected.
+          Typed judgments unavailable — Venice&apos;s beta decision model didn&apos;t respond. The briefing above is unaffected.
         </p>
       )}
     </div>
