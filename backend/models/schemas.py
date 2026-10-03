@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
@@ -68,40 +69,38 @@ class DailyAnalyticsResponse(BaseModel):
 
 
 class AppSettingsResponse(BaseModel):
-    coingecko_token_id: str
-    coingecko_currencies: List[str]
     coingecko_holding_amount: float
-    diem_token_id: str
     diem_holding_amount: float
+    vvv_holding_source: Literal["manual", "wallet"] = "manual"
+    vvv_wallet_address: str = ""
     benchmark_max_cost_usd: float
     benchmark_enable_billing_reconciliation: bool
     benchmark_judge_model: str
 
 
 class AppSettingsUpdate(BaseModel):
-    coingecko_token_id: Optional[str] = Field(default=None, min_length=1, max_length=128)
-    coingecko_currencies: Optional[List[str]] = Field(default=None, min_length=1, max_length=8)
     coingecko_holding_amount: Optional[float] = Field(default=None, ge=0, le=1_000_000_000)
-    diem_token_id: Optional[str] = Field(default=None, min_length=1, max_length=128)
     diem_holding_amount: Optional[float] = Field(default=None, ge=0, le=1_000_000_000)
+    vvv_holding_source: Optional[Literal["manual", "wallet"]] = None
+    vvv_wallet_address: Optional[str] = Field(default=None, max_length=42)
     benchmark_max_cost_usd: Optional[float] = Field(default=None, ge=0, le=1_000_000)
     benchmark_enable_billing_reconciliation: Optional[bool] = None
     benchmark_judge_model: Optional[str] = Field(default=None, min_length=1, max_length=200)
 
-    @field_validator("coingecko_token_id", "diem_token_id", "benchmark_judge_model")
+    @field_validator("vvv_wallet_address", "benchmark_judge_model")
     @classmethod
     def _strip_strings(cls, value: Optional[str]) -> Optional[str]:
         return value.strip() if value is not None else value
 
-    @field_validator("coingecko_currencies")
+    @field_validator("vvv_wallet_address")
     @classmethod
-    def _validate_currencies(cls, value: Optional[List[str]]) -> Optional[List[str]]:
-        if value is None:
+    def _validate_wallet_address(cls, value: Optional[str]) -> Optional[str]:
+        """Allow empty (clear) or a valid EVM address; reject anything else."""
+        if not value:
             return value
-        cleaned = [currency.strip().lower() for currency in value if currency.strip()]
-        if not cleaned or any(len(currency) > 16 for currency in cleaned):
-            raise ValueError("At least one valid currency is required")
-        return list(dict.fromkeys(cleaned))
+        if not re.fullmatch(r"0x[a-fA-F0-9]{40}", value):
+            raise ValueError("Wallet address must be a 0x-prefixed 40-hex EVM address")
+        return value
 
 
 _ALL_BENCHMARK_TESTS = (

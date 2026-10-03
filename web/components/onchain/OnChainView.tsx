@@ -21,7 +21,7 @@ export function OnChainView() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">On-Chain VVV</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Base network data via Venice crypto RPC
+          Supply &amp; staking via VeniceStats · wallet data via Venice crypto RPC
         </p>
       </div>
 
@@ -53,10 +53,26 @@ export function OnChainView() {
                     <p className="text-xl font-semibold">{formatNumber(supply.staked_in_contract, 2)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Circulating (est.)</p>
+                    <p className="text-sm text-muted-foreground">Circulating</p>
                     <p className="text-xl font-semibold">{formatNumber(supply.circulating_estimate, 2)}</p>
                   </div>
                 </div>
+                {typeof supply.burned_supply === 'number' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Burned</p>
+                      <p className="text-xl font-semibold">{formatNumber(supply.burned_supply, 2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Free Float (circ.)</p>
+                      <p className="text-xl font-semibold">
+                        {typeof supply.free_float_pct_circulating === 'number'
+                          ? `${formatNumber(supply.free_float_pct_circulating, 1)}%`
+                          : '—'}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground break-all">
                   Token: {supply.token_address}
                 </p>
@@ -88,13 +104,35 @@ export function OnChainView() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">% of Supply Staked</p>
-                  <p className="text-xl font-semibold">{formatNumber(staking.staked_percent, 2)}%</p>
-                  <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full bg-primary rounded-full"
-                      style={{ width: `${Math.min(staking.staked_percent, 100)}%` }}
-                    />
-                  </div>
+                  <p className="text-xl font-semibold">
+                    {typeof staking.staked_percent === 'number'
+                      ? `${formatNumber(staking.staked_percent, 2)}%`
+                      : '—'}
+                  </p>
+                  {typeof staking.staked_percent === 'number' && (
+                    <div className="mt-2 h-2 rounded-full bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-primary rounded-full"
+                        style={{ width: `${Math.min(staking.staked_percent, 100)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {typeof staking.apr === 'number' && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Staker APR</p>
+                      <p className="text-xl font-semibold">
+                        {formatNumber(staking.apr * (staking.apr <= 1 ? 100 : 1), 2)}%
+                      </p>
+                    </div>
+                  )}
+                  {typeof staking.lock_ratio === 'number' && (
+                    <div>
+                      <p className="text-sm text-muted-foreground">Lock Ratio</p>
+                      <p className="text-xl font-semibold">{formatNumber(staking.lock_ratio * 100, 1)}%</p>
+                    </div>
+                  )}
                 </div>
                 {staking.note && (
                   <p className="text-xs text-muted-foreground">{staking.note}</p>

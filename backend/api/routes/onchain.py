@@ -1,4 +1,10 @@
-"""On-chain VVV data via Venice crypto RPC (Base)."""
+"""On-chain VVV data via Venice crypto RPC (Base) and venicestats.com.
+
+Supply and staking KPIs (total supply, staked ratio, APR, free float)
+come from the free venicestats REST API (no auth) — one HTTP call replaces
+several eth_call round-trips. Per-address balance and transfer history
+still use Venice crypto RPC.
+"""
 
 from __future__ import annotations
 
@@ -9,8 +15,10 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.config import Settings, get_settings
+from backend.core import venicestats_client
 from backend.core.cache import TtlCache
 from backend.core.venice_api_client import VeniceAPIClient
+from backend.core.venicestats_client import VeniceStatsError
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -169,34 +177,44 @@ async def _fetch_vvv_erc20_meta(client: VeniceAPIClient) -> Dict[str, int]:
 @router.get("/onchain/supply")
 async def get_onchain_supply(
     client: VeniceAPIClient = Depends(get_venice_client),
+    settings: Settings = Depends(get_settings),
 ):
-    """VVV total supply on Base via Venice crypto RPC."""
+    """VVV supply decomposition via venicestats (one HTTP call, no RPC)."""
     cached = _cache.get("supply")
     if cached is not None:
         return cached
 
     try:
-        meta = await _fetch_vvv_erc20_meta(client)
-        scale = 10 ** meta["decimals"]
-        total = meta["total_raw"] / scale
-        staked = meta["staked_raw"] / scale
-        circulating_est = max(total - staked, 0.0)
+        m = await venicestats_client.get_metrics(settings)
+        total = m.get("totalSupply")
+        burned = m.get("burnedSupply") or 0.0
+        staked = m.get("totalStaked") or 0.0
+        if not isinstance(total, (int, float)):
+            raise VeniceStatsError("Metrics payload missing totalSupply")
+        circulating = m.get("circulatingSupply")
+        if not isinstance(circulating, (int, float)):
+            circulating = max(total - burned - staked, 0.0)
 
         result = {
             "network": NETWORK,
             "token_address": VVV_TOKEN,
             "staking_contract": STAKING_CONTRACT,
-            "decimals": meta["decimals"],
+            "decimals": 18,
+            "source": "venicestats",
             "total_supply": total,
             "staked_in_contract": staked,
-            "circulating_estimate": circulating_est,
-            "total_supply_raw": str(meta["total_raw"]),
-            "staked_raw": str(meta["staked_raw"]),
+            "circulating_estimate": circulating,
+            "burned_supply": burned,
+            "free_float": m.get("freeFloatVvv"),
+            "free_float_pct_circulating": m.get("freeFloatVvvPctCirc"),
+            "free_float_pct_total": m.get("freeFloatVvvPctTotal"),
         }
         _cache.set("supply", result)
         return result
     except HTTPException:
         raise
+    except VeniceStatsError as e:
+        raise HTTPException(502, f"VeniceStats error: {e}")
     except Exception:
         logger.exception("Failed to fetch on-chain supply")
         raise HTTPException(500, "Failed to fetch on-chain supply")
@@ -205,18 +223,19 @@ async def get_onchain_supply(
 @router.get("/onchain/staking")
 async def get_onchain_staking(
     client: VeniceAPIClient = Depends(get_venice_client),
+    settings: Settings = Depends(get_settings),
 ):
-    """Staking pool stats derived from VVV balance of the staking contract."""
+    """Staking stats via venicestats — now includes APR (previously unavailable via RPC)."""
     cached = _cache.get("staking")
     if cached is not None:
         return cached
 
     try:
-        meta = await _fetch_vvv_erc20_meta(client)
-        scale = 10 ** meta["decimals"]
-        total = meta["total_raw"] / scale
-        staked = meta["staked_raw"] / scale
-        pct = (staked / total * 100.0) if total else 0.0
+        m = await venicestats_client.get_metrics(settings)
+        staked = m.get("totalStaked") or 0.0
+        total = m.get("totalSupply")
+        ratio = m.get("stakingRatio")
+        apr = m.get("stakerApr")
 
         result = {
             "network": NETWORK,
@@ -224,27 +243,39 @@ async def get_onchain_staking(
             "staking_contract": STAKING_CONTRACT,
             "staked_vvv": staked,
             "total_supply": total,
-            "staked_percent": pct,
+            "staked_percent": (ratio * 100.0) if isinstance(ratio, (int, float)) else None,
+            "staking_ratio": ratio,
+            "staking_ratio_change_24h": m.get("stakingRatioChange24h"),
+            "apr": apr,
+            "svvv_locked": m.get("svvvLocked"),
+            "svvv_unlocked": m.get("svvvUnlocked"),
+            "lock_ratio": m.get("lockRatio"),
+            "staking_growth_7d": m.get("stakingGrowth7d"),
+            "staking_growth_30d": m.get("stakingGrowth30d"),
+            "cooldown_vvv": m.get("cooldownVvv"),
+            "cooldown_wallets": m.get("cooldownWallets"),
+            "source": "venicestats",
             "note": (
-                "staked_vvv is the VVV ERC-20 balance of the Venice staking contract. "
-                "APY and staker count require additional contract reads not yet wired."
+                "Staking ratio, APR, lock ratio and growth data from venicestats.com "
+                "(free, no auth). Previously APY was not wired; it is now available."
             ),
         }
         _cache.set("staking", result)
         return result
     except HTTPException:
         raise
+    except VeniceStatsError as e:
+        raise HTTPException(502, f"VeniceStats error: {e}")
     except Exception:
         logger.exception("Failed to fetch on-chain staking")
         raise HTTPException(500, "Failed to fetch on-chain staking")
 
 
-@router.get("/onchain/balance/{address}")
-async def get_onchain_balance(
-    address: str,
-    client: VeniceAPIClient = Depends(get_venice_client),
-):
-    """VVV balance for a wallet on Base."""
+async def fetch_vvv_balance(address: str, client: VeniceAPIClient) -> Dict[str, Any]:
+    """VVV balance for a wallet on Base (shared by route and prices route).
+
+    Returns a dict with ``vvv_balance`` (human units) and metadata.
+    """
     if not _ADDR_RE.match(address):
         raise HTTPException(400, "Invalid EVM address")
 
@@ -276,3 +307,12 @@ async def get_onchain_balance(
     except Exception:
         logger.exception("Failed to fetch on-chain balance")
         raise HTTPException(500, "Failed to fetch on-chain balance")
+
+
+@router.get("/onchain/balance/{address}")
+async def get_onchain_balance(
+    address: str,
+    client: VeniceAPIClient = Depends(get_venice_client),
+):
+    """VVV balance for a wallet on Base."""
+    return await fetch_vvv_balance(address, client)

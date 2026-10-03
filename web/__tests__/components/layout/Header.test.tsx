@@ -27,11 +27,10 @@ const balanceData = {
 }
 
 const settingsData = {
-  coingecko_token_id: 'venice-token',
-  coingecko_currencies: ['usd', 'aud'],
   coingecko_holding_amount: 2750,
-  diem_token_id: 'diem',
   diem_holding_amount: 0,
+  vvv_holding_source: 'manual',
+  vvv_wallet_address: '',
   benchmark_max_cost_usd: 5,
   benchmark_enable_billing_reconciliation: false,
   benchmark_judge_model: 'zai-org-glm-5-2',

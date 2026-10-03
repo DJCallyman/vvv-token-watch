@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, ValidationError
 
 from backend.api.routes.ai_common import extract_chat_text, get_client
-from backend.api.routes.onchain import _fetch_vvv_erc20_meta, VVV_TOKEN, STAKING_CONTRACT, NETWORK
-from backend.api.routes.prices import fetch_coin_gecko_price
+from backend.api.routes.onchain import VVV_TOKEN, STAKING_CONTRACT, NETWORK
+from backend.core import venicestats_client
 from backend.config import Settings, get_settings
 from backend.core.usage_tracker import UsageTracker
 from backend.limiter import limiter
@@ -85,18 +85,12 @@ async def _run_assistant_tool(name: str, client, settings: Settings) -> dict:
         }
 
     if name == "get_prices":
-        currencies = settings.coingecko_currencies_list
-        vvv = await fetch_coin_gecko_price(
-            settings.COINGECKO_TOKEN_ID, currencies, settings.COINGECKO_API_KEY
-        )
-        diem = await fetch_coin_gecko_price(
-            settings.DIEM_TOKEN_ID, currencies, settings.COINGECKO_API_KEY
-        )
-        vvv_prices = vvv.get(settings.COINGECKO_TOKEN_ID, {})
-        diem_prices = diem.get(settings.DIEM_TOKEN_ID, {})
+        metrics = await venicestats_client.get_metrics(settings)
+        vvv_usd = metrics.get("vvvPrice") or 0.0
+        diem_usd = metrics.get("diemPrice") or 0.0
         return {
-            "vvv": vvv_prices,
-            "diem": diem_prices,
+            "vvv": {"usd": vvv_usd, "change_24h": metrics.get("priceChange24h")},
+            "diem": {"usd": diem_usd, "change_24h": metrics.get("diemPriceChange24h")},
             "holdings": {
                 "vvv": settings.COINGECKO_HOLDING_AMOUNT,
                 "diem": settings.DIEM_HOLDING_AMOUNT,
@@ -108,17 +102,16 @@ async def _run_assistant_tool(name: str, client, settings: Settings) -> dict:
         return await tracker.get_epoch_usage()
 
     if name == "get_onchain":
-        meta = await _fetch_vvv_erc20_meta(client)
-        scale = 10 ** meta["decimals"]
-        total = meta["total_raw"] / scale
-        staked = meta["staked_raw"] / scale
+        metrics = await venicestats_client.get_metrics(settings)
+        total = metrics.get("totalSupply") or 0.0
+        staked = metrics.get("totalStaked") or 0.0
         return {
             "network": NETWORK,
             "token_address": VVV_TOKEN,
             "staking_contract": STAKING_CONTRACT,
             "total_supply": total,
             "staked_in_contract": staked,
-            "circulating_estimate": max(total - staked, 0.0),
+            "circulating_estimate": metrics.get("circulatingSupply") or max(total - staked, 0.0),
         }
 
     raise ValueError(f"Unknown assistant tool: {name}")
