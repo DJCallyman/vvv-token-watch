@@ -113,6 +113,14 @@ export function useAPIKeysUsage() {
   })
 }
 
+export function useAPIKeyAnalytics(days = 7) {
+  return useQuery({
+    queryKey: ['apiKeyAnalytics', days],
+    queryFn: () => api.getAPIKeyAnalytics(days),
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
 export function useAPIKeyDetail(id: string | null) {
   return useQuery({
     queryKey: ['apiKeyDetail', id],
@@ -204,6 +212,18 @@ export function useModelTraits(modelType: TraitModelType = 'text') {
   return useQuery({
     queryKey: ['modelTraits', modelType],
     queryFn: () => api.getModelTraits(modelType),
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+export function useModelCompatibilityMapping(
+  modelType: TraitModelType | 'code' = 'text',
+  enabled = true,
+) {
+  return useQuery({
+    queryKey: ['modelCompatibilityMapping', modelType],
+    queryFn: () => api.getModelCompatibilityMapping(modelType),
+    enabled,
     staleTime: 5 * 60 * 1000,
   })
 }

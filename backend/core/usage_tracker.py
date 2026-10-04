@@ -74,6 +74,7 @@ class APIKeyUsage:
     last6_chars: Optional[str] = None
     current_period_usage_usd: Optional[str] = None
     current_period_usage_diem: Optional[str] = None
+    model_privacy: Optional[str] = None
 
 
 @dataclass
@@ -439,6 +440,7 @@ class UsageTracker:
                         last6_chars=key_data.get("last6Chars"),
                         current_period_usage_usd=current_period.get("usd"),
                         current_period_usage_diem=current_period.get("diem"),
+                        model_privacy=key_data.get("modelPrivacy"),
                     )
                 )
             return api_keys

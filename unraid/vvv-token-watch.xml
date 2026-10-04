@@ -39,6 +39,7 @@
     docker run -d --name=postgres -e POSTGRES_DB=vvvwatch -e POSTGRES_USER=vvvwatch -e POSTGRES_PASSWORD=yourpassword postgres:15-alpine
   </Requires>
   <Config Name="Venice Admin Key" Target="VENICE_ADMIN_KEY" Default="" Mode="" Description="Your Venice AI Admin API key (required for usage tracking)" Type="Variable" Display="always" Required="true" Mask="true"></Config>
+  <Config Name="Assistant Model" Target="ASSISTANT_MODEL" Default="venice-uncensored-1-2" Mode="" Description="Venice model ID used by the read-only assistant" Type="Variable" Display="advanced" Required="false" Mask="false">venice-uncensored-1-2</Config>
   <Config Name="App Password" Target="APP_PASSWORD" Default="" Mode="" Description="Required: shared password protecting the web UI and API. Generate with: openssl rand -hex 24" Type="Variable" Display="always" Required="true" Mask="true"></Config>
   <Config Name="Database URL" Target="DATABASE_URL" Default="postgresql://vvvwatch:password@postgres:5432/vvvwatch" Mode="" Description="PostgreSQL connection string. The user must have USAGE and CREATE on schema public." Type="Variable" Display="always" Required="true" Mask="true">postgresql://vvvwatch:password@postgres:5432/vvvwatch</Config>
   <Config Name="CoinGecko API Key" Target="COINGECKO_API_KEY" Default="" Mode="" Description="Optional: CoinGecko Pro API key for higher rate limits" Type="Variable" Display="advanced" Required="false" Mask="true"></Config>

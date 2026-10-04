@@ -14,6 +14,7 @@ from backend.api.routes.onchain import VVV_TOKEN, STAKING_CONTRACT, NETWORK
 from backend.core import venicestats_client
 from backend.config import Settings, get_settings
 from backend.core.usage_tracker import UsageTracker
+from backend.core.venice_api_client import venice_error_hint
 from backend.limiter import limiter
 
 logger = logging.getLogger(__name__)
@@ -158,12 +159,12 @@ async def query_assistant(request: Request, settings: Settings = Depends(get_set
     messages = [{"role": "system", "content": system_message}, *body.history[-20:], {"role": "user", "content": body.query}]
     try:
         if live_tool:
-            completion = await client.post_json("/chat/completions", data={"model": "venice-uncensored-1-2", "messages": messages, "tool_choice": "none", "max_tokens": 1000, "venice_parameters": {"include_venice_system_prompt": False}}, timeout=60)
+            completion = await client.post_json("/chat/completions", data={"model": settings.ASSISTANT_MODEL, "messages": messages, "tool_choice": "none", "max_tokens": 1000, "venice_parameters": {"include_venice_system_prompt": False}}, timeout=60)
             return {"answer": extract_chat_text(completion), "tool_calls": []}
 
         all_tool_calls = []
         for _ in range(3):
-            completion = await client.post_json("/chat/completions", data={"model": "venice-uncensored-1-2", "messages": messages, "tools": tools, "tool_choice": "auto", "max_tokens": 1000, "venice_parameters": {"include_venice_system_prompt": False}}, timeout=60)
+            completion = await client.post_json("/chat/completions", data={"model": settings.ASSISTANT_MODEL, "messages": messages, "tools": tools, "tool_choice": "auto", "max_tokens": 1000, "venice_parameters": {"include_venice_system_prompt": False}}, timeout=60)
             message = (completion.get("choices") or [{}])[0].get("message", {})
             tool_calls = message.get("tool_calls") or []
             all_tool_calls.extend(tool_calls)
@@ -188,7 +189,26 @@ async def query_assistant(request: Request, settings: Settings = Depends(get_set
 
         raise HTTPException(status_code=502, detail="Assistant exceeded tool-call limit")
     except httpx.HTTPStatusError as exc:
-        raise HTTPException(502, "Venice assistant failed") from exc
+        response = exc.response
+        status = response.status_code if response is not None else 502
+        code = None
+        message = "Venice assistant failed"
+        if response is not None:
+            try:
+                payload = response.json()
+                if isinstance(payload, dict):
+                    error_data = payload.get("error")
+                    if isinstance(error_data, dict):
+                        code = error_data.get("code")
+                        message = str(error_data.get("message") or error_data.get("error") or message)
+                    else:
+                        code = payload.get("code")
+                        message = str(error_data or payload.get("message") or message)
+            except ValueError:
+                pass
+        hint = venice_error_hint(status, str(code) if code else None)
+        detail = f"{message}. {hint}" if hint else message
+        raise HTTPException(502, detail) from exc
     except Exception as exc:
         logger.exception("Assistant request failed")
         raise HTTPException(500, "Failed to answer request") from exc

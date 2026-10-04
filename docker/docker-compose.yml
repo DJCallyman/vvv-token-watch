@@ -7,6 +7,7 @@ services:
       - "3000:3000"
     environment:
       - VENICE_ADMIN_KEY=${VENICE_ADMIN_KEY}
+      - ASSISTANT_MODEL=${ASSISTANT_MODEL:-venice-uncensored-1-2}
       - APP_PASSWORD=${APP_PASSWORD:-}
       - ALLOW_INSECURE_NO_AUTH=${ALLOW_INSECURE_NO_AUTH:-false}
       - COINGECKO_API_KEY=${COINGECKO_API_KEY:-}

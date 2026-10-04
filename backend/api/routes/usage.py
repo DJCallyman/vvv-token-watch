@@ -109,6 +109,7 @@ async def get_api_keys_usage(
                     "consumption_limits_diem": key.consumption_limits_diem,
                     "current_period_usage_usd": key.current_period_usage_usd,
                     "current_period_usage_diem": key.current_period_usage_diem,
+                    "model_privacy": key.model_privacy,
                 }
                 for key in keys_usage
             ]

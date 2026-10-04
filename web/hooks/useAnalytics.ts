@@ -56,6 +56,8 @@ export interface DailyUsage {
 
 export interface DailyAnalyticsResponse {
   daily_usage: DailyUsage[]
+  model_daily?: Array<{ date: string; [model: string]: number | string }>
+  model_daily_usd?: Array<{ date: string; [model: string]: number | string }>
   period_days: number
   source?: string
 }

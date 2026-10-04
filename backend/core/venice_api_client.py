@@ -34,6 +34,30 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 
 
+_VENICE_ERROR_HINTS = {
+    "INSUFFICIENT_BALANCE": "Check account balances and available credits.",
+    "API_KEY_DIEM_SPEND_LIMIT_EXCEEDED": "Raise or wait for the key's DIEM spending limit to reset.",
+    "API_KEY_USD_SPEND_LIMIT_EXCEEDED": "Raise or wait for the key's USD spending limit to reset.",
+    "MODEL_OVERLOADED": "Retry later or select another available model.",
+    "MODEL_OFFLINE": "Select another model or retry after the model is online.",
+    "MODEL_AT_CAPACITY": "Retry later or select another available model.",
+}
+
+_VENICE_STATUS_HINTS = {
+    401: "Check the API key and its permissions; billing and key administration require an ADMIN key.",
+    402: "Check account balance, credit availability, and key spending limits.",
+    404: "Refresh the model catalog; the requested model or endpoint may have changed.",
+    429: "Retry after the upstream rate-limit window.",
+    503: "The model may be offline or at capacity; retry or select another model.",
+    504: "The upstream request timed out; retry with a shorter request or later.",
+}
+
+
+def venice_error_hint(status_code: int, code: Optional[str] = None) -> Optional[str]:
+    """Return a concise recovery hint for common Venice errors."""
+    return _VENICE_ERROR_HINTS.get((code or "").upper()) or _VENICE_STATUS_HINTS.get(status_code)
+
+
 def mask_api_key(api_key: str, visible_chars: int = 4) -> str:
     """Mask API key for safe logging."""
     if not api_key:

@@ -149,6 +149,12 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
     tokens: d.tokens == null ? undefined : d.tokens / 1000,
     cost: dailyChartCurrency === 'USD' ? d.cost_usd ?? 0 : d.cost_diem ?? 0,
   })) || []
+  const modelDailyRows = dailyTotalUsd > 0
+    ? dailyData?.model_daily_usd ?? []
+    : dailyData?.model_daily ?? []
+  const modelDailyNames = Array.from(new Set(
+    modelDailyRows.flatMap((row) => Object.keys(row).filter((key) => key !== 'date')),
+  )).slice(0, 6)
 
   const formatCompactNumber = (n: number) => {
     if (n >= 1000000) return `${(n / 1000000).toFixed(1)}M`
@@ -380,6 +386,38 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
           )}
         </CardContent>
       </Card>
+
+      {modelDailyRows.length > 0 && modelDailyNames.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Daily Spend by Model ({dailyChartCurrency})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={modelDailyRows}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="date" className="text-xs" />
+                  <YAxis className="text-xs" />
+                  <Tooltip />
+                  <Legend />
+                  {modelDailyNames.map((modelName, index) => (
+                    <Line
+                      key={modelName}
+                      type="monotone"
+                      dataKey={modelName}
+                      name={modelName}
+                      stroke={`hsl(var(--chart-${(index % 5) + 1}))`}
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-2">

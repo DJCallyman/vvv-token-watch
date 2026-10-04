@@ -66,8 +66,24 @@ class DailyUsage(BaseModel):
 
 class DailyAnalyticsResponse(BaseModel):
     daily_usage: List[DailyUsage]
+    model_daily: List[Dict[str, float | str]] = Field(default_factory=list)
+    model_daily_usd: List[Dict[str, float | str]] = Field(default_factory=list)
     period_days: int
     source: str = "billing-db"
+
+
+class APIKeyAnalytics(BaseModel):
+    api_key_id: Optional[str] = None
+    name: str
+    total_usd: float = 0.0
+    total_diem: float = 0.0
+    total_units: float = 0.0
+
+
+class APIKeyAnalyticsResponse(BaseModel):
+    key_usage: List[APIKeyAnalytics]
+    period_days: int
+    source: str = "billing/usage-analytics"
 
 
 class AppSettingsResponse(BaseModel):

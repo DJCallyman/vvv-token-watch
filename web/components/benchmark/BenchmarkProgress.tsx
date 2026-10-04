@@ -11,26 +11,29 @@ interface LogLine {
 interface Props {
   jobId: string
   onComplete: (runId: string) => void
-  onError?: () => void
+  onError?: (message: string) => void
+  onCancelled?: () => void
 }
 
 const MAX_DISPLAYED_LINES = 1000
 
-export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
+export function BenchmarkProgress({ jobId, onComplete, onError, onCancelled }: Props) {
   const [lines, setLines] = useState<LogLine[]>([])
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
-  const [status, setStatus] = useState<'running' | 'done' | 'error'>('running')
+  const [status, setStatus] = useState<'running' | 'done' | 'error' | 'cancelled'>('running')
   const bottomRef = useRef<HTMLDivElement>(null)
   const esRef = useRef<EventSource | null>(null)
   const finishedRef = useRef(false)
 
   const onCompleteRef = useRef(onComplete)
   const onErrorRef = useRef(onError)
+  const onCancelledRef = useRef(onCancelled)
 
   useEffect(() => {
     onCompleteRef.current = onComplete
     onErrorRef.current = onError
-  }, [onComplete, onError])
+    onCancelledRef.current = onCancelled
+  }, [onComplete, onError, onCancelled])
 
   const pushLine = (text: string, type: LogLine['type']) => {
     // Drop empty placeholder lines from the SSE handshake; keep every real
@@ -57,7 +60,16 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
     setStatus('error')
     pushLine(message, 'error')
     esRef.current?.close()
-    onErrorRef.current?.()
+    onErrorRef.current?.(message)
+  }
+
+  const markCancelled = () => {
+    if (finishedRef.current) return
+    finishedRef.current = true
+    setStatus('cancelled')
+    pushLine('Benchmark cancelled by user', 'system')
+    esRef.current?.close()
+    onCancelledRef.current?.()
   }
 
   const ingestEvent = (data: {
@@ -184,15 +196,15 @@ export function BenchmarkProgress({ jobId, onComplete, onError }: Props) {
   }, [lines])
 
   const statusColor =
-    status === 'done' ? 'text-green-400' : status === 'error' ? 'text-red-400' : 'text-amber-400'
-  const statusLabel = status === 'done' ? 'Complete' : status === 'error' ? 'Error' : 'Running'
+    status === 'done' ? 'text-green-400' : status === 'error' ? 'text-red-400' : status === 'cancelled' ? 'text-muted-foreground' : 'text-amber-400'
+  const statusLabel = status === 'done' ? 'Complete' : status === 'error' ? 'Error' : status === 'cancelled' ? 'Cancelled' : 'Running'
 
   const [cancelling, setCancelling] = useState(false)
   const onCancel = async () => {
     setCancelling(true)
     try {
       await api.cancelBenchmark(jobId)
-      markError('Benchmark cancelled by user')
+      markCancelled()
     } catch {
       pushLine('Failed to cancel benchmark', 'error')
     } finally {

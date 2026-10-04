@@ -7,6 +7,7 @@ import pytest
 import backend.api.routes.analytics as analytics_routes
 from backend.api.routes.analytics import (
     build_analytics_daily_response,
+    build_analytics_key_response,
     build_analytics_model_response,
     get_daily_analytics,
     get_model_analytics,
@@ -29,6 +30,23 @@ def test_usage_analytics_generates_cost_recommendations() -> None:
     recommendation_types = {recommendation.type for recommendation in result.recommendations}
     assert "efficiency" in recommendation_types
     assert "cost" in recommendation_types
+
+
+def test_usage_analytics_preserves_web_app_key_bucket() -> None:
+    result = build_analytics_key_response(
+        {
+            "byKey": [
+                {"apiKeyId": "key-1", "description": "Production", "totalUsd": 2, "totalDiem": 1},
+                {"apiKeyId": None, "description": None, "totalUsd": 0.5, "totalDiem": 0},
+            ]
+        },
+        days=7,
+    )
+
+    assert result.key_usage[0].name == "Production"
+    assert result.key_usage[1].api_key_id is None
+    assert result.key_usage[1].name == "Venice Web App"
+    assert result.key_usage[1].total_usd == 0.5
 
 
 @pytest.mark.asyncio
@@ -102,7 +120,11 @@ async def test_daily_analytics_uses_synced_billing_entries(monkeypatch) -> None:
 
 def test_analytics_daily_builder_maps_documented_currency_fields() -> None:
     result = build_analytics_daily_response(
-        {"byDate": [{"date": "2026-08-18", "USD": 1.25, "DIEM": 2.5}]},
+        {
+            "byDate": [{"date": "2026-08-18", "USD": 1.25, "DIEM": 2.5}],
+            "byModelDaily": [{"date": 1787011200000, "GLM": 2.5}],
+            "byModelDailyUsd": [{"date": 1787011200000, "GLM": 1.25}],
+        },
         days=7,
     )
     daily = result.daily_usage[0]
@@ -112,6 +134,8 @@ def test_analytics_daily_builder_maps_documented_currency_fields() -> None:
     assert daily.cost_usd == 1.25
     assert daily.cost_diem == 2.5
     assert daily.cost == 3.75
+    assert result.model_daily == [{"date": "2026-08-18", "GLM": 2.5}]
+    assert result.model_daily_usd == [{"date": "2026-08-18", "GLM": 1.25}]
 
 
 @pytest.mark.asyncio

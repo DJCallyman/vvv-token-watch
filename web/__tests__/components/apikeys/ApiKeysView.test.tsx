@@ -29,6 +29,9 @@ const SAMPLE_KEYS: APIKeyUsage[] = [
     last6_chars: 'ci1234',
     consumption_limits_usd: 10,
     limit_period: 'MONTH',
+    current_period_usage_usd: '2.50',
+    current_period_usage_diem: '0.125',
+    model_privacy: 'PRIVATE_ONLY',
   },
   {
     id: 'k-admin',
@@ -139,6 +142,12 @@ describe('ApiKeysView — populated', () => {
     render(<ApiKeysView />)
     expect(screen.getByText(/10 USD/i)).toBeInTheDocument()
     expect(screen.getAllByText(/month/i).length).toBeGreaterThan(0)
+  })
+
+  it('shows model privacy and current-period usage', () => {
+    render(<ApiKeysView />)
+    expect(screen.getByText('private only')).toBeInTheDocument()
+    expect(screen.getByText(/Current: \$2\.50 USD · 0\.1250 DIEM/)).toBeInTheDocument()
   })
 
   it('shows Unlimited label for key without limits', () => {

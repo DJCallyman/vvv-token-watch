@@ -6,6 +6,14 @@ import pytest
 
 from backend.tests.conftest import FakeResponse, FakeVeniceAPIClient
 from backend.api.routes import api_keys as api_keys_routes
+from backend.core.venice_api_client import venice_error_hint
+
+
+def test_venice_error_hints_cover_balance_and_model_errors() -> None:
+    assert "balance" in venice_error_hint(402).lower()
+    assert "spending limit" in venice_error_hint(400, "API_KEY_USD_SPEND_LIMIT_EXCEEDED").lower()
+    assert "model catalog" in venice_error_hint(404).lower()
+    assert "another available model" in venice_error_hint(503, "MODEL_OVERLOADED").lower()
 
 
 @pytest.mark.asyncio

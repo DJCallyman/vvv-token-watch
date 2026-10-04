@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     # Default model for optional benchmark judging. Deliberately avoids the
     # API text:default trait, which is not suitable for judging.
     BENCHMARK_JUDGE_MODEL: str = "zai-org-glm-5-2"
+    ASSISTANT_MODEL: str = "venice-uncensored-1-2"
 
     # When false (default), interactive API docs (/docs, /redoc, /openapi.json)
     # are disabled. Set true only for local development.
