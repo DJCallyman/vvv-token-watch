@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useBenchmarkRuns, useBenchmarkRun } from '@/lib/hooks'
-import { api, BenchmarkStartParams } from '@/lib/api'
+import { api, type BenchmarkStartParams } from '@/lib/api'
 import { ResultsSelector } from './ResultsSelector'
 import { ResultsTable } from './ResultsTable'
 import { CostOverlay } from './CostOverlay'
@@ -10,6 +10,7 @@ import { RunConfig } from './RunConfig'
 import { BenchmarkProgress } from './BenchmarkProgress'
 import { InfographicPanel } from './InfographicPanel'
 import { downloadBenchmarkFile } from '@/lib/benchmark-export'
+import { toast } from 'sonner'
 
 type Tab = 'results' | 'run'
 
@@ -35,21 +36,32 @@ export function BenchmarkView() {
     try {
       const { job_id } = await api.startBenchmark(params)
       setActiveJobId(job_id)
+      toast.success('Benchmark started')
     } catch (e) {
-      setStartError(e instanceof Error ? e.message : 'Failed to start benchmark')
+      const message = e instanceof Error ? e.message : 'Failed to start benchmark'
+      setStartError(message)
+      toast.error(message)
     }
   }
 
   const handleJobComplete = (runId: string) => {
     setActiveJobId(null)
-    refetchRuns().then(() => {
+    toast.success('Benchmark complete')
+    refetchRuns().then((result) => {
+      if (result.isError) toast.error('Benchmark completed, but the results list could not be refreshed')
       setSelectedRunId(runId)
       setActiveTab('results')
     })
   }
 
-  const handleJobError = () => {
+  const handleJobError = (message: string) => {
     setActiveJobId(null)
+    toast.error(message)
+  }
+
+  const handleJobCancelled = () => {
+    setActiveJobId(null)
+    toast.info('Benchmark cancelled')
   }
 
   const tabs: { id: Tab; label: string }[] = [
@@ -72,6 +84,7 @@ export function BenchmarkView() {
         <div className="flex gap-0">
           {tabs.map((tab) => (
             <button
+              type="button"
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
@@ -102,18 +115,21 @@ export function BenchmarkView() {
             {runDetail && (
               <div className="flex items-center gap-2">
                 <button
+                  type="button"
                   onClick={() => downloadBenchmarkFile(runDetail, 'csv')}
                   className="text-xs px-3 py-1.5 rounded-md border bg-card text-muted-foreground border-border hover:text-foreground transition-colors"
                 >
                   Export CSV
                 </button>
                 <button
+                  type="button"
                   onClick={() => downloadBenchmarkFile(runDetail, 'md')}
                   className="text-xs px-3 py-1.5 rounded-md border bg-card text-muted-foreground border-border hover:text-foreground transition-colors"
                 >
                   Export Markdown
                 </button>
                 <button
+                  type="button"
                   onClick={() => setShowCostOverlay((v) => !v)}
                   className={`text-xs px-3 py-1.5 rounded-md border transition-colors ${
                     showCostOverlay
@@ -182,6 +198,7 @@ export function BenchmarkView() {
               <p className="text-xs mt-1">
                 Switch to the{' '}
                 <button
+                  type="button"
                   onClick={() => setActiveTab('run')}
                   className="text-primary hover:underline"
                 >
@@ -212,6 +229,7 @@ export function BenchmarkView() {
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-foreground">Benchmark in progress</p>
                 <button
+                  type="button"
                   onClick={() => setActiveJobId(null)}
                   className="text-xs text-muted-foreground hover:text-foreground"
                 >
@@ -222,6 +240,7 @@ export function BenchmarkView() {
                 jobId={activeJobId}
                 onComplete={handleJobComplete}
                 onError={handleJobError}
+                onCancelled={handleJobCancelled}
               />
             </>
           )}

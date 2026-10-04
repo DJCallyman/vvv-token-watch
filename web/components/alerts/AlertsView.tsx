@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAlerts, useAlertEvents } from '@/lib/hooks'
 import { api, type AlertConfigCreate } from '@/lib/api'
@@ -19,6 +19,7 @@ const METRIC_OPTIONS = [
 ]
 
 export function AlertsView() {
+  const formId = useId()
   const queryClient = useQueryClient()
   const { data: alertsData, isLoading: alertsLoading, isError: alertsError } = useAlerts()
   const { data: eventsData, isLoading: eventsLoading } = useAlertEvents(false)
@@ -48,7 +49,9 @@ export function AlertsView() {
       refresh()
       toast.success('Alert created')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create alert')
+      const message = err instanceof Error ? err.message : 'Failed to create alert'
+      setError(message)
+      toast.error(message)
     } finally {
       setSaving(false)
     }
@@ -60,7 +63,9 @@ export function AlertsView() {
       refresh()
       toast.success('Alert deleted')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete alert')
+      const message = err instanceof Error ? err.message : 'Failed to delete alert'
+      setError(message)
+      toast.error(message)
     }
   }
 
@@ -70,7 +75,9 @@ export function AlertsView() {
       refresh()
       toast.success('Alert acknowledged')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to acknowledge event')
+      const message = err instanceof Error ? err.message : 'Failed to acknowledge event'
+      setError(message)
+      toast.error(message)
     }
   }
 
@@ -101,8 +108,9 @@ export function AlertsView() {
           <CardContent>
             <form onSubmit={onCreate} className="space-y-4">
               <div>
-                <label className="text-sm text-muted-foreground">Name</label>
+                <label htmlFor={`${formId}-name`} className="text-sm text-muted-foreground">Name</label>
                 <input
+                  id={`${formId}-name`}
                   required
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -111,8 +119,9 @@ export function AlertsView() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm text-muted-foreground">Type</label>
+                  <label htmlFor={`${formId}-type`} className="text-sm text-muted-foreground">Type</label>
                   <select
+                    id={`${formId}-type`}
                     value={form.alert_type}
                     onChange={(e) =>
                       setForm({
@@ -128,8 +137,9 @@ export function AlertsView() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-sm text-muted-foreground">Metric</label>
+                  <label htmlFor={`${formId}-metric`} className="text-sm text-muted-foreground">Metric</label>
                   <select
+                    id={`${formId}-metric`}
                     value={form.metric}
                     onChange={(e) => setForm({ ...form, metric: e.target.value })}
                     className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -144,8 +154,9 @@ export function AlertsView() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm text-muted-foreground">Threshold</label>
+                  <label htmlFor={`${formId}-threshold`} className="text-sm text-muted-foreground">Threshold</label>
                   <input
+                    id={`${formId}-threshold`}
                     type="number"
                     step="any"
                     required
@@ -155,8 +166,9 @@ export function AlertsView() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-muted-foreground">Comparison</label>
+                  <label htmlFor={`${formId}-comparison`} className="text-sm text-muted-foreground">Comparison</label>
                   <select
+                    id={`${formId}-comparison`}
                     value={form.comparison}
                     onChange={(e) =>
                       setForm({
