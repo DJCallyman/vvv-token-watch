@@ -24,7 +24,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 
 from backend.config import Settings, get_settings
-from backend.core.venice_api_client import VeniceAPIClient
+from backend.core.venice_api_client import VeniceAPIClient, venice_error_hint
 from backend.models.schemas import ApiKeyCreate, ApiKeyUpdate, ConsumptionLimit
 
 logger = logging.getLogger(__name__)
@@ -52,8 +52,13 @@ def _map_upstream_error(e: httpx.HTTPStatusError) -> HTTPException:
         body = {}
     if isinstance(body, dict):
         detail = str(body.get("error") or body.get("message") or e)
+        code = body.get("code")
     else:
         detail = str(e)
+        code = None
+    hint = venice_error_hint(status, str(code) if code else None)
+    if hint:
+        detail = f"{detail}. {hint}"
     if status >= 500:
         return HTTPException(status_code=502, detail=f"Venice API error: {status} {detail}")
     return HTTPException(status_code=status, detail=detail)

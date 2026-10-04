@@ -95,6 +95,7 @@ Press **Ctrl+C** to stop all processes and remove the PostgreSQL container.
 | Variable | Required | Description |
 |---|---|---|
 | `VENICE_ADMIN_KEY` | Required | Venice Admin API key, not an Inference Only key. |
+| `ASSISTANT_MODEL` | Optional | Venice model ID for the read-only assistant. The default is `venice-uncensored-1-2`. |
 | `APP_PASSWORD` | Conditional | Shared password for the web UI and API. Generate it with `openssl rand -hex 24`. Required unless `ALLOW_INSECURE_NO_AUTH=true`. |
 | `ALLOW_INSECURE_NO_AUTH` | Optional | Set to `true` to run without authentication. The default is `false`. |
 | `DB_PASSWORD` | Docker only | PostgreSQL password required by `docker/docker-compose.yml`. Local development via `./dev.sh` uses its own development database settings. |

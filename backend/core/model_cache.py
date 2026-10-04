@@ -30,6 +30,18 @@ logger = logging.getLogger(__name__)
 SENSITIVE_FILE_MODE = 0o600
 
 
+def missing_configured_models(
+    available_model_ids: set[str],
+    configured_models: Dict[str, str],
+) -> Dict[str, str]:
+    """Return configured roles whose model IDs are absent from the catalog."""
+    return {
+        role: model_id
+        for role, model_id in configured_models.items()
+        if model_id not in available_model_ids
+    }
+
+
 @dataclass
 class CachedModel:
     """Simplified model representation for caching"""
@@ -95,6 +107,22 @@ class ModelCacheManager:
         to avoid synchronous file I/O in the constructor (which previously
         ran on every request)."""
         await asyncio.to_thread(self._load_cache)
+
+    def validate_configured_models(self, configured_models: Dict[str, str]) -> Dict[str, str]:
+        """Warn about configured IDs missing from the latest available catalog."""
+        available_model_ids = set(self.models)
+        if not available_model_ids:
+            logger.warning("Skipping configured-model validation: model catalog is unavailable")
+            return {}
+
+        missing = missing_configured_models(available_model_ids, configured_models)
+        for role, model_id in missing.items():
+            logger.error(
+                "Configured %s model '%s' is absent from the Venice model catalog",
+                role,
+                model_id,
+            )
+        return missing
 
     async def fetch_models(self, force_refresh: bool = False) -> bool:
         """Fetch models from Venice API and update cache (async-friendly).

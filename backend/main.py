@@ -100,6 +100,11 @@ async def lifespan(app: FastAPI):
     from backend.core.model_cache import ModelCacheManager
     cache = ModelCacheManager()
     await cache.initialize()
+    await cache.fetch_models()
+    cache.validate_configured_models({
+        "assistant": settings.ASSISTANT_MODEL,
+        "benchmark judge": settings.BENCHMARK_JUDGE_MODEL,
+    })
     app.state.model_cache = cache
     logger.info("Model cache initialized")
 

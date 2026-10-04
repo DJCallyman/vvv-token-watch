@@ -1,6 +1,6 @@
 'use client'
 
-import { useAPIKeysUsage, useEpochUsage, useUsageTrends } from '@/lib/hooks'
+import { useAPIKeyAnalytics, useAPIKeysUsage, useEpochUsage, useUsageTrends } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatNumber, formatCurrency, formatDate } from '@/lib/utils'
 import { BarChart3, Activity, TrendingUp, TrendingDown, Minus } from 'lucide-react'
@@ -18,6 +18,7 @@ import {
 export function UsageView() {
   const { data: epochUsage, isLoading: epochLoading, isError: epochError } = useEpochUsage()
   const { data: keysUsage, isLoading: keysLoading, isError: keysError } = useAPIKeysUsage()
+  const { data: keyAnalytics } = useAPIKeyAnalytics(7)
   const { data: trends, isLoading: trendsLoading } = useUsageTrends('epoch')
 
   // For the "Epoch DIEM/USD Spent" cards we now use the dedicated epoch endpoint.
@@ -305,6 +306,33 @@ export function UsageView() {
                         </div>
                       )
                     })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {keyAnalytics?.key_usage && keyAnalytics.key_usage.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Billing by key</CardTitle>
+                <CardDescription>
+                  Venice billing analytics for the trailing {keyAnalytics.period_days} days, including Venice Web App usage
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="divide-y divide-border">
+                  {keyAnalytics.key_usage.map((key) => (
+                    <div key={key.api_key_id ?? 'venice-web-app'} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{key.name}</p>
+                        {key.api_key_id && <p className="truncate font-mono text-xs text-muted-foreground">{key.api_key_id}</p>}
+                      </div>
+                      <div className="flex gap-5 text-right text-sm">
+                        <span>{formatCurrency(key.total_usd)}</span>
+                        <span>{formatNumber(key.total_diem, 4)} DIEM</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </CardContent>
             </Card>

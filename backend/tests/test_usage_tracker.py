@@ -79,6 +79,7 @@ async def test_api_keys_usage_includes_last_used_at(monkeypatch: pytest.MonkeyPa
                     created_at="2026-01-01T00:00:00Z",
                     is_active=True,
                     last_used_at="2026-08-18T12:34:56Z",
+                    model_privacy="PRIVATE_ONLY",
                 )
             ]
 
@@ -91,6 +92,7 @@ async def test_api_keys_usage_includes_last_used_at(monkeypatch: pytest.MonkeyPa
     )
 
     assert result["keys"][0]["last_used_at"] == "2026-08-18T12:34:56Z"
+    assert result["keys"][0]["model_privacy"] == "PRIVATE_ONLY"
 
 
 @pytest.mark.asyncio

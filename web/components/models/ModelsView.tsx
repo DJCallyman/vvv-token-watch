@@ -8,6 +8,7 @@ import { ModelsComparisonTable } from './ModelsComparisonTable'
 import { ColumnSelector } from './ColumnSelector'
 import { ModelAnalytics } from './ModelAnalytics'
 import { TraitsPanel } from './TraitsPanel'
+import { CompatibilityMappingPanel } from './CompatibilityMappingPanel'
 import { Search, Filter, X, LayoutGrid, List, Table, ChevronDown, ChevronUp, DollarSign, BarChart3, ListX } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ModelType, loadColumnPreferences } from './columnConfig'
@@ -366,6 +367,7 @@ export function ModelsView() {
             onPickModel={(id) => setPickedModelId((prev) => (prev === id ? null : id))}
             selectedModelId={pickedModelId}
           />
+          <CompatibilityMappingPanel modelType={traitsModelType} />
           <div className="flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />

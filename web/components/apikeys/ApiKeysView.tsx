@@ -316,13 +316,20 @@ function ApiKeyRow({
         </div>
       </TableCell>
       <TableCell>
-        {apiKey.api_key_type ? (
-          <Badge variant={apiKey.api_key_type === 'ADMIN' ? 'destructive' : 'default'}>
-            {apiKey.api_key_type}
-          </Badge>
-        ) : (
-          <span className="text-xs text-muted-foreground">—</span>
-        )}
+        <div className="flex flex-col items-start gap-1">
+          {apiKey.api_key_type ? (
+            <Badge variant={apiKey.api_key_type === 'ADMIN' ? 'destructive' : 'default'}>
+              {apiKey.api_key_type}
+            </Badge>
+          ) : (
+            <span className="text-xs text-muted-foreground">—</span>
+          )}
+          {apiKey.model_privacy && (
+            <span className="text-[11px] text-muted-foreground" title="Model privacy policy">
+              {apiKey.model_privacy.replaceAll('_', ' ').toLowerCase()}
+            </span>
+          )}
+        </div>
       </TableCell>
       <TableCell>
         <Badge variant={apiKey.is_active ? 'success' : 'secondary'}>
@@ -339,6 +346,13 @@ function ApiKeyRow({
           </span>
         ) : (
           <span className="text-xs text-muted-foreground">Unlimited</span>
+        )}
+        {(apiKey.current_period_usage_usd != null || apiKey.current_period_usage_diem != null) && (
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            Current: {apiKey.current_period_usage_usd != null && `$${Number(apiKey.current_period_usage_usd).toFixed(2)} USD`}
+            {apiKey.current_period_usage_usd != null && apiKey.current_period_usage_diem != null && ' · '}
+            {apiKey.current_period_usage_diem != null && `${Number(apiKey.current_period_usage_diem).toFixed(4)} DIEM`}
+          </div>
         )}
       </TableCell>
       <TableCell className="text-sm text-muted-foreground">

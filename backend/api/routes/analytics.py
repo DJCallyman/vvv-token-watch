@@ -22,6 +22,8 @@ from backend.core.billing_sync import sync_billing_entries, load_billing_entries
 from backend.database import AsyncSessionLocal
 from backend.models.schemas import (
     AnalyticsResponse,
+    APIKeyAnalytics,
+    APIKeyAnalyticsResponse,
     DailyAnalyticsResponse,
     DailyUsage,
     ModelAnalytics,
@@ -460,8 +462,9 @@ def build_analytics_daily_response(
     analytics: Dict[str, Any],
     days: int,
 ) -> DailyAnalyticsResponse:
+    payload = analytics.get('data', analytics)
     daily_usage = []
-    for entry in analytics.get('byDate', []):
+    for entry in payload.get('byDate', []):
         usd = entry.get('USD', entry.get('usd', entry.get('totalUsd', 0)))
         diem = entry.get('DIEM', entry.get('diem', entry.get('totalDiem', 0)))
         try:
@@ -489,9 +492,69 @@ def build_analytics_daily_response(
         )
     return DailyAnalyticsResponse(
         daily_usage=daily_usage,
+        model_daily=_normalize_model_daily(analytics.get('byModelDaily', [])),
+        model_daily_usd=_normalize_model_daily(analytics.get('byModelDailyUsd', [])),
         period_days=days,
         source='billing/usage-analytics',
     )
+
+
+def _normalize_model_daily(rows: List[Dict[str, Any]]) -> List[Dict[str, float | str]]:
+    normalized = []
+    for row in rows:
+        raw_date = row.get('date')
+        try:
+            if isinstance(raw_date, (int, float)):
+                date_value = datetime.fromtimestamp(raw_date / 1000, tz=timezone.utc).date().isoformat()
+            else:
+                date_value = str(raw_date)[:10]
+                datetime.strptime(date_value, '%Y-%m-%d')
+        except (TypeError, ValueError, OSError):
+            continue
+
+        point: Dict[str, float | str] = {'date': date_value}
+        for model_name, raw_value in row.items():
+            if model_name == 'date':
+                continue
+            try:
+                point[str(model_name)] = float(raw_value or 0)
+            except (TypeError, ValueError):
+                continue
+        normalized.append(point)
+    return normalized
+
+
+def build_analytics_key_response(
+    analytics: Dict[str, Any],
+    days: int,
+) -> APIKeyAnalyticsResponse:
+    payload = analytics.get('data', analytics)
+    key_usage = [
+        APIKeyAnalytics(
+            api_key_id=entry.get('apiKeyId'),
+            name=entry.get('description') or (
+                'Venice Web App' if entry.get('apiKeyId') is None else 'Unnamed API key'
+            ),
+            total_usd=float(entry.get('totalUsd') or 0),
+            total_diem=float(entry.get('totalDiem') or 0),
+            total_units=float(entry.get('totalUnits') or 0),
+        )
+        for entry in payload.get('byKey', [])
+        if isinstance(entry, dict)
+    ]
+    return APIKeyAnalyticsResponse(key_usage=key_usage, period_days=days)
+
+
+@router.get("/keys", response_model=APIKeyAnalyticsResponse)
+async def get_key_analytics(
+    days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
+    client: VeniceAPIClient = Depends(get_venice_client),
+):
+    start_date, end_date = _analytics_window(days)
+    analytics = await fetch_usage_analytics_optional(client, start_date, end_date)
+    if not analytics:
+        raise HTTPException(status_code=502, detail="Venice key analytics are unavailable")
+    return build_analytics_key_response(analytics, days)
 
 
 @router.get("/models", response_model=AnalyticsResponse)
@@ -606,6 +669,8 @@ async def get_daily_analytics(
         
         daily_data: Dict[str, Dict] = {}
         request_tracker: Dict[str, set] = {}
+        model_daily_data: Dict[str, Dict[str, float]] = {}
+        model_daily_usd_data: Dict[str, Dict[str, float]] = {}
         
         for entry in usage_entries:
             timestamp = entry.get('timestamp', '')
@@ -634,6 +699,10 @@ async def get_daily_analytics(
                 }
                 request_tracker[date_key] = set()
 
+            model_name = clean_model_name(entry.get('sku', 'unknown'))
+            model_daily_data.setdefault(date_key, {})
+            model_daily_usd_data.setdefault(date_key, {})
+
             request_id = None
             if isinstance(inference, dict):
                 request_id = inference.get('requestId')
@@ -654,8 +723,14 @@ async def get_daily_analytics(
             daily_data[date_key]['cost'] += amount
             if currency == 'USD':
                 daily_data[date_key]['cost_usd'] += amount
+                model_daily_usd_data[date_key][model_name] = (
+                    model_daily_usd_data[date_key].get(model_name, 0.0) + amount
+                )
             elif currency == 'DIEM':
                 daily_data[date_key]['cost_diem'] += amount
+                model_daily_data[date_key][model_name] = (
+                    model_daily_data[date_key].get(model_name, 0.0) + amount
+                )
             elif currency in ('BUNDLED_CREDITS', 'VCU'):
                 daily_data[date_key]['cost_bundled_credits'] += amount
             elif currency == 'EARNED_CREDITS':
@@ -677,6 +752,8 @@ async def get_daily_analytics(
 
         return DailyAnalyticsResponse(
             daily_usage=daily_usage,
+            model_daily=[{'date': date, **values} for date, values in sorted(model_daily_data.items())],
+            model_daily_usd=[{'date': date, **values} for date, values in sorted(model_daily_usd_data.items())],
             period_days=days,
             source=billing_source,
         )

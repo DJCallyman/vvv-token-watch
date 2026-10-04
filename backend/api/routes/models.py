@@ -1,7 +1,7 @@
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from backend.config import get_settings, Settings
 from backend.core.model_cache import ModelCacheManager
@@ -85,6 +85,31 @@ async def get_model_traits(
     except Exception:
         logger.exception("Failed to fetch model traits")
         raise HTTPException(status_code=500, detail="Failed to fetch model traits")
+
+
+@router.get("/models/compatibility-mapping")
+async def get_model_compatibility_mapping(
+    model_type: str = Query("text", alias="type", min_length=1, max_length=32),
+    client: VeniceAPIClient = Depends(get_venice_client),
+):
+    """Return Venice model aliases for the requested modality."""
+    try:
+        return await client.get_json(
+            "/models/compatibility_mapping",
+            params={"type": model_type},
+        )
+    except httpx.HTTPStatusError as e:
+        logger.warning("Upstream error in /models/compatibility-mapping: %s", e)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Venice API error: {e.response.status_code if e.response else '?'}",
+        ) from e
+    except (httpx.TimeoutException, httpx.ConnectError) as e:
+        logger.warning("Upstream unreachable in /models/compatibility-mapping: %s", e)
+        raise HTTPException(status_code=504, detail=f"Venice API unreachable: {e}") from e
+    except Exception:
+        logger.exception("Failed to fetch model compatibility mapping")
+        raise HTTPException(status_code=500, detail="Failed to fetch model compatibility mapping")
 
 
 @router.get("/models/{model_id}")

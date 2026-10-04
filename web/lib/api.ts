@@ -101,10 +101,23 @@ export interface APIKeyUsage {
   consumption_limits_diem?: number | null
   current_period_usage_usd?: string | null
   current_period_usage_diem?: string | null
+  model_privacy?: 'ALL' | 'PRIVATE_TEXT' | 'PRIVATE_ONLY' | string | null
 }
 
 export interface UsageKeysResponse {
   keys: APIKeyUsage[]
+}
+
+export interface APIKeyAnalyticsResponse {
+  key_usage: Array<{
+    api_key_id: string | null
+    name: string
+    total_usd: number
+    total_diem: number
+    total_units: number
+  }>
+  period_days: number
+  source: string
 }
 
 // ---------------------------------------------------------------------------
@@ -260,6 +273,12 @@ export interface ModelsResponse {
  * this to surface Venice-curated picks next to the user-facing filters.
  */
 export interface ModelTraitsResponse {
+  data: Record<string, string>
+  object: 'list'
+  type: string
+}
+
+export interface ModelCompatibilityResponse {
   data: Record<string, string>
   object: 'list'
   type: string
@@ -680,6 +699,10 @@ export const api = {
     return fetchAPI<UsageKeysResponse>('/api/usage/keys')
   },
 
+  async getAPIKeyAnalytics(days = 7): Promise<APIKeyAnalyticsResponse> {
+    return fetchAPI<APIKeyAnalyticsResponse>(`/api/analytics/keys?days=${days}`)
+  },
+
   async createAPIKey(payload: ApiKeyCreatePayload): Promise<ApiKeyCreateResponse> {
     return fetchAPI<ApiKeyCreateResponse>('/api/keys', {
       method: 'POST',
@@ -717,6 +740,10 @@ export const api = {
 
   async getModelTraits(modelType: TraitModelType = 'text'): Promise<ModelTraitsResponse> {
     return fetchAPI<ModelTraitsResponse>(`/api/models/traits?type=${modelType}`)
+  },
+
+  async getModelCompatibilityMapping(modelType: TraitModelType | 'code' = 'text'): Promise<ModelCompatibilityResponse> {
+    return fetchAPI<ModelCompatibilityResponse>(`/api/models/compatibility-mapping?type=${modelType}`)
   },
 
   async getHealth(): Promise<{ status: string; timestamp: string }> {
