@@ -11,6 +11,7 @@ from backend.core.usage_tracker import (
     UsageTracker,
     APIKeyUsage,
     UsageMetrics,
+    VeniceUpstreamError,
     _net_usage_from_analytics,
 )
 from backend.api.routes import usage as usage_routes
@@ -42,7 +43,25 @@ def test_net_usage_from_analytics_sums_documented_date_totals() -> None:
         "diem": 4.0,
         "usd": 2.0,
         "bundled_credits": 0.0,
+        "earned_credits": 0.0,
     }
+
+
+@pytest.mark.asyncio
+async def test_unavailable_usage_history_surfaces_typed_upstream_error() -> None:
+    client = FakeVeniceAPIClient()
+    client.queue(
+        "/billing/usage-history",
+        [FakeResponse(status_code=410, json_data={})],
+    )
+
+    with pytest.raises(VeniceUpstreamError) as exc_info:
+        await UsageTracker("test-key", client).fetch_billing_entries(
+            "2026-01-01T00:00:00Z",
+            "2026-01-02T00:00:00Z",
+        )
+
+    assert exc_info.value.status_code == 410
 
 
 @pytest.mark.asyncio
@@ -96,7 +115,7 @@ async def test_epoch_usage_prefers_analytics_over_ledger(
             FakeResponse(
                 json_data={
                     "byDate": [
-                        {"date": epoch_date, "USD": 1.25, "DIEM": 2.5}
+                        {"date": epoch_date, "USD": 1.25, "DIEM": 2.5, "earnedCredits": 0.75}
                     ]
                 }
             )
@@ -108,6 +127,7 @@ async def test_epoch_usage_prefers_analytics_over_ledger(
     assert result["usd"] == 1.25
     assert result["diem"] == 2.5
     assert result["bundled_credits"] == 0.0
+    assert result["earned_credits"] == 0.75
     assert [call[1] for call in client.calls] == [
         "/api_keys/rate_limits",
         "/billing/usage-analytics",
@@ -178,6 +198,7 @@ async def test_epoch_usage_falls_back_to_ledger_when_analytics_unavailable() -> 
                         {"currency": "USD", "amount": -1.25},
                         {"currency": "DIEM", "amount": -2.5},
                         {"currency": "BUNDLED_CREDITS", "amount": -0.5},
+                        {"currency": "EARNED_CREDITS", "amount": -0.25},
                     ]
                 }
             )
@@ -189,6 +210,7 @@ async def test_epoch_usage_falls_back_to_ledger_when_analytics_unavailable() -> 
     assert result["usd"] == 1.25
     assert result["diem"] == 2.5
     assert result["bundled_credits"] == 0.5
+    assert result["earned_credits"] == 0.25
     assert [call[1] for call in client.calls] == [
         "/api_keys/rate_limits",
         "/billing/usage-analytics",

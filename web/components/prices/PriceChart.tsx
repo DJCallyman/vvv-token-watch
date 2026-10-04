@@ -39,7 +39,7 @@ export function PriceChart() {
         <div>
           <CardTitle>Price History</CardTitle>
           <CardDescription>
-            Local snapshots from CoinGecko polls
+            Local snapshots from VeniceStats polls
             {data ? ` · ${data.count} point(s)` : ''}
           </CardDescription>
         </div>

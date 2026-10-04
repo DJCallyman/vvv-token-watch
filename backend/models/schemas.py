@@ -26,6 +26,7 @@ class ModelAnalytics(BaseModel):
     cost_diem: float = 0.0
     # Bundled/legacy credits (BUNDLED_CREDITS, VCU) tracked separately.
     cost_bundled_credits: float = 0.0
+    cost_earned_credits: float = 0.0
     avg_response_time_ms: Optional[float] = None  # None when source='billing/usage-analytics'
     # success_rate removed: Venice billing usage does not expose per-request
     # success/failure status, so any computed rate would always be 100%.
@@ -46,7 +47,7 @@ class AnalyticsResponse(BaseModel):
     total_cost: float
     period_days: int
     recommendations: List[ModelRecommendation]
-    source: str = "billing/usage"
+    source: str = "billing-db"
 
 
 class DailyUsage(BaseModel):
@@ -60,12 +61,13 @@ class DailyUsage(BaseModel):
     cost_diem: float = 0.0
     # Bundled/legacy credits (BUNDLED_CREDITS, VCU) tracked separately.
     cost_bundled_credits: float = 0.0
+    cost_earned_credits: float = 0.0
 
 
 class DailyAnalyticsResponse(BaseModel):
     daily_usage: List[DailyUsage]
     period_days: int
-    source: str = "billing/usage"
+    source: str = "billing-db"
 
 
 class AppSettingsResponse(BaseModel):

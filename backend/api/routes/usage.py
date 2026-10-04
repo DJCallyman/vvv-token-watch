@@ -35,6 +35,7 @@ async def get_daily_usage(
                 diem=float(result.get("diem", 0)),
                 usd=float(result.get("usd", 0)),
                 bundled_credits=float(result.get("bundled_credits", 0)),
+                earned_credits=float(result.get("earned_credits", 0)),
                 target_date=result.get("date"),
             )
         except Exception:
@@ -65,6 +66,7 @@ async def get_epoch_usage(
                 diem=float(result.get("diem", 0)),
                 usd=float(result.get("usd", 0)),
                 bundled_credits=float(result.get("bundled_credits", 0)),
+                earned_credits=float(result.get("earned_credits", 0)),
                 epoch_start=result.get("epoch_start"),
                 next_epoch=result.get("next_epoch"),
             )
@@ -129,11 +131,7 @@ async def get_usage_history(
     currency: Optional[str] = None,
     client: VeniceAPIClient = Depends(get_venice_client)
 ):
-    """Fetch billing usage history.
-
-    Use ``/billing/usage-history`` first. Use ``/billing/usage`` for legacy
-    accounts. The ``currency`` filter accepts USD, DIEM, or BUNDLED_CREDITS.
-    """
+    """Fetch one cursor-paginated billing history page."""
     try:
         # Try the new endpoint first.
         params: Dict[str, Any] = {"pageSize": limit}
@@ -145,40 +143,13 @@ async def get_usage_history(
             params["currency"] = currency
 
         response = await client.get("/billing/usage-history", params=params)
-        if response.status_code in (403, 404, 410):
-            # New endpoint unavailable for this account — fall back to legacy.
-            logger.info(
-                "/billing/usage-history unavailable (HTTP %s); falling back to /billing/usage",
-                response.status_code,
-            )
-        elif response.status_code >= 400:
+        if response.status_code >= 400:
             response.raise_for_status()
-        else:
-            payload = response.json()
-            return {
-                "data": payload.get("data", []),
-                "next_cursor": payload.get("nextCursor"),
-                "source": "billing/usage-history",
-                "start_date": start_date,
-                "end_date": end_date,
-            }
-
-        # Fallback: /billing/usage (legacy accounts).
-        legacy_params = {
-            "limit": min(limit, 500),
-            "sortOrder": "desc",
-        }
-        if start_date:
-            legacy_params["startDate"] = start_date
-        if end_date:
-            legacy_params["endDate"] = end_date
-
-        data = await client.get_json("/billing/usage", params=legacy_params)
-
+        payload = response.json()
         return {
-            "data": data.get("data", []),
-            "pagination": data.get("pagination", {}),
-            "source": "billing/usage",
+            "data": payload.get("data", []),
+            "next_cursor": payload.get("nextCursor"),
+            "source": "billing/usage-history",
             "start_date": start_date,
             "end_date": end_date,
         }

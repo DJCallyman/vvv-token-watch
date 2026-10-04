@@ -40,6 +40,7 @@ class UsageSnapshot(Base):
     diem: Mapped[float] = mapped_column(Float, default=0.0)
     usd: Mapped[float] = mapped_column(Float, default=0.0)
     bundled_credits: Mapped[float] = mapped_column(Float, default=0.0)
+    earned_credits: Mapped[float] = mapped_column(Float, default=0.0)
     epoch_start: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     next_epoch: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     target_date: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
@@ -55,7 +56,7 @@ class PriceSnapshot(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
-    token_id: Mapped[str] = mapped_column(String(64), nullable=False)  # vvv | diem | coingecko id
+    token_id: Mapped[str] = mapped_column(String(64), nullable=False)  # vvv | diem
     price_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     price_aud: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     market_cap: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

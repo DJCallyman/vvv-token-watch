@@ -12,12 +12,14 @@ def test_net_usage_diem_usd_and_bundled_credits():
             {"currency": "USD", "amount": -1.0},
             {"currency": "BUNDLED_CREDITS", "amount": -3.0},
             {"currency": "VCU", "amount": -0.5},
+            {"currency": "EARNED_CREDITS", "amount": -1.25},
             {"currency": "DIEM", "amount": 0.5},  # refund
         ]
     )
     assert totals["diem"] == 2.0
     assert totals["usd"] == 1.0
     assert totals["bundled_credits"] == 3.5
+    assert totals["earned_credits"] == 1.25
 
 
 def test_net_usage_empty():
@@ -25,6 +27,7 @@ def test_net_usage_empty():
         "diem": 0.0,
         "usd": 0.0,
         "bundled_credits": 0.0,
+        "earned_credits": 0.0,
     }
 
 
@@ -37,3 +40,4 @@ def test_alert_compare_gte_lte():
 
 def test_model_analytics_has_no_success_rate():
     assert "success_rate" not in ModelAnalytics.model_fields
+    assert "cost_earned_credits" in ModelAnalytics.model_fields

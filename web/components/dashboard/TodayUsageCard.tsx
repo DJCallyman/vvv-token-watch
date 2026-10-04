@@ -58,6 +58,22 @@ export function TodayUsageCard() {
             {formatCurrency(usage.usd)}
           </p>
         </div>
+        {(usage.bundled_credits > 0 || usage.earned_credits > 0) && (
+          <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
+            {usage.bundled_credits > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground">Bundled credits</p>
+                <p className="text-lg font-semibold">{formatNumber(usage.bundled_credits, 4)}</p>
+              </div>
+            )}
+            {usage.earned_credits > 0 && (
+              <div>
+                <p className="text-xs text-muted-foreground">Earned credits</p>
+                <p className="text-lg font-semibold">{formatNumber(usage.earned_credits, 4)}</p>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

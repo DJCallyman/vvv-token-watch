@@ -39,6 +39,7 @@ async def record_usage_snapshot(
     diem: float,
     usd: float,
     bundled_credits: float = 0.0,
+    earned_credits: float = 0.0,
     epoch_start: Optional[str] = None,
     next_epoch: Optional[str] = None,
     target_date: Optional[str] = None,
@@ -63,6 +64,7 @@ async def record_usage_snapshot(
             abs((last.diem or 0) - (diem or 0)) < 1e-9
             and abs((last.usd or 0) - (usd or 0)) < 1e-9
             and abs((last.bundled_credits or 0) - (bundled_credits or 0)) < 1e-9
+            and abs((last.earned_credits or 0) - (earned_credits or 0)) < 1e-9
         ):
             # Still run purge occasionally even on skip
             try:
@@ -76,6 +78,7 @@ async def record_usage_snapshot(
         diem=diem,
         usd=usd,
         bundled_credits=bundled_credits,
+        earned_credits=earned_credits,
         epoch_start=epoch_start,
         next_epoch=next_epoch,
         target_date=target_date,
@@ -122,6 +125,7 @@ async def get_usage_trends(
             "diem": row.diem,
             "usd": row.usd,
             "bundled_credits": row.bundled_credits,
+            "earned_credits": row.earned_credits,
             "epoch_start": row.epoch_start,
             "next_epoch": row.next_epoch,
             "target_date": row.target_date,

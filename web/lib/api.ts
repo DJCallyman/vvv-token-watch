@@ -63,6 +63,8 @@ export interface BalanceData {
   consumption_currency?: string
   can_consume?: boolean
   diem_epoch_allocation?: number | null
+  bundled_credits?: number
+  earned_credits?: number
 }
 
 export interface DailyUsage {
@@ -70,6 +72,7 @@ export interface DailyUsage {
   diem: number
   usd: number
   bundled_credits?: number
+  earned_credits?: number
   // epoch_start removed — use EpochUsage (getEpochUsage) for epoch data
 }
 
@@ -77,6 +80,7 @@ export interface EpochUsage {
   diem: number
   usd: number
   bundled_credits: number
+  earned_credits: number
   epoch_start: string | null
   next_epoch: string | null
 }
@@ -521,6 +525,7 @@ export interface UsageTrendPoint {
   diem: number
   usd: number
   bundled_credits: number
+  earned_credits: number
   epoch_start?: string | null
   next_epoch?: string | null
   target_date?: string | null

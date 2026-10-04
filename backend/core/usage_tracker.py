@@ -16,21 +16,17 @@ import httpx
 from backend.core.venice_api_client import VeniceAPIClient
 from backend.config import get_settings
 from backend.core.billing_pagination import (
-    BillingUsageDeprecated,
     UsageHistoryUnavailable,
     fetch_usage_analytics_optional,
     walk_billing_usage_history,
-    walk_billing_usage_legacy,
 )
 from backend.core.cache import TtlCache
 
 # Re-export for callers that import the names from this module.
 __all__ = [
     "VeniceUpstreamError",
-    "BillingUsageDeprecated",
     "UsageHistoryUnavailable",
     "UsageTracker",
-    "UsageWorker",
     "UsageMetrics",
     "APIKeyUsage",
     "BalanceInfo",
@@ -88,16 +84,22 @@ class BalanceInfo:
     daily_diem_limit: float = 100.0
     daily_usd_limit: float = 25.0
     next_epoch_begins: Optional[str] = None
+    bundled_credits: float = 0.0
+    earned_credits: float = 0.0
 
 
 def _net_usage_from_entries(entries: List[Dict[str, Any]]) -> Dict[str, float]:
     """Net billing amounts: charges are negative, refunds positive. Return positive usage.
 
-    Tracks DIEM, USD, and bundled/legacy credits (BUNDLED_CREDITS, VCU) as
-    separate buckets. Do NOT mix currencies 1:1 — callers should display each
-    bucket on its own axis.
+    Tracks each billing currency separately. Do NOT mix currencies 1:1 —
+    callers should display each bucket on its own axis.
     """
-    totals = {"diem": 0.0, "usd": 0.0, "bundled_credits": 0.0}
+    totals = {
+        "diem": 0.0,
+        "usd": 0.0,
+        "bundled_credits": 0.0,
+        "earned_credits": 0.0,
+    }
     for entry in entries:
         currency = (entry.get("currency") or "").upper()
         amount = float(entry.get("amount", 0))
@@ -108,6 +110,8 @@ def _net_usage_from_entries(entries: List[Dict[str, Any]]) -> Dict[str, float]:
         elif currency in ("BUNDLED_CREDITS", "VCU"):
             # Track bundled/legacy credits separately — do not mix into diem.
             totals["bundled_credits"] -= amount
+        elif currency == "EARNED_CREDITS":
+            totals["earned_credits"] -= amount
         # Unknown currencies are ignored (logged elsewhere if needed).
     return totals
 
@@ -137,7 +141,12 @@ def _net_usage_from_analytics(
 
     start_date = start_datetime.date()
     end_date = end_datetime.date()
-    totals = {"diem": 0.0, "usd": 0.0, "bundled_credits": 0.0}
+    totals = {
+        "diem": 0.0,
+        "usd": 0.0,
+        "bundled_credits": 0.0,
+        "earned_credits": 0.0,
+    }
 
     def numeric_value(entry: Dict[str, Any], names: tuple[str, ...]) -> Optional[float]:
         for name in names:
@@ -182,6 +191,12 @@ def _net_usage_from_analytics(
         )
         if bundled is not None:
             totals["bundled_credits"] += bundled
+        earned = numeric_value(
+            entry,
+            ("EARNED_CREDITS", "earnedCredits", "totalEarnedCredits"),
+        )
+        if earned is not None:
+            totals["earned_credits"] += earned
 
     return totals
 
@@ -267,15 +282,9 @@ class UsageTracker:
         self,
         start_datetime: str,
         end_datetime: str,
-        sort_order: str = "desc",
         currency: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Fetch billing entries for a window, preferring /billing/usage-history.
-
-        Falls back to /billing/usage when the new endpoint is unavailable
-        (older accounts). Raises BillingUsageDeprecated if /billing/usage
-        returns 410 — the caller should surface this to the user.
-        """
+        """Fetch billing entries for a window from the cursor-paginated ledger."""
         try:
             return await walk_billing_usage_history(
                 self.api_client,
@@ -284,16 +293,10 @@ class UsageTracker:
                 currency=currency,
             )
         except UsageHistoryUnavailable as exc:
-            logger.info(
-                "Falling back to /billing/usage (history unavailable: %s)",
-                exc,
-            )
-            return await walk_billing_usage_legacy(
-                self.api_client,
-                start_datetime,
-                end_datetime,
-                sort_order=sort_order,
-            )
+            raise VeniceUpstreamError(
+                str(exc),
+                status_code=exc.status_code,
+            ) from exc
 
     async def get_epoch_usage(self) -> Dict:
         """Query billing usage from the start of the current epoch to now.
@@ -303,8 +306,8 @@ class UsageTracker:
         to the cursor-paginated ledger. Completed results are cached briefly so
         dashboard polling does not repeat the upstream work on every request.
 
-        Prefers /billing/usage-history (cursor-paginated, no rate limit) and
-        falls back to /billing/usage for legacy accounts.
+        Prefers the aggregated analytics endpoint, then uses the
+        cursor-paginated billing ledger.
         """
         cached = _cached_epoch_usage(self.admin_key)
         if cached is not None:
@@ -358,6 +361,7 @@ class UsageTracker:
                 "diem": totals["diem"],
                 "usd": totals["usd"],
                 "bundled_credits": totals["bundled_credits"],
+                "earned_credits": totals["earned_credits"],
                 "epoch_start": epoch_start_str,
                 "next_epoch": next_epoch_str,
             }
@@ -392,6 +396,7 @@ class UsageTracker:
                 "diem": totals["diem"],
                 "usd": totals["usd"],
                 "bundled_credits": totals["bundled_credits"],
+                "earned_credits": totals["earned_credits"],
                 "date": target_date,
             }
         except httpx.HTTPStatusError as e:
@@ -448,22 +453,10 @@ class UsageTracker:
             ) from e
 
 
-class UsageWorker:
-    """
-    Compatibility class that wraps UsageTracker.
-    Provides the same interface as the Qt-based UsageWorker.
-    """
 
-    def __init__(self, admin_key: str, parent=None):
-        self.admin_key = admin_key
-        self.api_client = VeniceAPIClient(admin_key)
-        self._tracker = UsageTracker(admin_key, self.api_client)
 
-    async def fetch_rate_limits(self) -> BalanceInfo:
-        return await self._tracker.fetch_rate_limits()
 
-    async def get_daily_usage(self, target_date: Optional[str] = None) -> Dict[str, float]:
-        return await self._tracker.get_daily_usage(target_date)
 
-    async def fetch_api_keys_with_daily_usage(self) -> List[APIKeyUsage]:
-        return await self._tracker.fetch_api_keys_with_daily_usage()
+
+
+

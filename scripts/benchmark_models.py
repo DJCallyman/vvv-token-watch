@@ -1788,7 +1788,7 @@ async def reconcile_billed_costs(
     run_start: datetime,
     run_end: datetime,
 ) -> dict:
-    """Query /billing/usage and match entries to recorded request IDs.
+    """Query /billing/usage-history and match entries to recorded request IDs.
 
     Returns a mapping of request_id -> list of billing entries. Also updates
     each model result with actual_billed fields per category and model total.
@@ -1818,24 +1818,27 @@ async def reconcile_billed_costs(
 
     log(f"Reconciling billing for {len(request_ids)} request(s) from {start_str} to {end_str}…")
     matched: dict[str, list[dict]] = {}
-    page = 1
+    cursor: str | None = None
     max_pages = 50
 
-    while page <= max_pages:
+    for _ in range(max_pages):
         try:
+            params = (
+                {"cursor": cursor}
+                if cursor
+                else {
+                    "startTimestamp": start_str,
+                    "endTimestamp": end_str,
+                    "pageSize": 1000,
+                }
+            )
             resp = await client.get(
-                f"{VENICE_BASE}/billing/usage",
-                params={
-                    "startDate": start_str,
-                    "endDate": end_str,
-                    "limit": 500,
-                    "sortOrder": "desc",
-                    "page": page,
-                },
+                f"{VENICE_BASE}/billing/usage-history",
+                params=params,
             )
             if resp.status_code >= 400:
                 body = resp.text[:500]
-                log(f"WARNING: Billing usage returned {resp.status_code}: {body}")
+                log(f"WARNING: Billing usage history returned {resp.status_code}: {body}")
                 return {}
             payload = resp.json()
         except Exception as exc:
@@ -1852,17 +1855,13 @@ async def reconcile_billed_costs(
             if rid and rid in request_ids:
                 matched.setdefault(rid, []).append(entry)
 
-        pagination = payload.get("pagination", {})
-        total_pages = int(
-            pagination.get("totalPages", resp.headers.get("x-pagination-total-pages", 1))
-        )
-        if page >= total_pages:
+        cursor = payload.get("nextCursor")
+        if not cursor:
             break
-        page += 1
     else:
-        log("WARNING: Billing reconciliation hit max page limit; results may be incomplete.")
+        log("WARNING: Billing reconciliation hit max cursor limit; results may be incomplete.")
 
-    log(f"Matched {len(matched)} request(s) in billing usage.")
+    log(f"Matched {len(matched)} request(s) in billing usage history.")
 
     # Aggregate matched amounts per model/category
     totals: dict[str, dict[str, dict[str, float]]] = {}

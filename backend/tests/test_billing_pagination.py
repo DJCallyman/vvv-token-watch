@@ -91,43 +91,6 @@ async def test_410_raises_usage_history_unavailable() -> None:
 
 
 @pytest.mark.asyncio
-async def test_legacy_410_raises_billing_usage_deprecated() -> None:
-    client = FakeVeniceAPIClient()
-    client.queue(
-        "/billing/usage",
-        [FakeResponse(status_code=410, json_data={})],
-    )
-    with pytest.raises(bp.BillingUsageDeprecated) as exc_info:
-        await bp.walk_billing_usage_legacy(
-            client, "2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"
-        )
-    assert exc_info.value.status_code == 410
-    assert exc_info.value.replacement == "/billing/usage-history"
-
-
-@pytest.mark.asyncio
-async def test_legacy_walks_until_pagination_done() -> None:
-    client = FakeVeniceAPIClient()
-    client.queue(
-        "/billing/usage",
-        [
-            FakeResponse(status_code=200, json_data={
-                "data": [{"a": 1}],
-                "pagination": {"totalPages": 2},
-            }),
-            FakeResponse(status_code=200, json_data={
-                "data": [{"b": 1}],
-                "pagination": {"totalPages": 2},
-            }),
-        ],
-    )
-    entries = await bp.walk_billing_usage_legacy(
-        client, "2025-01-01T00:00:00Z", "2025-01-02T00:00:00Z"
-    )
-    assert entries == [{"a": 1}, {"b": 1}]
-
-
-@pytest.mark.asyncio
 async def test_max_pages_caps_cursor_walk(monkeypatch) -> None:
     """Verify cursor walk stops after max_pages and returns what it has."""
     monkeypatch.setattr(bp.settings, "API_MAX_PAGES", 2, raising=False)
