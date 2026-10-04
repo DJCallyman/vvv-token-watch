@@ -63,6 +63,8 @@ export interface BalanceData {
   consumption_currency?: string
   can_consume?: boolean
   diem_epoch_allocation?: number | null
+  bundled_credits?: number
+  earned_credits?: number
 }
 
 export interface DailyUsage {
@@ -70,6 +72,7 @@ export interface DailyUsage {
   diem: number
   usd: number
   bundled_credits?: number
+  earned_credits?: number
   // epoch_start removed — use EpochUsage (getEpochUsage) for epoch data
 }
 
@@ -77,6 +80,7 @@ export interface EpochUsage {
   diem: number
   usd: number
   bundled_credits: number
+  earned_credits: number
   epoch_start: string | null
   next_epoch: string | null
 }
@@ -165,26 +169,47 @@ export interface ApiKeyDetail {
   currentPeriodUsage?: { usd: string; diem: string }
 }
 
+export interface TokenPrice {
+  usd: number | null
+  aud: number | null
+  change_24h?: number | null
+  market_cap?: number | null
+  fdv?: number | null
+}
+
 export interface PricesData {
-  vvv: Record<string, number>
-  diem: Record<string, number>
+  vvv: TokenPrice | Record<string, number>
+  diem: TokenPrice | Record<string, number>
   holdings: {
     vvv: number
     diem: number
+    vvv_source?: 'manual' | 'wallet'
+    diem_source?: 'manual' | 'wallet'
+    vvv_wallet?: number
+    svvv?: number
+    unclaimed_rewards?: number
+    diem_wallet?: number
+    diem_staked?: number
   }
   portfolio?: {
     vvv_value_usd: number
+    svvv_value_usd?: number
+    unclaimed_rewards_value_usd?: number
     diem_value_usd: number
+    gross_exposure_usd?: number
+    diem_unlock_offset_usd?: number
+    net_worth_usd?: number
     total_usd: number
   }
 }
 
+export type VvvHoldingSource = 'manual' | 'wallet'
+
 export interface AppSettings {
-  coingecko_token_id: string
-  coingecko_currencies: string[]
   coingecko_holding_amount: number
-  diem_token_id: string
   diem_holding_amount: number
+  vvv_holding_source: VvvHoldingSource
+  vvv_wallet_address: string
   benchmark_max_cost_usd: number
   benchmark_enable_billing_reconciliation: boolean
   benchmark_judge_model: string
@@ -500,6 +525,7 @@ export interface UsageTrendPoint {
   diem: number
   usd: number
   bundled_credits: number
+  earned_credits: number
   epoch_start?: string | null
   next_epoch?: string | null
   target_date?: string | null
@@ -517,9 +543,14 @@ export interface OnchainSupply {
   token_address: string
   staking_contract: string
   decimals: number
+  source?: string
   total_supply: number
   staked_in_contract: number
   circulating_estimate: number
+  burned_supply?: number
+  free_float?: number | null
+  free_float_pct_circulating?: number | null
+  free_float_pct_total?: number | null
 }
 
 export interface OnchainStaking {
@@ -527,8 +558,19 @@ export interface OnchainStaking {
   token_address: string
   staking_contract: string
   staked_vvv: number
-  total_supply: number
-  staked_percent: number
+  total_supply: number | null
+  staked_percent: number | null
+  staking_ratio?: number | null
+  staking_ratio_change_24h?: number | null
+  apr?: number | null
+  svvv_locked?: number | null
+  svvv_unlocked?: number | null
+  lock_ratio?: number | null
+  staking_growth_7d?: number | null
+  staking_growth_30d?: number | null
+  cooldown_vvv?: number | null
+  cooldown_wallets?: number | null
+  source?: string
   note?: string
 }
 

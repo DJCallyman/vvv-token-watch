@@ -33,7 +33,6 @@ if [[ ! -f ".env" ]]; then
     _app_password="${_app_password_input:-$_app_password}"
     [[ -n "$_app_password" ]] || error "APP_PASSWORD is required (could not auto-generate one either)."
 
-    read -rp "  COINGECKO_API_KEY     (leave blank if none): " _cg_key
     read -rp "  COINGECKO_HOLDING_AMOUNT [2750]: " _vvv_hold
     _vvv_hold="${_vvv_hold:-2750}"
     read -rp "  DIEM_HOLDING_AMOUNT   [0]: " _diem_hold
@@ -43,12 +42,8 @@ if [[ ! -f ".env" ]]; then
 # Created by dev.sh — mirrors your Unraid template values
 VENICE_ADMIN_KEY=${_admin_key}
 APP_PASSWORD=${_app_password}
-COINGECKO_API_KEY=${_cg_key}
 COINGECKO_HOLDING_AMOUNT=${_vvv_hold}
 DIEM_HOLDING_AMOUNT=${_diem_hold}
-COINGECKO_TOKEN_ID=venice-token
-DIEM_TOKEN_ID=diem
-COINGECKO_CURRENCIES=usd,aud
 LOG_LEVEL=INFO
 EOF
     success ".env created."

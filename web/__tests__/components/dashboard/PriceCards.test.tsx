@@ -9,11 +9,26 @@ const mockUsePrices = usePrices as jest.MockedFunction<typeof usePrices>
 const pricesData = {
   vvv: { usd: 2.50, aud: 3.85 },
   diem: { usd: 0.01, aud: 0.015 },
-  holdings: { vvv: 2750, diem: 500 },
+  holdings: {
+    vvv: 305,
+    diem: 500,
+    vvv_source: 'wallet' as const,
+    diem_source: 'wallet' as const,
+    vvv_wallet: 100,
+    svvv: 200,
+    unclaimed_rewards: 5,
+    diem_wallet: 500,
+    diem_staked: 0,
+  },
   portfolio: {
-    vvv_value_usd: 6875.0,
+    vvv_value_usd: 250.0,
+    svvv_value_usd: 500.0,
+    unclaimed_rewards_value_usd: 12.5,
     diem_value_usd: 5.0,
-    total_usd: 6880.0,
+    gross_exposure_usd: 767.5,
+    diem_unlock_offset_usd: 5.0,
+    net_worth_usd: 762.5,
+    total_usd: 767.5,
   },
 }
 
@@ -67,15 +82,18 @@ describe('PriceCards — success', () => {
     expect(screen.getByText('$0.01')).toBeInTheDocument()
   })
 
-  it('renders Portfolio Value card title', () => {
+  it('renders Protocol Exposure card title', () => {
     render(<PriceCards />)
-    expect(screen.getByText('Portfolio Value')).toBeInTheDocument()
+    expect(screen.getByText('Protocol Exposure')).toBeInTheDocument()
   })
 
-  it('renders total portfolio USD value', () => {
+  it('renders gross exposure and net worth', () => {
     render(<PriceCards />)
-    // formatCurrency(6880.0) → "$6,880.00"
-    expect(screen.getByText('$6,880.00')).toBeInTheDocument()
+    expect(screen.getByText('$767.50')).toBeInTheDocument()
+    expect(screen.getByText('$762.50')).toBeInTheDocument()
+    expect(screen.getByText('sVVV')).toBeInTheDocument()
+    expect(screen.getByText('Unclaimed Rewards')).toBeInTheDocument()
+    expect(screen.getByText('Net worth')).toBeInTheDocument()
   })
 
   it('renders VVV AUD price when available', () => {

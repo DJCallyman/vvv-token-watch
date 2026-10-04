@@ -20,6 +20,7 @@ export interface ModelAnalytics {
   cost_usd?: number
   cost_diem?: number
   cost_bundled_credits?: number
+  cost_earned_credits?: number
   avg_response_time_ms?: number | null
   model_type: string
   breakdown?: ModelBreakdown[]
@@ -49,6 +50,8 @@ export interface DailyUsage {
   // BUG-05: separated daily costs
   cost_usd?: number
   cost_diem?: number
+  cost_bundled_credits?: number
+  cost_earned_credits?: number
 }
 
 export interface DailyAnalyticsResponse {

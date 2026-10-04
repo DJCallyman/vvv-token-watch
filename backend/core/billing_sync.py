@@ -74,8 +74,8 @@ async def sync_billing_entries(
             client, start_str, end_str, max_pages=max_pages
         )
     except UsageHistoryUnavailable:
-        logger.warning("Billing sync: /billing/usage-history unavailable, skipping sync")
-        return 0
+        logger.warning("Billing sync: /billing/usage-history unavailable")
+        raise
 
     if not entries:
         logger.info("Billing sync: no new entries")

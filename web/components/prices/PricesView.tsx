@@ -53,7 +53,7 @@ export function PricesView() {
       <div>
         <h1 className="text-3xl font-bold text-foreground">Token Prices</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Live prices and portfolio values from CoinGecko
+          Live prices from VeniceStats with ECB-based AUD conversion
         </p>
       </div>
       

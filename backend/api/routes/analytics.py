@@ -14,8 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from backend.core.venice_api_client import VeniceAPIClient
 from backend.config import get_settings, Settings
 from backend.core.billing_pagination import (
-    BillingUsageDeprecated,
     fetch_usage_analytics_optional,
+    UsageHistoryUnavailable,
 )
 from backend.core.cache import TtlCache
 from backend.core.billing_sync import sync_billing_entries, load_billing_entries
@@ -247,6 +247,7 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
                 'cost_usd': 0.0,
                 'cost_diem': 0.0,
                 'cost_bundled_credits': 0.0,
+                'cost_earned_credits': 0.0,
                 'response_times': [],
                 'model_type': model_type,
             }
@@ -284,6 +285,8 @@ def process_usage_data(usage_entries: List[Dict[str, Any]]) -> Dict[str, Any]:
         elif currency in ('BUNDLED_CREDITS', 'VCU'):
             # Track bundled/legacy credits separately — do not mix into diem.
             model_data[model_name]['cost_bundled_credits'] += abs_amount
+        elif currency == 'EARNED_CREDITS':
+            model_data[model_name]['cost_earned_credits'] += abs_amount
         else:
             # Unknown/other currencies contribute to legacy 'cost' only
             pass
@@ -391,12 +394,6 @@ def generate_recommendations(model_data: Dict[str, Dict]) -> List[Dict[str, str]
 
 # ---------------------------------------------------------------------------
 # Billing pagination (cursor + legacy) lives in backend.core.billing_pagination.
-# The legacy walker raises BillingUsageDeprecated (with HTTP 410) which the
-# route handlers below let propagate to the frontend as the documented
-# migration signal — previously a blanket `except Exception` swallowed it.
-# ---------------------------------------------------------------------------
-
-
 def build_analytics_model_response(
     analytics: Dict[str, Any],
     days: int,
@@ -428,6 +425,7 @@ def build_analytics_model_response(
             cost=cost,
             cost_usd=cost_usd,
             cost_diem=cost_diem,
+            cost_earned_credits=float(model.get('totalEarnedCredits', 0)),
             avg_response_time_ms=None,
             model_type=(model.get('modelType') or 'other').lower(),
             breakdown=breakdown,
@@ -439,6 +437,8 @@ def build_analytics_model_response(
         name: {
             'tokens': model.tokens,
             'cost': model.cost,
+            'cost_usd': model.cost_usd,
+            'cost_diem': model.cost_diem,
             'avg_response_time_ms': model.avg_response_time_ms,
             'model_type': model.model_type,
         }
@@ -472,6 +472,10 @@ def build_analytics_daily_response(
             diem_f = float(diem or 0)
         except (TypeError, ValueError):
             diem_f = 0.0
+        try:
+            earned_f = float(entry.get('earnedCredits', entry.get('EARNED_CREDITS', 0)) or 0)
+        except (TypeError, ValueError):
+            earned_f = 0.0
         daily_usage.append(
             DailyUsage(
                 date=entry.get('date', ''),
@@ -480,6 +484,7 @@ def build_analytics_daily_response(
                 cost=usd_f + diem_f,
                 cost_usd=usd_f,
                 cost_diem=diem_f,
+                cost_earned_credits=earned_f,
             )
         )
     return DailyAnalyticsResponse(
@@ -497,13 +502,13 @@ async def get_model_analytics(
 ):
     """
     Get model usage analytics including requests, tokens, costs, and performance.
-    Uses per-request billing history when available, falling back to aggregated
-    analytics and then legacy billing pagination.
+    Uses synchronized ledger entries, with aggregate analytics as a fallback
+    when cursor-paginated billing history is unavailable.
     """
     try:
         try:
             usage_entries, billing_source = await get_billing_entries_from_db(client, days)
-        except BillingUsageDeprecated:
+        except UsageHistoryUnavailable:
             start_date, end_date = _analytics_window(days)
             analytics = await fetch_usage_analytics_optional(client, start_date, end_date)
             if analytics:
@@ -536,6 +541,7 @@ async def get_model_analytics(
                 cost_usd=mdata.get('cost_usd', 0.0),
                 cost_diem=mdata.get('cost_diem', 0.0),
                 cost_bundled_credits=mdata.get('cost_bundled_credits', 0.0),
+                cost_earned_credits=mdata.get('cost_earned_credits', 0.0),
                 avg_response_time_ms=mdata['avg_response_time_ms'],
                 model_type=mdata.get('model_type', 'other'),
             )
@@ -558,15 +564,9 @@ async def get_model_analytics(
 
     except HTTPException:
         raise
-    except BillingUsageDeprecated as exc:
-        logger.info("Legacy /billing/usage 410 in model analytics: %s", exc)
-        raise HTTPException(
-            status_code=410,
-            detail=(
-                "/billing/usage is no longer available for this account. "
-                "Use /billing/usage-history."
-            ),
-        ) from exc
+    except UsageHistoryUnavailable as exc:
+        logger.warning("Billing history unavailable in model analytics: %s", exc)
+        raise HTTPException(status_code=502, detail="Venice billing history is unavailable") from exc
     except httpx.HTTPStatusError as exc:
         detail = str(exc)
         if exc.response is not None:
@@ -589,13 +589,13 @@ async def get_daily_analytics(
     Get daily usage trends.
 
     Returns aggregated usage metrics per day for trend analysis.
-    Uses per-request billing history when available, falling back to aggregated
-    analytics and then legacy billing pagination.
+    Uses synchronized ledger entries, with aggregate analytics as a fallback
+    when cursor-paginated billing history is unavailable.
     """
     try:
         try:
             usage_entries, billing_source = await get_billing_entries_from_db(client, days)
-        except BillingUsageDeprecated:
+        except UsageHistoryUnavailable:
             start_date, end_date = _analytics_window(days)
             analytics = await fetch_usage_analytics_optional(client, start_date, end_date)
             if analytics:
@@ -630,6 +630,7 @@ async def get_daily_analytics(
                     'cost_usd': 0.0,
                     'cost_diem': 0.0,
                     'cost_bundled_credits': 0.0,
+                    'cost_earned_credits': 0.0,
                 }
                 request_tracker[date_key] = set()
 
@@ -657,6 +658,8 @@ async def get_daily_analytics(
                 daily_data[date_key]['cost_diem'] += amount
             elif currency in ('BUNDLED_CREDITS', 'VCU'):
                 daily_data[date_key]['cost_bundled_credits'] += amount
+            elif currency == 'EARNED_CREDITS':
+                daily_data[date_key]['cost_earned_credits'] += amount
 
         daily_usage = [
             DailyUsage(
@@ -667,6 +670,7 @@ async def get_daily_analytics(
                 cost_usd=data.get('cost_usd', 0.0),
                 cost_diem=data.get('cost_diem', 0.0),
                 cost_bundled_credits=data.get('cost_bundled_credits', 0.0),
+                cost_earned_credits=data.get('cost_earned_credits', 0.0),
             )
             for date, data in sorted(daily_data.items())
         ]
@@ -679,15 +683,9 @@ async def get_daily_analytics(
 
     except HTTPException:
         raise
-    except BillingUsageDeprecated as exc:
-        logger.info("Legacy /billing/usage 410 in daily analytics: %s", exc)
-        raise HTTPException(
-            status_code=410,
-            detail=(
-                "/billing/usage is no longer available for this account. "
-                "Use /billing/usage-history."
-            ),
-        ) from exc
+    except UsageHistoryUnavailable as exc:
+        logger.warning("Billing history unavailable in daily analytics: %s", exc)
+        raise HTTPException(status_code=502, detail="Venice billing history is unavailable") from exc
     except httpx.HTTPStatusError as exc:
         detail = str(exc)
         if exc.response is not None:

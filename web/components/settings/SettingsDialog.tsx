@@ -12,24 +12,23 @@ import {
 } from '@/components/ui/dialog'
 import { Button, Input } from '@/components/ui'
 import { useResetSettings, useSettings, useUpdateSettings } from '@/lib/hooks'
+import type { VvvHoldingSource } from '@/lib/api'
 
 type SettingsForm = {
-  coingecko_token_id: string
-  coingecko_currencies: string
   coingecko_holding_amount: string
-  diem_token_id: string
   diem_holding_amount: string
+  vvv_holding_source: VvvHoldingSource
+  vvv_wallet_address: string
   benchmark_max_cost_usd: string
   benchmark_enable_billing_reconciliation: boolean
   benchmark_judge_model: string
 }
 
 const EMPTY_FORM: SettingsForm = {
-  coingecko_token_id: '',
-  coingecko_currencies: '',
   coingecko_holding_amount: '',
-  diem_token_id: '',
   diem_holding_amount: '',
+  vvv_holding_source: 'manual',
+  vvv_wallet_address: '',
   benchmark_max_cost_usd: '',
   benchmark_enable_billing_reconciliation: false,
   benchmark_judge_model: '',
@@ -42,15 +41,16 @@ export function SettingsDialog() {
   const reset = useResetSettings()
   const [form, setForm] = useState<SettingsForm>(EMPTY_FORM)
   const billingReconciliationId = useId()
+  const holdingSourceId = useId()
+  const walletAddressId = useId()
 
   useEffect(() => {
     if (!data) return
     setForm({
-      coingecko_token_id: data.coingecko_token_id,
-      coingecko_currencies: data.coingecko_currencies.join(', '),
       coingecko_holding_amount: String(data.coingecko_holding_amount),
-      diem_token_id: data.diem_token_id,
       diem_holding_amount: String(data.diem_holding_amount),
+      vvv_holding_source: data.vvv_holding_source ?? 'manual',
+      vvv_wallet_address: data.vvv_wallet_address ?? '',
       benchmark_max_cost_usd: String(data.benchmark_max_cost_usd),
       benchmark_enable_billing_reconciliation: data.benchmark_enable_billing_reconciliation,
       benchmark_judge_model: data.benchmark_judge_model,
@@ -64,11 +64,10 @@ export function SettingsDialog() {
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     update.mutate({
-      coingecko_token_id: form.coingecko_token_id.trim(),
-      coingecko_currencies: form.coingecko_currencies.split(',').map((value) => value.trim()).filter(Boolean),
       coingecko_holding_amount: Number(form.coingecko_holding_amount),
-      diem_token_id: form.diem_token_id.trim(),
       diem_holding_amount: Number(form.diem_holding_amount),
+      vvv_holding_source: form.vvv_holding_source,
+      vvv_wallet_address: form.vvv_wallet_address.trim(),
       benchmark_max_cost_usd: Number(form.benchmark_max_cost_usd),
       benchmark_enable_billing_reconciliation: form.benchmark_enable_billing_reconciliation,
       benchmark_judge_model: form.benchmark_judge_model.trim(),
@@ -109,12 +108,39 @@ export function SettingsDialog() {
             <form onSubmit={submit} className="space-y-5">
               <section className="space-y-3">
                 <h3 className="font-medium">Portfolio</h3>
-                {textField('coingecko_token_id', 'VVV CoinGecko ID')}
-                {textField('diem_token_id', 'DIEM CoinGecko ID')}
-                {textField('coingecko_currencies', 'Currencies (comma-separated)')}
+                <p className="text-xs text-muted-foreground">
+                  Prices come from VeniceStats; AUD is derived from daily ECB FX rates.
+                </p>
+                <label htmlFor={holdingSourceId} className="space-y-1 text-sm">
+                  <span className="text-muted-foreground">Holdings source</span>
+                  <select
+                    id={holdingSourceId}
+                    value={form.vvv_holding_source}
+                    onChange={(event) => updateField('vvv_holding_source', event.target.value as VvvHoldingSource)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="manual">Manual amounts</option>
+                    <option value="wallet">Read VVV and DIEM from wallet</option>
+                  </select>
+                </label>
+                {form.vvv_holding_source === 'wallet' && (
+                  <label htmlFor={walletAddressId} className="space-y-1 text-sm">
+                    <span className="text-muted-foreground">Wallet address (0x…)</span>
+                    <Input
+                      id={walletAddressId}
+                      type="text"
+                      placeholder="0x…"
+                      value={form.vvv_wallet_address}
+                      onChange={(event) => updateField('vvv_wallet_address', event.target.value)}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      VeniceStats provides VVV, staked sVVV, unclaimed VVV rewards, and wallet/staked DIEM. If the lookup fails, the manual amounts below are used.
+                    </span>
+                  </label>
+                )}
                 <div className="grid grid-cols-2 gap-3">
-                  {textField('coingecko_holding_amount', 'VVV holding', 'number')}
-                  {textField('diem_holding_amount', 'DIEM holding', 'number')}
+                  {textField('coingecko_holding_amount', form.vvv_holding_source === 'wallet' ? 'VVV fallback amount' : 'VVV holding', 'number')}
+                  {textField('diem_holding_amount', form.vvv_holding_source === 'wallet' ? 'DIEM fallback amount' : 'DIEM holding', 'number')}
                 </div>
               </section>
               <section className="space-y-3">

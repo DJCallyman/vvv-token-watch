@@ -10,6 +10,7 @@ const epochData = {
   diem: 12.3456,
   usd: 3.07,
   bundled_credits: 0,
+  earned_credits: 0,
   epoch_start: '2026-03-01T00:00:00Z',
   next_epoch: '2026-03-02T00:00:00Z',
 }
@@ -65,6 +66,17 @@ describe('TodayUsageCard — success', () => {
   it('renders USD usage as currency', () => {
     render(<TodayUsageCard />)
     expect(screen.getByText('$3.07')).toBeInTheDocument()
+  })
+
+  it('shows earned credits separately when present', () => {
+    mockUseEpochUsage.mockReturnValue({
+      data: { ...epochData, earned_credits: 0.25 },
+      isLoading: false,
+      isError: false,
+    } as any)
+    render(<TodayUsageCard />)
+    expect(screen.getByText('Earned credits')).toBeInTheDocument()
+    expect(screen.getByText('0.2500')).toBeInTheDocument()
   })
 
   it('renders zero DIEM correctly', () => {

@@ -10,11 +10,15 @@ class Settings(BaseSettings):
     # Matches docker-compose.dev.yml (host port 5433, user/db/password: vvvwatch).
     DATABASE_URL: str = "postgresql+asyncpg://vvvwatch:vvvwatch@localhost:5433/vvvwatch"
     
+    # Holdings amounts are still configurable (DB-backed via app_settings).
+    # Prices come from venicestats (VVV/DIEM); AUD is derived from daily ECB
+    # FX rates. The COINGECKO_* token/currency vars remain in existing .env
+    # files, so declare them (unused) to avoid extra_forbidden errors.
     COINGECKO_API_KEY: Optional[str] = None
-    COINGECKO_TOKEN_ID: str = "venice-token"
-    COINGECKO_CURRENCIES: str = "usd,aud"
+    COINGECKO_TOKEN_ID: Optional[str] = None
+    COINGECKO_CURRENCIES: Optional[str] = None
+    DIEM_TOKEN_ID: Optional[str] = None
     COINGECKO_HOLDING_AMOUNT: float = 2750.0
-    DIEM_TOKEN_ID: str = "diem"
     DIEM_HOLDING_AMOUNT: float = 0.0
     
     # Venice billing/usage-history takes ~10s per page regardless of page
@@ -32,7 +36,9 @@ class Settings(BaseSettings):
     EPOCH_LENGTH_HOURS: int = 24
     
     VENICE_API_BASE_URL: str = "https://api.venice.ai/api/v1"
-    COINGECKO_API_BASE_URL: str = "https://api.coingecko.com/api/v3"
+    # Free, no-auth analytics + FX sources.
+    VENICESTATS_BASE_URL: str = "https://venicestats.com/api"
+    FRANKFURTER_BASE_URL: str = "https://api.frankfurter.dev/v1"
     
     LOG_LEVEL: str = "INFO"
     LOG_FILE_PATH: str = "./data/logs/app.log"
@@ -94,8 +100,8 @@ class Settings(BaseSettings):
     )
     
     @property
-    def coingecko_currencies_list(self) -> list[str]:
-        return [c.strip() for c in self.COINGECKO_CURRENCIES.split(",")]
+    def supported_currencies_list(self) -> list[str]:
+        return ["usd", "aud"]
 
     @property
     def cors_origins_list(self) -> list[str]:

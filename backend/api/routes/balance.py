@@ -15,6 +15,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _balance_amount(balances: dict, currency: str, fallback: float) -> float:
+    value = balances.get(
+        currency,
+        balances.get(currency.lower(), balances.get(currency.upper())),
+    )
+    return float(fallback if value is None else value)
+
+
 def get_venice_client(settings: Settings = Depends(get_settings)) -> VeniceAPIClient:
     return VeniceAPIClient(settings.VENICE_ADMIN_KEY)
 
@@ -37,8 +45,10 @@ async def get_balance(
         tracker = UsageTracker(client.api_key, client)
         balance_info = await tracker.fetch_rate_limits()
 
-        diem_balance = float(balances.get("DIEM", balance_info.diem))
-        usd_balance = float(balances.get("USD", balance_info.usd))
+        diem_balance = _balance_amount(balances, "diem", balance_info.diem)
+        usd_balance = _balance_amount(balances, "usd", balance_info.usd)
+        bundled_credits = _balance_amount(balances, "bundledCredits", 0.0)
+        earned_credits = _balance_amount(balances, "earnedCredits", 0.0)
 
         # BUG-06: Compute CONSUMED percent for both currencies consistently.
         # When the relevant limit/allocation is absent or zero, we omit the
@@ -84,6 +94,8 @@ async def get_balance(
             "consumption_currency": consumption_currency,
             "can_consume": can_consume,
             "diem_epoch_allocation": diem_epoch_allocation,
+            "bundled_credits": bundled_credits,
+            "earned_credits": earned_credits,
         }
 
         # Best-effort alert evaluation on each balance poll.

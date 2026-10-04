@@ -3,6 +3,7 @@ import logging
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
+from sqlalchemy import text
 from backend.config import get_settings
 
 
@@ -55,6 +56,11 @@ async def init_db(
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
+                if conn.dialect.name == "postgresql":
+                    await conn.execute(text(
+                        "ALTER TABLE usage_snapshots ADD COLUMN IF NOT EXISTS "
+                        "earned_credits FLOAT NOT NULL DEFAULT 0"
+                    ))
             logger.info("Database tables ready")
             return True
         except Exception as exc:

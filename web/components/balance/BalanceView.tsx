@@ -76,6 +76,16 @@ export function BalanceView() {
                 {balance ? formatCurrency(balance.usd) : '—'}
               </p>
             </div>
+            <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Bundled credits</p>
+                <p className="text-xl font-semibold">{formatNumber(balance?.bundled_credits ?? 0, 4)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Earned credits</p>
+                <p className="text-xl font-semibold">{formatNumber(balance?.earned_credits ?? 0, 4)}</p>
+              </div>
+            </div>
             <div className="pt-4 border-t border-border">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Consumption</span>
@@ -111,6 +121,16 @@ export function BalanceView() {
               <p className="text-4xl font-bold text-foreground">
                 {epochUsage ? formatCurrency(epochUsage.usd) : '—'}
               </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4 border-t border-border pt-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Bundled credits consumed</p>
+                <p className="text-xl font-semibold">{formatNumber(epochUsage?.bundled_credits ?? 0, 4)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground">Earned credits consumed</p>
+                <p className="text-xl font-semibold">{formatNumber(epochUsage?.earned_credits ?? 0, 4)}</p>
+              </div>
             </div>
             {diemPerUsd > 0 && (
               <div className="pt-4 border-t border-border">

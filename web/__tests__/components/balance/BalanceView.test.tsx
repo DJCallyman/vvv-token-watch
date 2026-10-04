@@ -10,6 +10,8 @@ const mockUseEpochUsage = useEpochUsage as jest.MockedFunction<typeof useEpochUs
 const balanceData = {
   diem: 45.5,
   usd: 11.25,
+  bundled_credits: 2,
+  earned_credits: 1,
   daily_diem_limit: 100.0,
   daily_usd_limit: 25.0,
   diem_usage_percent: 45.5,
@@ -17,7 +19,7 @@ const balanceData = {
   next_epoch_begins: '2026-03-02T00:00:00Z',
 }
 
-const epochData = { diem: 8.123, usd: 2.01, bundled_credits: 0, epoch_start: '2026-03-01T00:00:00Z', next_epoch: '2026-03-02T00:00:00Z' }
+const epochData = { diem: 8.123, usd: 2.01, bundled_credits: 0.5, earned_credits: 0.25, epoch_start: '2026-03-01T00:00:00Z', next_epoch: '2026-03-02T00:00:00Z' }
 
 describe('BalanceView — loading', () => {
   beforeEach(() => {
@@ -76,6 +78,16 @@ describe('BalanceView — success', () => {
     render(<BalanceView />)
     const els = screen.getAllByText('$2.01')
     expect(els.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders bundled and earned credit balances and usage separately', () => {
+    render(<BalanceView />)
+    expect(screen.getByText('Bundled credits')).toBeInTheDocument()
+    expect(screen.getByText('Earned credits')).toBeInTheDocument()
+    expect(screen.getByText('Bundled credits consumed')).toBeInTheDocument()
+    expect(screen.getByText('Earned credits consumed')).toBeInTheDocument()
+    expect(screen.getByText('0.5000')).toBeInTheDocument()
+    expect(screen.getByText('0.2500')).toBeInTheDocument()
   })
 
   it('rounds sub-cent USD balance and consumption to zero', () => {

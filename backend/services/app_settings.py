@@ -13,11 +13,10 @@ from backend.models.db import AppSettings
 
 
 SETTING_KEYS = (
-    "coingecko_token_id",
-    "coingecko_currencies",
     "coingecko_holding_amount",
-    "diem_token_id",
     "diem_holding_amount",
+    "vvv_holding_source",
+    "vvv_wallet_address",
     "benchmark_max_cost_usd",
     "benchmark_enable_billing_reconciliation",
     "benchmark_judge_model",
@@ -26,11 +25,10 @@ SETTING_KEYS = (
 
 def environment_defaults(settings: Settings) -> dict[str, Any]:
     return {
-        "coingecko_token_id": settings.COINGECKO_TOKEN_ID,
-        "coingecko_currencies": settings.coingecko_currencies_list,
         "coingecko_holding_amount": settings.COINGECKO_HOLDING_AMOUNT,
-        "diem_token_id": settings.DIEM_TOKEN_ID,
         "diem_holding_amount": settings.DIEM_HOLDING_AMOUNT,
+        "vvv_holding_source": "manual",
+        "vvv_wallet_address": "",
         "benchmark_max_cost_usd": settings.BENCHMARK_MAX_COST_USD,
         "benchmark_enable_billing_reconciliation": settings.BENCHMARK_ENABLE_BILLING_RECONCILIATION,
         "benchmark_judge_model": settings.BENCHMARK_JUDGE_MODEL,

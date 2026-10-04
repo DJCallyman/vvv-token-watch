@@ -114,6 +114,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
   const filteredTotalUsd = Object.values(filteredUsage).reduce((s, d) => s + (d.cost_usd ?? 0), 0)
   const filteredTotalDiem = Object.values(filteredUsage).reduce((s, d) => s + (d.cost_diem ?? 0), 0)
   const filteredTotalBundledCredits = Object.values(filteredUsage).reduce((s, d) => s + (d.cost_bundled_credits ?? 0), 0)
+  const filteredTotalEarnedCredits = Object.values(filteredUsage).reduce((s, d) => s + (d.cost_earned_credits ?? 0), 0)
 
   const modelData = Object.entries(filteredUsage)
     .map(([name, data]) => ({
@@ -125,6 +126,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
       costUsd: data.cost_usd ?? 0,
       costDiem: data.cost_diem ?? 0,
       costBundledCredits: data.cost_bundled_credits ?? 0,
+      costEarnedCredits: data.cost_earned_credits ?? 0,
       avgResponseTime: data.avg_response_time_ms,
       breakdown: data.breakdown ?? [],
     }))
@@ -220,6 +222,9 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
               <p className="text-sm font-semibold">{formatFixedNumber(filteredTotalDiem, 4)} DIEM</p>
               {filteredTotalBundledCredits > 0 && (
                 <p className="text-xs font-medium">{formatFixedNumber(filteredTotalBundledCredits, 4)} bundled credits</p>
+              )}
+              {filteredTotalEarnedCredits > 0 && (
+                <p className="text-xs font-medium">{formatFixedNumber(filteredTotalEarnedCredits, 4)} earned credits</p>
               )}
             </div>
             <p className="text-[10px] text-muted-foreground">Currencies kept separate</p>
@@ -410,7 +415,8 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                         {model.costUsd > 0 && <div>{formatCurrency(model.costUsd)}</div>}
                         {model.costDiem > 0 && <div>{formatFixedNumber(model.costDiem, 4)} DIEM</div>}
                         {model.costBundledCredits > 0 && <div>{formatFixedNumber(model.costBundledCredits, 4)} bundled</div>}
-                        {model.costUsd <= 0 && model.costDiem <= 0 && model.costBundledCredits <= 0 && <div>—</div>}
+                        {model.costEarnedCredits > 0 && <div>{formatFixedNumber(model.costEarnedCredits, 4)} earned</div>}
+                        {model.costUsd <= 0 && model.costDiem <= 0 && model.costBundledCredits <= 0 && model.costEarnedCredits <= 0 && <div>—</div>}
                       </div>
                     </td>
                     {hasBreakdowns && (

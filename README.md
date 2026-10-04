@@ -11,7 +11,7 @@ The application uses a **FastAPI** backend and a **Next.js** frontend. A single 
 - **Account balance** — Shows remaining DIEM and USD credit, the epoch reset time, and consumption status.
 - **Epoch usage** — Shows DIEM and USD use since the current epoch started. The calculation nets refunds and cancellations.
 - **API key leaderboard** — Shows trailing seven-day use for each key.
-- **Price tracking** — Gets current VVV and DIEM prices from CoinGecko and calculates portfolio value.
+- **Price tracking** — Gets current VVV and DIEM prices from VeniceStats, converts USD to AUD with ECB rates, and calculates portfolio value.
 - **Model catalog** — Shows Venice AI models, capabilities, prices, and deprecation status.
 - **Usage analytics** — Shows spending by model and API key.
 - **Real-time refresh** — Uses configurable polling intervals.
@@ -25,7 +25,7 @@ The FastAPI backend and Next.js frontend run from one Docker image. You can depl
 ### Architecture
 
 ```
-browser → Next.js (port 3000) → /api/* rewrites → FastAPI (port 8000) → Venice API / CoinGecko
+browser → Next.js (port 3000) → /api/* proxy → FastAPI (port 8000) → Venice API / VeniceStats / Frankfurter
 ```
 
 ### Production (Docker)
@@ -99,12 +99,12 @@ Press **Ctrl+C** to stop all processes and remove the PostgreSQL container.
 | `ALLOW_INSECURE_NO_AUTH` | Optional | Set to `true` to run without authentication. The default is `false`. |
 | `DB_PASSWORD` | Docker only | PostgreSQL password required by `docker/docker-compose.yml`. Local development via `./dev.sh` uses its own development database settings. |
 | `DATABASE_URL` | ✅ | PostgreSQL connection string |
-| `COINGECKO_API_KEY` | Optional | CoinGecko API key. The free tier is used when this value is empty. |
-| `COINGECKO_HOLDING_AMOUNT` | Optional | VVV holdings. The default is `2750`. |
+| `COINGECKO_API_KEY` | Legacy | Accepted for old `.env` files; not used for live prices. |
+| `COINGECKO_HOLDING_AMOUNT` | Optional | Manual VVV holdings (legacy variable name). The default is `2750`. |
 | `DIEM_HOLDING_AMOUNT` | Optional | DIEM holdings. The default is `0`. |
-| `COINGECKO_TOKEN_ID` | Optional | CoinGecko ID for VVV. The default is `venice-token`. |
-| `DIEM_TOKEN_ID` | Optional | CoinGecko ID for DIEM. The default is `diem`. |
-| `COINGECKO_CURRENCIES` | Optional | Currencies to fetch. The default is `usd,aud`. |
+| `COINGECKO_TOKEN_ID` | Legacy | Accepted for old `.env` files; not used for live prices. |
+| `DIEM_TOKEN_ID` | Legacy | Accepted for old `.env` files; not used for live prices. |
+| `COINGECKO_CURRENCIES` | Legacy | Accepted for old `.env` files; not used for live prices. |
 | `LOG_LEVEL` | Optional | `INFO` or `DEBUG`. The default is `INFO`. |
 | `DEBUG` | Optional | Enables `/docs`, `/redoc`, and `/openapi.json`. The default is `false`. |
 | `EPOCH_LENGTH_HOURS` | Optional | Billing epoch length in hours. The application uses this value to calculate `epoch_start` from `nextEpochBegins`. The default is `24`. |
@@ -112,7 +112,7 @@ Press **Ctrl+C** to stop all processes and remove the PostgreSQL container.
 | `SNAPSHOT_RETENTION_DAYS` | Optional | Retention period for `usage_snapshots` and `price_snapshots` rows. The application removes older rows during each snapshot write and at startup. The default is `90`. |
 | `SESSION_SECURE_COOKIE` (frontend) | Optional | When `true`, sets the session cookie with `Secure`. The default is `NODE_ENV === "production"`. Set this value for plaintext HTTP deployments. |
 
-> **Admin key required:** Regular inference keys return 401 for `/billing/usage`. Create an Admin key at https://venice.ai/settings/api.
+> **Admin key required:** Billing history and balance endpoints require an Admin key. Create one at https://venice.ai/settings/api.
 > **Use a separate inference key:** Set `VENICE_API_KEY` to a separate inference-only key. Do not reuse `VENICE_ADMIN_KEY`. This keeps admin credentials out of public endpoints.
 
 ---
@@ -148,7 +148,7 @@ npm run test:coverage
 
 ### Venice AI
 - `GET /api/v1/api_keys/rate_limits` — current epoch balance and reset time.
-- `GET /api/v1/billing/usage` — itemized billing transactions.
+- `GET /api/v1/billing/usage-history` — cursor-paginated itemized billing transactions.
 - `GET /api/v1/billing/usage-analytics` — usage grouped by date, model, and key.
 - `GET /api/v1/billing/balance` — account balance and consumption currency.
 - `GET /api/v1/api_keys` — API keys with trailing seven-day usage.
