@@ -1,9 +1,10 @@
 'use client'
 
-import { Sparkles, Loader2 } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { useModelTraits } from '@/lib/hooks'
 import type { TraitModelType } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 export interface TraitsPanelProps {
@@ -39,9 +40,13 @@ export function TraitsPanel({
           <CardDescription>Trait → fastest/default/…</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Loading trait recommendations…
+          <div aria-live="polite" aria-busy="true" className="space-y-3">
+            <span className="sr-only">Loading trait recommendations</span>
+            <div className="flex flex-wrap gap-2" aria-hidden="true">
+              <Skeleton className="h-8 w-28 rounded-full" />
+              <Skeleton className="h-8 w-24 rounded-full" />
+              <Skeleton className="h-8 w-32 rounded-full" />
+            </div>
           </div>
         </CardContent>
       </Card>

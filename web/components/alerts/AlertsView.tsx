@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Bell, Check, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { formatDateTime } from '@/lib/utils'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 
 const METRIC_OPTIONS = [
   { value: 'diem_usage_percent', label: 'DIEM usage %' },
@@ -20,6 +22,7 @@ const METRIC_OPTIONS = [
 
 export function AlertsView() {
   const formId = useId()
+  const { timezone } = useDisplayPreferences()
   const queryClient = useQueryClient()
   const { data: alertsData, isLoading: alertsLoading, isError: alertsError } = useAlerts()
   const { data: eventsData, isLoading: eventsLoading } = useAlertEvents(false)
@@ -265,7 +268,7 @@ export function AlertsView() {
                 <div>
                   <p className="text-sm font-medium">{ev.message}</p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {ev.triggered_at ? new Date(ev.triggered_at).toLocaleString() : '—'}
+                    {ev.triggered_at ? formatDateTime(ev.triggered_at, timezone) : '—'}
                     {ev.acknowledged ? ' · acknowledged' : ''}
                   </p>
                 </div>

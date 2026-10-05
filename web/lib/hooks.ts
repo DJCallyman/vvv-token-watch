@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type GetCharactersParams, type TraitModelType } from '@/lib/api'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 
 // ---------------------------------------------------------------------------
@@ -44,19 +44,26 @@ export function useBenchmarkStatus(jobId: string | null, enabled: boolean) {
 }
 
 export function useBalance() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['balance'],
     queryFn: api.getBalance,
-    refetchInterval: 30000,
+    refetchInterval: refreshInterval,
   })
 }
 
-export function useSettings() {
+export function useSettings(enabled = true) {
   return useQuery({
     queryKey: ['settings'],
     queryFn: api.getSettings,
+    enabled,
     staleTime: 5 * 60 * 1000,
   })
+}
+
+function useRefreshInterval() {
+  const { data: settings } = useSettings()
+  return (settings?.refresh_interval_seconds ?? 60) * 1000
 }
 
 export function useUpdateSettings() {
@@ -90,26 +97,29 @@ export function useResetSettings() {
 }
 
 export function useDailyUsage(date?: string) {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['dailyUsage', date],
     queryFn: () => api.getDailyUsage(date),
-    refetchInterval: 30000,
+    refetchInterval: refreshInterval,
   })
 }
 
 export function useEpochUsage() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['epochUsage'],
     queryFn: api.getEpochUsage,
-    refetchInterval: 30000,
+    refetchInterval: refreshInterval,
   })
 }
 
 export function useAPIKeysUsage() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['apiKeysUsage'],
     queryFn: api.getAPIKeysUsage,
-    refetchInterval: 60000,
+    refetchInterval: refreshInterval,
   })
 }
 
@@ -185,10 +195,11 @@ export function useCharacter(slug: string | null) {
 }
 
 export function usePrices() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['prices'],
     queryFn: api.getPrices,
-    refetchInterval: 60000,
+    refetchInterval: refreshInterval,
   })
 }
 
@@ -229,34 +240,38 @@ export function useModelCompatibilityMapping(
 }
 
 export function usePriceHistory(token: 'vvv' | 'diem' = 'vvv', range: string = '7d') {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['priceHistory', token, range],
     queryFn: () => api.getPriceHistory(token, range),
-    refetchInterval: 60_000,
+    refetchInterval: refreshInterval,
   })
 }
 
 export function useUsageTrends(scope: 'epoch' | 'daily' = 'epoch') {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['usageTrends', scope],
     queryFn: () => api.getUsageTrends(scope),
-    refetchInterval: 60_000,
+    refetchInterval: refreshInterval,
   })
 }
 
 export function useOnchainSupply() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['onchainSupply'],
     queryFn: api.getOnchainSupply,
-    refetchInterval: 60_000,
+    refetchInterval: refreshInterval,
   })
 }
 
 export function useOnchainStaking() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['onchainStaking'],
     queryFn: api.getOnchainStaking,
-    refetchInterval: 60_000,
+    refetchInterval: refreshInterval,
   })
 }
 
@@ -303,6 +318,13 @@ export function useAlertEvents(unacknowledgedOnly = false) {
 
 export function useAlertStream() {
   const queryClient = useQueryClient()
+  const { data: settings } = useSettings()
+  const notificationsEnabled = settings?.in_app_notifications_enabled ?? true
+  const notificationsEnabledRef = useRef(notificationsEnabled)
+  useEffect(() => {
+    notificationsEnabledRef.current = notificationsEnabled
+  }, [notificationsEnabled])
+
   useEffect(() => {
     if (typeof window === 'undefined' || typeof EventSource === 'undefined') return
     let source: EventSource | null = null
@@ -313,7 +335,13 @@ export function useAlertStream() {
       source = new EventSource('/api/alerts/stream')
       source.onmessage = (event) => {
         try {
-          if (JSON.parse(event.data).type === 'event') queryClient.invalidateQueries({ queryKey: ['alertEvents'] })
+          const payload = JSON.parse(event.data)
+          if (payload.type === 'event') {
+            queryClient.invalidateQueries({ queryKey: ['alertEvents'] })
+            if (notificationsEnabledRef.current) {
+              toast.info(payload.message || 'A new alert was triggered')
+            }
+          }
         } catch { /* Ignore malformed stream events. */ }
       }
       source.onerror = () => { source?.close(); retry = setTimeout(connect, 5000) }

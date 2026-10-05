@@ -74,7 +74,7 @@ export function CommandPalette() {
         run: async () => {
           setOpen(false)
           try {
-            await queryClient.invalidateQueries()
+            await queryClient.invalidateQueries({}, { throwOnError: true })
             toast.success('Data refreshed')
           } catch (error) {
             toast.error(error instanceof Error ? error.message : 'Failed to refresh data')

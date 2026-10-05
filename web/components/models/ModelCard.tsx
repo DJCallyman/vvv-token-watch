@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { ChevronDown, ChevronUp, Cpu, Zap, Clock, DollarSign, AlertTriangle } from 'lucide-react'
 import { cn, getTypeColor } from '@/lib/utils'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 
 interface ModelCardProps {
   model: Model
@@ -22,6 +23,7 @@ function getUsdPrice(price: unknown): number | null {
 
 export function ModelCard({ model }: ModelCardProps) {
   const [expanded, setExpanded] = useState(false)
+  const { timezone } = useDisplayPreferences()
 
   const modelSpec = model.model_spec || model.spec || {}
   const flatModel = model as unknown as Record<string, unknown>
@@ -238,7 +240,10 @@ export function ModelCard({ model }: ModelCardProps) {
                 <div>
                   <span>Created: </span>
                   <span className="font-medium">
-                    {new Date(model.created * 1000).toLocaleDateString()}
+                    {new Date(model.created * 1000).toLocaleDateString(
+                      undefined,
+                      timezone === 'local' ? {} : { timeZone: timezone },
+                    )}
                   </span>
                 </div>
               )}

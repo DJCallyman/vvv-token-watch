@@ -21,6 +21,8 @@ import { DeleteKeyConfirm } from './DeleteKeyConfirm'
 import { formatDate } from '@/lib/utils'
 import { Button, Dialog, DialogContent, DialogTitle, Input } from '@/components/ui'
 import { DataState } from '@/components/ui/data-state'
+import { toast } from 'sonner'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 
 interface SecretDisplay {
   apiKey: string
@@ -29,6 +31,7 @@ interface SecretDisplay {
 }
 
 export function ApiKeysView() {
+  const { timezone } = useDisplayPreferences()
   const { data, isLoading, isError, refetch } = useAPIKeysUsage()
   const createMutation = useCreateAPIKey()
   const updateMutation = useUpdateAPIKey()
@@ -137,8 +140,8 @@ export function ApiKeysView() {
         )
       },
     },
-    { id: 'created', header: 'Created', sortValue: (key) => key.created_at, cell: (key) => formatDate(key.created_at) },
-    { id: 'last-used', header: 'Last used', sortValue: (key) => key.last_used_at ?? '', cell: (key) => key.last_used_at ? formatDate(key.last_used_at) : '—' },
+    { id: 'created', header: 'Created', sortValue: (key) => key.created_at, cell: (key) => formatDate(key.created_at, timezone) },
+    { id: 'last-used', header: 'Last used', sortValue: (key) => key.last_used_at ?? '', cell: (key) => key.last_used_at ? formatDate(key.last_used_at, timezone) : '—' },
     {
       id: 'actions',
       header: 'Actions',
@@ -354,8 +357,9 @@ function SecretDisplayModal({
       await navigator.clipboard.writeText(secret.apiKey)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+      toast.success('API key copied')
     } catch {
-      // Clipboard might be unavailable in tests; surface copy state only when it works.
+      toast.error('Unable to copy API key. Select and copy it manually.')
     }
   }
 

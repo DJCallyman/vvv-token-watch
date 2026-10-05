@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useAPIKeysUsage } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatNumber, formatCurrency, cn, getUsagePercentile, getUsageBarColor } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
@@ -42,9 +43,24 @@ export function UsageLeaderboardCard() {
 
   if (isLoading) {
     return (
-      <Card>
-        <CardContent className="flex items-center justify-center h-48">
-          <div className="animate-pulse text-muted-foreground">Loading usage data...</div>
+      <Card aria-busy="true" aria-live="polite">
+        <span className="sr-only">Loading usage data</span>
+        <CardHeader className="pb-2">
+          <Skeleton aria-hidden="true" className="h-5 w-44" />
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-3 gap-4 border-b border-border pb-2">
+            {[0, 1, 2].map((cell) => (
+              <Skeleton key={cell} aria-hidden="true" className="h-4 w-full" />
+            ))}
+          </div>
+          {[0, 1, 2, 3].map((row) => (
+            <div key={row} className="grid grid-cols-3 gap-4">
+              {[0, 1, 2].map((cell) => (
+                <Skeleton key={cell} aria-hidden="true" className="h-5 w-full" />
+              ))}
+            </div>
+          ))}
         </CardContent>
       </Card>
     )

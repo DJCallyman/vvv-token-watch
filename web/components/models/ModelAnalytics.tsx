@@ -145,7 +145,11 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
   const dailyHasTokens = dailyData?.daily_usage.some((day) => day.tokens != null) ?? false
 
   const dailyChartData = dailyData?.daily_usage.map((d) => ({
-    date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    date: new Date(d.date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }),
     tokens: d.tokens == null ? undefined : d.tokens / 1000,
     cost: dailyChartCurrency === 'USD' ? d.cost_usd ?? 0 : d.cost_diem ?? 0,
   })) || []

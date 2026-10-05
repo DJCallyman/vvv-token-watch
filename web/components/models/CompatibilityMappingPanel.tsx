@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
 import { useModelCompatibilityMapping } from '@/lib/hooks'
 import type { TraitModelType } from '@/lib/api'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export function CompatibilityMappingPanel({ modelType }: { modelType: TraitModelType }) {
   const [open, setOpen] = useState(false)
@@ -39,7 +40,17 @@ export function CompatibilityMappingPanel({ modelType }: { modelType: TraitModel
               className="w-full rounded-md border border-input bg-background py-2 pl-9 pr-3 text-sm"
             />
           </div>
-          {isLoading && <p className="text-sm text-muted-foreground">Loading mappings…</p>}
+          {isLoading && (
+            <div aria-live="polite" aria-busy="true" className="space-y-2">
+              <span className="sr-only">Loading compatibility mappings</span>
+              {[0, 1, 2, 3].map((row) => (
+                <div key={row} aria-hidden="true" className="grid grid-cols-2 gap-4">
+                  <Skeleton className="h-8" />
+                  <Skeleton className="h-8" />
+                </div>
+              ))}
+            </div>
+          )}
           {isError && <p role="alert" className="text-sm text-destructive">Could not load compatibility mappings.</p>}
           {!isLoading && !isError && (
             <div className="max-h-64 overflow-auto rounded-md border border-border">

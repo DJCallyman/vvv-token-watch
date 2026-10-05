@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from typing import Dict, List, Literal, Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -94,6 +95,13 @@ class AppSettingsResponse(BaseModel):
     benchmark_max_cost_usd: float
     benchmark_enable_billing_reconciliation: bool
     benchmark_judge_model: str
+    refresh_interval_seconds: int = 60
+    in_app_notifications_enabled: bool = True
+    display_currency: Literal["USD", "AUD"] = "USD"
+    timezone: str = "local"
+    dashboard_layout: List[Literal["balance", "usage", "prices", "usage_leaderboard"]] = Field(
+        default_factory=lambda: ["balance", "usage", "prices", "usage_leaderboard"]
+    )
 
 
 class AppSettingsUpdate(BaseModel):
@@ -104,8 +112,15 @@ class AppSettingsUpdate(BaseModel):
     benchmark_max_cost_usd: Optional[float] = Field(default=None, ge=0, le=1_000_000)
     benchmark_enable_billing_reconciliation: Optional[bool] = None
     benchmark_judge_model: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    refresh_interval_seconds: Optional[int] = Field(default=None, ge=15, le=900, multiple_of=15)
+    in_app_notifications_enabled: Optional[bool] = None
+    display_currency: Optional[Literal["USD", "AUD"]] = None
+    timezone: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    dashboard_layout: Optional[
+        List[Literal["balance", "usage", "prices", "usage_leaderboard"]]
+    ] = Field(default=None, min_length=4, max_length=4)
 
-    @field_validator("vvv_wallet_address", "benchmark_judge_model")
+    @field_validator("vvv_wallet_address", "benchmark_judge_model", "timezone")
     @classmethod
     def _strip_strings(cls, value: Optional[str]) -> Optional[str]:
         return value.strip() if value is not None else value
@@ -118,6 +133,27 @@ class AppSettingsUpdate(BaseModel):
             return value
         if not re.fullmatch(r"0x[a-fA-F0-9]{40}", value):
             raise ValueError("Wallet address must be a 0x-prefixed 40-hex EVM address")
+        return value
+
+    @field_validator("timezone")
+    @classmethod
+    def _validate_timezone(cls, value: Optional[str]) -> Optional[str]:
+        if value is None or value == "local":
+            return value
+        try:
+            ZoneInfo(value)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("Timezone must be 'local' or a valid IANA timezone") from exc
+        return value
+
+    @field_validator("dashboard_layout")
+    @classmethod
+    def _validate_dashboard_layout(
+        cls, value: Optional[List[str]]
+    ) -> Optional[List[str]]:
+        expected = {"balance", "usage", "prices", "usage_leaderboard"}
+        if value is not None and (len(value) != len(expected) or set(value) != expected):
+            raise ValueError("Dashboard layout must contain each widget exactly once")
         return value
 
 

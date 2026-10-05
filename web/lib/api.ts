@@ -217,6 +217,8 @@ export interface PricesData {
 }
 
 export type VvvHoldingSource = 'manual' | 'wallet'
+export type DisplayCurrency = 'USD' | 'AUD'
+export type DashboardWidget = 'balance' | 'usage' | 'prices' | 'usage_leaderboard'
 
 export interface AppSettings {
   coingecko_holding_amount: number
@@ -226,6 +228,11 @@ export interface AppSettings {
   benchmark_max_cost_usd: number
   benchmark_enable_billing_reconciliation: boolean
   benchmark_judge_model: string
+  refresh_interval_seconds: number
+  in_app_notifications_enabled: boolean
+  display_currency: DisplayCurrency
+  timezone: string
+  dashboard_layout: DashboardWidget[]
 }
 
 export type AppSettingsUpdate = Partial<AppSettings>

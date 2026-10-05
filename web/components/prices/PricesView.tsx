@@ -1,18 +1,19 @@
 'use client'
 
-import { useId, useState } from 'react'
-import { usePrices } from '@/lib/hooks'
+import { useId } from 'react'
+import { usePrices, useUpdateSettings } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { Coins, Wallet } from 'lucide-react'
 import { PriceChart } from '@/components/prices/PriceChart'
 import { DataState } from '@/components/ui/data-state'
-
-type Currency = 'USD' | 'AUD'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
+import type { DisplayCurrency } from '@/lib/api'
 
 export function PricesView() {
   const { data: prices, isLoading, isError, refetch } = usePrices()
-  const [portfolioCurrency, setPortfolioCurrency] = useState<Currency>('USD')
+  const { currency: portfolioCurrency } = useDisplayPreferences()
+  const updateSettings = useUpdateSettings()
   const portfolioCurrencyId = useId()
 
   if (isLoading) {
@@ -167,7 +168,10 @@ export function PricesView() {
             <select
               id={portfolioCurrencyId}
               value={portfolioCurrency}
-              onChange={(e) => setPortfolioCurrency(e.target.value as Currency)}
+              disabled={updateSettings.isPending}
+              onChange={(event) => {
+                updateSettings.mutate({ display_currency: event.target.value as DisplayCurrency })
+              }}
               className="text-sm rounded-md border border-input bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="USD">USD</option>

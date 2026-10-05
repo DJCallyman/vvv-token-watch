@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/components/ThemeProvider'
 import { SidebarDrawerProvider } from '@/components/layout/SidebarDrawerContext'
 import { Toaster } from 'sonner'
 import { CommandPalette } from '@/components/layout/CommandPalette'
+import { PreferencesProvider } from '@/components/PreferencesProvider'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -23,9 +24,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <SidebarDrawerProvider>
-          {children}
-          <Toaster position="bottom-right" richColors closeButton />
-          <CommandPalette />
+          <PreferencesProvider>
+            {children}
+            <Toaster position="bottom-right" richColors closeButton />
+            <CommandPalette />
+          </PreferencesProvider>
         </SidebarDrawerProvider>
       </ThemeProvider>
     </QueryClientProvider>

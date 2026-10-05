@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { formatNumber, formatCurrency, formatDateTime } from '@/lib/utils'
 import { Wallet, TrendingUp, Clock, PieChart, Activity, AlertCircle } from 'lucide-react'
 import { DataState } from '@/components/ui/data-state'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 
 export function BalanceView() {
+  const { timezone } = useDisplayPreferences()
   const { data: balance, isLoading: balanceLoading, isError: balanceError, refetch: refetchBalance } = useBalance()
   const { data: epochUsage, isLoading: epochLoading, isError: epochError, refetch: refetchEpochUsage } = useEpochUsage()
 
@@ -193,13 +195,13 @@ export function BalanceView() {
                 <div>
                   <p className="text-sm text-muted-foreground">Epoch Started</p>
                   <p className="text-lg font-semibold">
-                    {epochStart ? formatDateTime(epochStart.toISOString()) : '—'}
+                    {epochStart ? formatDateTime(epochStart.toISOString(), timezone) : '—'}
                   </p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Next Epoch Begins</p>
                   <p className="text-lg font-semibold">
-                    {formatDateTime(balance?.next_epoch_begins ?? '')}
+                    {formatDateTime(balance?.next_epoch_begins ?? '', timezone)}
                   </p>
                 </div>
               </div>

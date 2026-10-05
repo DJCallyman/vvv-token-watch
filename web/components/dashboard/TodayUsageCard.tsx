@@ -2,17 +2,32 @@
 
 import { useEpochUsage } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatNumber, formatCurrency } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
+import { formatDateTime, formatNumber, formatCurrency } from '@/lib/utils'
 import { Activity } from 'lucide-react'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 
 export function TodayUsageCard() {
   const { data: usage, isLoading, isError } = useEpochUsage()
+  const { timezone } = useDisplayPreferences()
 
   if (isLoading) {
     return (
-      <Card className="h-full">
-        <CardContent className="flex items-center justify-center h-48">
-          <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <Card aria-busy="true" aria-live="polite" className="h-full">
+        <span className="sr-only">Loading epoch usage</span>
+        <CardHeader className="pb-2 space-y-2">
+          <Skeleton aria-hidden="true" className="h-6 w-44" />
+          <Skeleton aria-hidden="true" className="h-3 w-36" />
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Skeleton aria-hidden="true" className="h-3 w-24" />
+            <Skeleton aria-hidden="true" className="h-8 w-36" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton aria-hidden="true" className="h-3 w-24" />
+            <Skeleton aria-hidden="true" className="h-8 w-36" />
+          </div>
         </CardContent>
       </Card>
     )
@@ -28,11 +43,7 @@ export function TodayUsageCard() {
     )
   }
 
-  const epochStart = usage.epoch_start
-    ? new Date(usage.epoch_start).toLocaleString(undefined, {
-        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-      })
-    : null
+  const epochStart = usage.epoch_start ? formatDateTime(usage.epoch_start, timezone) : null
 
   return (
     <Card className="h-full">

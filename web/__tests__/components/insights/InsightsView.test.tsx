@@ -48,6 +48,19 @@ beforeEach(() => {
 })
 
 describe('InsightsView — decisions card', () => {
+  it('shows analysis-shaped loading state while generating', () => {
+    mockAnalyzeMarket.mockReturnValue(new Promise(() => {}))
+
+    render(<InsightsView />)
+    fireEvent.click(screen.getByRole('button', { name: /generate analysis/i }))
+
+    expect(screen.getByText('Generating market analysis')).toBeInTheDocument()
+    expect(screen.getByText('Generating market analysis').parentElement).toHaveAttribute(
+      'aria-busy',
+      'true',
+    )
+  })
+
   it('renders typed judgment tiles when decisions are present', async () => {
     mockAnalyzeMarket.mockResolvedValue({ analysis: analysisFixture, articles: [], decisions: decisionsFixture })
 

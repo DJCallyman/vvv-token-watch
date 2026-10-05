@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button, Input } from '@/components/ui'
 import { useResetSettings, useSettings, useUpdateSettings } from '@/lib/hooks'
-import type { VvvHoldingSource } from '@/lib/api'
+import type { DisplayCurrency, VvvHoldingSource } from '@/lib/api'
 
 type SettingsForm = {
   coingecko_holding_amount: string
@@ -22,6 +22,10 @@ type SettingsForm = {
   benchmark_max_cost_usd: string
   benchmark_enable_billing_reconciliation: boolean
   benchmark_judge_model: string
+  refresh_interval_seconds: string
+  in_app_notifications_enabled: boolean
+  display_currency: DisplayCurrency
+  timezone: string
 }
 
 const EMPTY_FORM: SettingsForm = {
@@ -32,6 +36,10 @@ const EMPTY_FORM: SettingsForm = {
   benchmark_max_cost_usd: '',
   benchmark_enable_billing_reconciliation: false,
   benchmark_judge_model: '',
+  refresh_interval_seconds: '',
+  in_app_notifications_enabled: true,
+  display_currency: 'USD',
+  timezone: 'local',
 }
 
 export function SettingsDialog() {
@@ -43,6 +51,10 @@ export function SettingsDialog() {
   const billingReconciliationId = useId()
   const holdingSourceId = useId()
   const walletAddressId = useId()
+  const refreshIntervalId = useId()
+  const displayCurrencyId = useId()
+  const timezoneId = useId()
+  const notificationsEnabledId = useId()
 
   useEffect(() => {
     if (!data) return
@@ -54,6 +66,10 @@ export function SettingsDialog() {
       benchmark_max_cost_usd: String(data.benchmark_max_cost_usd),
       benchmark_enable_billing_reconciliation: data.benchmark_enable_billing_reconciliation,
       benchmark_judge_model: data.benchmark_judge_model,
+      refresh_interval_seconds: String(data.refresh_interval_seconds),
+      in_app_notifications_enabled: data.in_app_notifications_enabled,
+      display_currency: data.display_currency,
+      timezone: data.timezone,
     })
   }, [data])
 
@@ -71,6 +87,10 @@ export function SettingsDialog() {
       benchmark_max_cost_usd: Number(form.benchmark_max_cost_usd),
       benchmark_enable_billing_reconciliation: form.benchmark_enable_billing_reconciliation,
       benchmark_judge_model: form.benchmark_judge_model.trim(),
+      refresh_interval_seconds: Number(form.refresh_interval_seconds),
+      in_app_notifications_enabled: form.in_app_notifications_enabled,
+      display_currency: form.display_currency,
+      timezone: form.timezone.trim(),
     })
   }
 
@@ -91,7 +111,7 @@ export function SettingsDialog() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Open settings"
       >
         <Settings2 className="w-4 h-4" />
@@ -106,6 +126,60 @@ export function SettingsDialog() {
             <p className="text-sm text-muted-foreground">Loading settings...</p>
           ) : (
             <form onSubmit={submit} className="space-y-5">
+              <section className="space-y-3">
+                <h3 className="font-medium">Display &amp; notifications</h3>
+                <label htmlFor={refreshIntervalId} className="space-y-1 text-sm">
+                  <span className="text-muted-foreground">Data refresh interval (seconds)</span>
+                  <Input
+                    id={refreshIntervalId}
+                    type="number"
+                    min={15}
+                    max={900}
+                    step={15}
+                    required
+                    value={form.refresh_interval_seconds}
+                    onChange={(event) => updateField('refresh_interval_seconds', event.target.value)}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Choose a 15-second increment from 15 to 900. Alert, benchmark, and news polling keep their own intervals.
+                  </span>
+                </label>
+                <label htmlFor={displayCurrencyId} className="space-y-1 text-sm">
+                  <span className="text-muted-foreground">Display currency</span>
+                  <select
+                    id={displayCurrencyId}
+                    value={form.display_currency}
+                    onChange={(event) => updateField('display_currency', event.target.value as DisplayCurrency)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="USD">USD</option>
+                    <option value="AUD">AUD</option>
+                  </select>
+                </label>
+                <label htmlFor={timezoneId} className="space-y-1 text-sm">
+                  <span className="text-muted-foreground">Timezone</span>
+                  <Input
+                    id={timezoneId}
+                    type="text"
+                    value={form.timezone}
+                    onChange={(event) => updateField('timezone', event.target.value)}
+                    placeholder="Australia/Sydney"
+                    required
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    Enter an IANA timezone such as UTC or Australia/Sydney, or use local for your browser timezone.
+                  </span>
+                </label>
+                <label htmlFor={notificationsEnabledId} className="flex items-center gap-2 text-sm">
+                  <input
+                    id={notificationsEnabledId}
+                    type="checkbox"
+                    checked={form.in_app_notifications_enabled}
+                    onChange={(event) => updateField('in_app_notifications_enabled', event.target.checked)}
+                  />
+                  Show in-app notifications for new alerts
+                </label>
+              </section>
               <section className="space-y-3">
                 <h3 className="font-medium">Portfolio</h3>
                 <p className="text-xs text-muted-foreground">

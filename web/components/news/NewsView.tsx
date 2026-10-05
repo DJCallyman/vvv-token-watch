@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui'
 import { RefreshCw, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { DataState } from '@/components/ui/data-state'
+import { Skeleton } from '@/components/ui/skeleton'
 
 export function NewsView() {
   const { data, isLoading, isError, isFetching, refetch } = useNews()
@@ -37,9 +38,22 @@ export function NewsView() {
        <DialogContent className="max-w-3xl">
          <DialogTitle>{article.data?.title || 'Article'}</DialogTitle>
          <div className="max-h-[70vh] overflow-y-auto">
-           <pre className="whitespace-pre-wrap font-sans text-sm leading-6">
-             {article.data?.content || (article.isLoading ? 'Loading article…' : 'Unable to load article.')}
-           </pre>
+           {article.isLoading ? (
+             <div aria-live="polite" aria-busy="true" className="space-y-3 py-2">
+               <span className="sr-only">Loading article</span>
+               {[0, 1, 2, 3, 4, 5, 6].map((line) => (
+                 <Skeleton
+                   key={line}
+                   aria-hidden="true"
+                   className={`h-4 ${line % 3 === 2 ? 'w-4/5' : 'w-full'}`}
+                 />
+               ))}
+             </div>
+           ) : article.data?.content ? (
+             <pre className="whitespace-pre-wrap font-sans text-sm leading-6">{article.data.content}</pre>
+           ) : (
+             <p role="alert" className="text-sm text-destructive">Unable to load article.</p>
+           )}
          </div>
        </DialogContent>
      </Dialog>

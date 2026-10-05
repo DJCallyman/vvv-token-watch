@@ -5,6 +5,7 @@ import { api, type MarketAnalysis, type MarketDecisions, type DecisionAnswer, ty
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui'
+import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
 
 // Sentiment score levels — must match backend _build_market_questions().
@@ -132,6 +133,39 @@ function TypedJudgmentsCard({ decisions }: { decisions: MarketDecisions }) {
   )
 }
 
+function AnalysisLoadingState() {
+  return (
+    <div aria-live="polite" aria-busy="true" className="grid gap-6 lg:grid-cols-3">
+      <span className="sr-only">Generating market analysis</span>
+      <Card className="lg:col-span-2">
+        <CardHeader>
+          <Skeleton aria-hidden="true" className="h-6 w-32" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Skeleton aria-hidden="true" className="h-4 w-full" />
+          <Skeleton aria-hidden="true" className="h-4 w-5/6" />
+          <Skeleton aria-hidden="true" className="h-4 w-2/3" />
+          <Skeleton aria-hidden="true" className="mt-6 h-5 w-24" />
+          <Skeleton aria-hidden="true" className="h-4 w-4/5" />
+          <Skeleton aria-hidden="true" className="h-4 w-3/5" />
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <Skeleton aria-hidden="true" className="h-6 w-28" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Skeleton aria-hidden="true" className="h-10 w-20" />
+          <Skeleton aria-hidden="true" className="h-2 w-full" />
+          <Skeleton aria-hidden="true" className="mt-6 h-5 w-16" />
+          <Skeleton aria-hidden="true" className="h-4 w-full" />
+          <Skeleton aria-hidden="true" className="h-4 w-4/5" />
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export function InsightsView() {
   const [analysis, setAnalysis] = useState<MarketAnalysis | null>(null)
   const [decisions, setDecisions] = useState<MarketDecisions | null>(null)
@@ -169,6 +203,7 @@ export function InsightsView() {
         </Button>
       </div>
       {error && <p className="text-destructive" role="alert">{error}</p>}
+      {loading && !analysis && <AnalysisLoadingState />}
       {analysis && (
         <div className="grid gap-6 lg:grid-cols-3">
           <Card className="lg:col-span-2">

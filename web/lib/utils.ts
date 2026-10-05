@@ -27,22 +27,26 @@ export function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`
 }
 
-export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-US', {
+export function formatDate(dateString: string, timeZone = 'local'): string {
+  const options: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
-  })
+  }
+  if (timeZone !== 'local') options.timeZone = timeZone
+  return new Date(dateString).toLocaleDateString('en-US', options)
 }
 
-export function formatDateTime(dateString: string): string {
-  return new Date(dateString).toLocaleString('en-US', {
+export function formatDateTime(dateString: string, timeZone = 'local'): string {
+  const options: Intl.DateTimeFormatOptions = {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  })
+  }
+  if (timeZone !== 'local') options.timeZone = timeZone
+  return new Date(dateString).toLocaleString('en-US', options)
 }
 
 export function getUsagePercentile(value: number, max: number): number {

@@ -2,17 +2,29 @@
 
 import { useBalance } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { formatCurrency, formatNumber } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/skeleton'
+import { formatCurrency, formatDateTime, formatNumber } from '@/lib/utils'
 import { Wallet, Clock } from 'lucide-react'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 
 export function HeroBalanceCard() {
   const { data: balance, isLoading, isError } = useBalance()
+  const { timezone } = useDisplayPreferences()
 
   if (isLoading) {
     return (
-      <Card className="h-full">
-        <CardContent className="flex items-center justify-center h-48">
-          <div className="animate-pulse text-muted-foreground">Loading balance...</div>
+      <Card aria-busy="true" aria-live="polite" className="h-full">
+        <span className="sr-only">Loading balance</span>
+        <CardHeader className="pb-2 space-y-2">
+          <Skeleton aria-hidden="true" className="h-6 w-40" />
+          <Skeleton aria-hidden="true" className="h-3 w-48" />
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-2 gap-6">
+            <Skeleton aria-hidden="true" className="h-14 w-full" />
+            <Skeleton aria-hidden="true" className="h-14 w-full" />
+          </div>
+          <Skeleton aria-hidden="true" className="h-4 w-52" />
         </CardContent>
       </Card>
     )
@@ -56,7 +68,7 @@ export function HeroBalanceCard() {
         {balance.next_epoch_begins && (
           <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="w-4 h-4" />
-            <span>Epoch resets: {new Date(balance.next_epoch_begins).toLocaleString()}</span>
+            <span>Epoch resets: {formatDateTime(balance.next_epoch_begins, timezone)}</span>
           </div>
         )}
       </CardContent>

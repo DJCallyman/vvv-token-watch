@@ -11,6 +11,22 @@ const mockQueryAssistant = api.queryAssistant as jest.MockedFunction<typeof api.
 beforeEach(() => jest.clearAllMocks())
 
 describe('AssistantView notifications', () => {
+  it('shows a response-shaped loading state while waiting', () => {
+    mockQueryAssistant.mockReturnValue(new Promise(() => {}))
+
+    render(<AssistantView />)
+    fireEvent.change(screen.getByRole('textbox', { name: /assistant question/i }), {
+      target: { value: 'Summarize my usage' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Ask' }))
+
+    expect(screen.getByText('Generating assistant response')).toBeInTheDocument()
+    expect(screen.getByText('Generating assistant response').parentElement).toHaveAttribute(
+      'aria-busy',
+      'true',
+    )
+  })
+
   it('notifies when an answer is ready', async () => {
     mockQueryAssistant.mockResolvedValue({ answer: 'Usage is steady.', tool_calls: [] })
 

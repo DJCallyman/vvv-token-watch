@@ -1,11 +1,12 @@
 import React from 'react'
-import { render, screen } from '../../test-utils'
+import { fireEvent, render, screen } from '../../test-utils'
 import { PricesView } from '@/components/prices/PricesView'
-import { usePrices, usePriceHistory } from '@/lib/hooks'
+import { usePrices, usePriceHistory, useUpdateSettings } from '@/lib/hooks'
 
 jest.mock('@/lib/hooks')
 const mockUsePrices = usePrices as jest.MockedFunction<typeof usePrices>
 const mockUsePriceHistory = usePriceHistory as jest.MockedFunction<typeof usePriceHistory>
+const mockUseUpdateSettings = useUpdateSettings as jest.MockedFunction<typeof useUpdateSettings>
 
 const pricesData = {
   vvv: { usd: 2.50, aud: 3.85 },
@@ -27,6 +28,7 @@ describe('PricesView — loading', () => {
   beforeEach(() => {
     mockUsePrices.mockReturnValue({ data: undefined, isLoading: true, isError: false } as any)
     mockUsePriceHistory.mockReturnValue({ data: undefined, isLoading: true, isError: false } as any)
+    mockUseUpdateSettings.mockReturnValue({ mutate: jest.fn(), isPending: false } as any)
   })
 
   it('shows loading text', () => {
@@ -39,6 +41,7 @@ describe('PricesView — error', () => {
   beforeEach(() => {
     mockUsePrices.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch: jest.fn() } as any)
     mockUsePriceHistory.mockReturnValue({ data: undefined, isLoading: false, isError: false } as any)
+    mockUseUpdateSettings.mockReturnValue({ mutate: jest.fn(), isPending: false } as any)
   })
 
   it('shows a retryable error state', () => {
@@ -52,6 +55,7 @@ describe('PricesView — success', () => {
   beforeEach(() => {
     mockUsePrices.mockReturnValue({ data: pricesData, isLoading: false, isError: false } as any)
     mockUsePriceHistory.mockReturnValue({ data: priceHistoryData, isLoading: false, isError: false } as any)
+    mockUseUpdateSettings.mockReturnValue({ mutate: jest.fn(), isPending: false } as any)
   })
 
   it('renders page heading', () => {
@@ -67,6 +71,18 @@ describe('PricesView — success', () => {
   it('renders DIEM Token card', () => {
     render(<PricesView />)
     expect(screen.getByText('DIEM Token')).toBeInTheDocument()
+  })
+
+  it('persists the selected display currency', () => {
+    const mutate = jest.fn()
+    mockUseUpdateSettings.mockReturnValue({ mutate, isPending: false } as any)
+
+    render(<PricesView />)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Portfolio currency' }), {
+      target: { value: 'AUD' },
+    })
+
+    expect(mutate).toHaveBeenCalledWith({ display_currency: 'AUD' })
   })
 
   it('renders VVV USD price', () => {

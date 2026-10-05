@@ -4,6 +4,7 @@ import { useAPIKeyAnalytics, useAPIKeysUsage, useEpochUsage, useUsageTrends } fr
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatNumber, formatCurrency, formatDate } from '@/lib/utils'
 import { DataState } from '@/components/ui/data-state'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 import { BarChart3, Activity, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import {
   LineChart,
@@ -17,6 +18,7 @@ import {
 } from 'recharts'
 
 export function UsageView() {
+  const { timezone } = useDisplayPreferences()
   const { data: epochUsage, isLoading: epochLoading, isError: epochError, refetch: refetchEpoch } = useEpochUsage()
   const { data: keysUsage, isLoading: keysLoading, isError: keysError, refetch: refetchKeys } = useAPIKeysUsage()
   const { data: keyAnalytics } = useAPIKeyAnalytics(7)
@@ -32,6 +34,7 @@ export function UsageView() {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    ...(timezone === 'local' ? {} : { timeZone: timezone }),
   })
 
   const isLoading = usageLoading || keysLoading
@@ -64,7 +67,12 @@ export function UsageView() {
   const trend = getUsageTrend()
   const trendChartData = trendPoints.map((p) => ({
     time: p.timestamp
-      ? new Date(p.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' })
+      ? new Date(p.timestamp).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          ...(timezone === 'local' ? {} : { timeZone: timezone }),
+        })
       : '',
     diem: p.diem,
     usd: p.usd,
@@ -264,7 +272,7 @@ export function UsageView() {
               {usage?.epoch_start && (
                 <div className="mt-6 pt-4 border-t border-border">
                   <p className="text-sm text-muted-foreground">
-                    Epoch started: {formatDate(usage.epoch_start)}
+                    Epoch started: {formatDate(usage.epoch_start, timezone)}
                   </p>
                 </div>
               )}
