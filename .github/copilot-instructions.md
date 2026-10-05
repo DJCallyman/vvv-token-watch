@@ -24,8 +24,6 @@ deployment. There is no PySide6 desktop app.
 - Keep USD, DIEM, bundled credits, and earned credits separate.
 - Discover models through `/models` and traits through `/models/traits`. Model
   IDs change; add availability checks for configured model IDs.
-- Rate-limit tracking is not a product requirement. Do not add rate-limit
-  monitoring, rate-limit log integration, or rate-limit header parsing.
 
 ## Architecture
 
