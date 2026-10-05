@@ -30,7 +30,7 @@ describe('NewsView refresh notifications', () => {
     } as unknown as ReturnType<typeof useNews>)
 
     render(<NewsView />)
-    fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
 
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('News refreshed'))
   })
@@ -45,7 +45,7 @@ describe('NewsView refresh notifications', () => {
     } as unknown as ReturnType<typeof useNews>)
 
     render(<NewsView />)
-    fireEvent.click(screen.getByRole('button', { name: /refresh/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Search timed out'))
   })

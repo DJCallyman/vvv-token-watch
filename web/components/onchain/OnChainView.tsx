@@ -3,18 +3,19 @@
 import { useState } from 'react'
 import { useOnchainSupply, useOnchainStaking, useOnchainBalance, useOnchainTransfers } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { DataState } from '@/components/ui/data-state'
 import { formatNumber } from '@/lib/utils'
 import { ArrowDownLeft, ArrowUpRight, Blocks, Coins, ExternalLink, Landmark, Search } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
 export function OnChainView() {
-  const { data: supply, isLoading: supplyLoading, isError: supplyError } = useOnchainSupply()
-  const { data: staking, isLoading: stakingLoading, isError: stakingError } = useOnchainStaking()
+  const { data: supply, isLoading: supplyLoading, isError: supplyError, refetch: refetchSupply } = useOnchainSupply()
+  const { data: staking, isLoading: stakingLoading, isError: stakingError, refetch: refetchStaking } = useOnchainStaking()
   const [address, setAddress] = useState('')
   const [lookup, setLookup] = useState<string | null>(null)
-  const { data: balance, isLoading: balLoading, isError: balError } = useOnchainBalance(lookup)
+  const { data: balance, isLoading: balLoading, isError: balError, refetch: refetchBalance } = useOnchainBalance(lookup)
   const [blocks, setBlocks] = useState(10000)
-  const { data: transfers, isLoading: transfersLoading, isError: transfersError } = useOnchainTransfers(lookup, blocks)
+  const { data: transfers, isLoading: transfersLoading, isError: transfersError, refetch: refetchTransfers } = useOnchainTransfers(lookup, blocks)
 
   return (
     <div className="space-y-8">
@@ -35,12 +36,9 @@ export function OnChainView() {
             <CardDescription>VVV ERC-20 on Base</CardDescription>
           </CardHeader>
           <CardContent>
-            {supplyLoading && (
-              <div className="animate-pulse text-muted-foreground">Loading supply…</div>
-            )}
-            {supplyError && (
-              <div className="text-destructive text-sm">Failed to load supply</div>
-            )}
+            {supplyLoading && <DataState kind="loading" title="Loading token supply" rows={2} />}
+            {supplyError && !supply && <DataState kind="error" title="Could not load token supply" onRetry={() => { void refetchSupply() }} />}
+            {supplyError && supply && <DataState kind="stale" title="Showing last loaded supply data" onRetry={() => { void refetchSupply() }} />}
             {supply && (
               <div className="space-y-4">
                 <div>
@@ -90,12 +88,9 @@ export function OnChainView() {
             <CardDescription>Venice staking contract</CardDescription>
           </CardHeader>
           <CardContent>
-            {stakingLoading && (
-              <div className="animate-pulse text-muted-foreground">Loading staking…</div>
-            )}
-            {stakingError && (
-              <div className="text-destructive text-sm">Failed to load staking</div>
-            )}
+            {stakingLoading && <DataState kind="loading" title="Loading staking data" rows={2} />}
+            {stakingError && !staking && <DataState kind="error" title="Could not load staking data" onRetry={() => { void refetchStaking() }} />}
+            {stakingError && staking && <DataState kind="stale" title="Showing last loaded staking data" onRetry={() => { void refetchStaking() }} />}
             {staking && (
               <div className="space-y-4">
                 <div>
@@ -175,8 +170,9 @@ export function OnChainView() {
               Lookup
             </button>
           </form>
-          {balLoading && <div className="animate-pulse text-muted-foreground">Looking up…</div>}
-          {balError && <div className="text-destructive text-sm">Failed to load balance</div>}
+          {lookup && balLoading && <DataState kind="loading" title="Looking up wallet balance" rows={1} />}
+          {lookup && balError && !balance && <DataState kind="error" title="Could not load wallet balance" onRetry={() => { void refetchBalance() }} />}
+          {balError && balance && <DataState kind="stale" title="Showing last loaded wallet balance" onRetry={() => { void refetchBalance() }} />}
           {balance && (
             <div className="rounded-md border border-border p-4">
               <p className="text-sm text-muted-foreground">VVV Balance</p>
@@ -200,9 +196,10 @@ export function OnChainView() {
             </select>
           </CardHeader>
           <CardContent>
-            {transfersLoading && <div className="animate-pulse text-muted-foreground">Loading transfers…</div>}
-            {transfersError && <div className="text-destructive text-sm">Failed to load transfers</div>}
-            {!transfersLoading && !transfersError && transfers?.transfers.length === 0 && <p className="text-sm text-muted-foreground">No transfers found in this range.</p>}
+            {transfersLoading && <DataState kind="loading" title="Loading wallet transfers" rows={3} />}
+            {transfersError && !transfers && <DataState kind="error" title="Could not load wallet transfers" onRetry={() => { void refetchTransfers() }} />}
+            {transfersError && transfers && <DataState kind="stale" title="Showing last loaded transfers" onRetry={() => { void refetchTransfers() }} />}
+            {!transfersLoading && !transfersError && transfers?.transfers.length === 0 && <DataState kind="empty" title="No transfers in this range" description="Try increasing the recent block range." />}
             {!!transfers?.transfers.length && (
               <Table>
                 <TableHeader><TableRow><TableHead>Direction</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Amount</TableHead><TableHead>Transaction</TableHead></TableRow></TableHeader>

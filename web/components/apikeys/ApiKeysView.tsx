@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useId, useState, useMemo } from 'react'
 import { Key, Search, Plus, Pencil, Trash2, AlertTriangle, Check, Copy } from 'lucide-react'
 import {
   useAPIKeysUsage,
@@ -12,26 +12,15 @@ import type {
   APIKeyUsage,
   ApiKeyCreatePayload,
   ApiKeyCreateResponse,
-  ApiKeyType,
-  LimitPeriod,
 } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
+import { DataTable, type DataTableColumn } from '@/components/ui/data-table'
 import { ApiKeyFormModal } from './ApiKeyFormModal'
 import { DeleteKeyConfirm } from './DeleteKeyConfirm'
 import { formatDate } from '@/lib/utils'
-import { cn } from '@/lib/utils'
 import { Button, Dialog, DialogContent, DialogTitle, Input } from '@/components/ui'
-
-type SortMode = 'name' | 'usage' | 'recent'
+import { DataState } from '@/components/ui/data-state'
 
 interface SecretDisplay {
   apiKey: string
@@ -40,13 +29,12 @@ interface SecretDisplay {
 }
 
 export function ApiKeysView() {
-  const { data, isLoading, isError } = useAPIKeysUsage()
+  const { data, isLoading, isError, refetch } = useAPIKeysUsage()
   const createMutation = useCreateAPIKey()
   const updateMutation = useUpdateAPIKey()
   const deleteMutation = useDeleteAPIKey()
 
   const [search, setSearch] = useState('')
-  const [sortMode, setSortMode] = useState<SortMode>('usage')
   const [typeFilter, setTypeFilter] = useState<'all' | 'INFERENCE' | 'ADMIN'>('all')
 
   const [formState, setFormState] = useState<
@@ -79,23 +67,95 @@ export function ApiKeysView() {
       result = result.filter((k) => k.api_key_type === typeFilter)
     }
 
-    result.sort((a, b) => {
-      switch (sortMode) {
-        case 'name':
-          return (a.name ?? '').localeCompare(b.name ?? '')
-        case 'recent':
-          return (
-            new Date(b.created_at ?? 0).getTime() -
-            new Date(a.created_at ?? 0).getTime()
-          )
-        case 'usage':
-        default:
-          return (b.diem_usage ?? 0) - (a.diem_usage ?? 0)
-      }
-    })
-
     return result
-  }, [keys, search, typeFilter, sortMode])
+  }, [keys, search, typeFilter])
+
+  const columns: DataTableColumn<APIKeyUsage>[] = [
+    {
+      id: 'name',
+      header: 'Name',
+      sortValue: (key) => key.name,
+      cell: (key) => (
+        <div className="flex flex-col gap-1">
+          <span className="font-medium">{key.name}</span>
+          {key.last6_chars && <span className="font-mono text-xs text-muted-foreground">…{key.last6_chars}</span>}
+        </div>
+      ),
+    },
+    {
+      id: 'type',
+      header: 'Type',
+      sortValue: (key) => key.api_key_type ?? '',
+      cell: (key) => (
+        <div className="flex flex-col items-start gap-1">
+          {key.api_key_type ? <Badge variant={key.api_key_type === 'ADMIN' ? 'destructive' : 'default'}>{key.api_key_type}</Badge> : '—'}
+          {key.model_privacy && <span className="text-xs text-muted-foreground">{key.model_privacy.replaceAll('_', ' ').toLowerCase()}</span>}
+        </div>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      sortValue: (key) => key.is_active ? 1 : 0,
+      cell: (key) => <Badge variant={key.is_active ? 'success' : 'secondary'}>{key.is_active ? 'Active' : 'Inactive'}</Badge>,
+    },
+    {
+      id: 'usage',
+      header: '7-day use',
+      sortValue: (key) => key.diem_usage,
+      cell: (key) => (
+        <span className="text-xs text-muted-foreground">
+          ${key.usd_usage.toFixed(2)} USD · {key.diem_usage.toFixed(4)} DIEM
+        </span>
+      ),
+    },
+    {
+      id: 'limits',
+      header: 'Limits / current',
+      cell: (key) => {
+        const hasLimits = key.consumption_limits_usd != null || key.consumption_limits_diem != null
+        return (
+          <div className="space-y-1 text-xs text-muted-foreground">
+            <div>
+              {hasLimits ? (
+                <>
+                  {key.consumption_limits_usd != null && `$${key.consumption_limits_usd} USD`}
+                  {key.consumption_limits_usd != null && key.consumption_limits_diem != null && ' · '}
+                  {key.consumption_limits_diem != null && `${key.consumption_limits_diem} DIEM`}
+                  {key.limit_period && ` / ${key.limit_period.toLowerCase()}`}
+                </>
+              ) : 'Unlimited'}
+            </div>
+            {(key.current_period_usage_usd != null || key.current_period_usage_diem != null) && (
+              <div>
+                Current: {key.current_period_usage_usd != null && `$${Number(key.current_period_usage_usd).toFixed(2)} USD`}
+                {key.current_period_usage_usd != null && key.current_period_usage_diem != null && ' · '}
+                {key.current_period_usage_diem != null && `${Number(key.current_period_usage_diem).toFixed(4)} DIEM`}
+              </div>
+            )}
+          </div>
+        )
+      },
+    },
+    { id: 'created', header: 'Created', sortValue: (key) => key.created_at, cell: (key) => formatDate(key.created_at) },
+    { id: 'last-used', header: 'Last used', sortValue: (key) => key.last_used_at ?? '', cell: (key) => key.last_used_at ? formatDate(key.last_used_at) : '—' },
+    {
+      id: 'actions',
+      header: 'Actions',
+      hideable: false,
+      className: 'text-right',
+      cell: (key) => (
+        <div className="flex justify-end gap-1">
+          <button type="button" onClick={() => setFormState({ mode: 'edit', key })} aria-label={`Edit ${key.name}`} className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button type="button" onClick={() => setDeleteTarget(key)} aria-label={`Delete ${key.name}`} className="rounded-md p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      ),
+    },
+  ]
 
   const handleCreate = async (payload: ApiKeyCreatePayload) => {
     setError(null)
@@ -182,6 +242,7 @@ export function ApiKeysView() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <input
                 type="text"
+                aria-label="Search API keys"
                 placeholder="Search by name or id…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -189,6 +250,7 @@ export function ApiKeysView() {
               />
             </div>
             <select
+              aria-label="Filter API keys by type"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value as typeof typeFilter)}
               className="px-3 py-2 rounded-md border border-input bg-background text-foreground"
@@ -197,61 +259,46 @@ export function ApiKeysView() {
               <option value="INFERENCE">Inference</option>
               <option value="ADMIN">Admin</option>
             </select>
-            <select
-              value={sortMode}
-              onChange={(e) => setSortMode(e.target.value as SortMode)}
-              className="px-3 py-2 rounded-md border border-input bg-background text-foreground"
-            >
-              <option value="usage">Sort: usage</option>
-              <option value="name">Sort: name</option>
-              <option value="recent">Sort: newest</option>
-            </select>
           </div>
 
-          {isLoading && (
-            <div className="animate-pulse text-muted-foreground py-8 text-center">
-              Loading API keys…
-            </div>
+          {isLoading && <DataState kind="loading" title="Loading API keys" rows={3} />}
+
+          {isError && !data && (
+            <DataState
+              kind="error"
+              title="Could not load API keys"
+              description="Check your connection and try again."
+              onRetry={() => { void refetch() }}
+              retryLabel="Retry"
+            />
           )}
 
-          {isError && (
-            <div className="text-destructive text-sm py-8 text-center">
-              Failed to load API keys
-            </div>
+          {isError && data && (
+            <DataState
+              kind="stale"
+              title="Showing last available API-key data"
+              description="The latest refresh failed. Your loaded data remains available."
+              onRetry={() => { void refetch() }}
+            />
           )}
 
-          {!isLoading && !isError && filteredKeys.length === 0 && (
-            <div className="text-sm text-muted-foreground py-8 text-center">
-              {keys.length === 0
-                ? 'No API keys yet. Click "Create Key" to add one.'
-                : 'No keys match your filters.'}
-            </div>
+          {!isLoading && data && filteredKeys.length === 0 && (
+            <DataState
+              kind="empty"
+              title={keys.length === 0 ? 'No API keys yet' : 'No keys match these filters'}
+              description={keys.length === 0 ? 'Create a key to start tracking per-key usage.' : 'Try a different search or key type.'}
+            />
           )}
 
-          {!isLoading && !isError && filteredKeys.length > 0 && (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Limits</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Last used</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredKeys.map((key) => (
-                  <ApiKeyRow
-                    key={key.id}
-                    apiKey={key}
-                    onEdit={() => setFormState({ mode: 'edit', key })}
-                    onDelete={() => setDeleteTarget(key)}
-                  />
-                ))}
-              </TableBody>
-            </Table>
+          {!isLoading && data && filteredKeys.length > 0 && (
+            <DataTable
+              rows={filteredKeys}
+              columns={columns}
+              getRowId={(key) => key.id}
+              ariaLabel="API keys"
+              emptyMessage="No keys match these filters."
+              initialSort={{ columnId: 'usage', direction: 'desc' }}
+            />
           )}
         </CardContent>
       </Card>
@@ -291,100 +338,6 @@ export function ApiKeysView() {
   )
 }
 
-function ApiKeyRow({
-  apiKey,
-  onEdit,
-  onDelete,
-}: {
-  apiKey: APIKeyUsage
-  onEdit: () => void
-  onDelete: () => void
-}) {
-  const hasLimits =
-    apiKey.consumption_limits_usd != null || apiKey.consumption_limits_diem != null
-
-  return (
-    <TableRow>
-      <TableCell className="font-medium">
-        <div className="flex flex-col gap-0.5">
-          <span>{apiKey.name}</span>
-          {apiKey.last6_chars && (
-            <span className="text-xs text-muted-foreground font-mono">
-              …{apiKey.last6_chars}
-            </span>
-          )}
-        </div>
-      </TableCell>
-      <TableCell>
-        <div className="flex flex-col items-start gap-1">
-          {apiKey.api_key_type ? (
-            <Badge variant={apiKey.api_key_type === 'ADMIN' ? 'destructive' : 'default'}>
-              {apiKey.api_key_type}
-            </Badge>
-          ) : (
-            <span className="text-xs text-muted-foreground">—</span>
-          )}
-          {apiKey.model_privacy && (
-            <span className="text-[11px] text-muted-foreground" title="Model privacy policy">
-              {apiKey.model_privacy.replaceAll('_', ' ').toLowerCase()}
-            </span>
-          )}
-        </div>
-      </TableCell>
-      <TableCell>
-        <Badge variant={apiKey.is_active ? 'success' : 'secondary'}>
-          {apiKey.is_active ? 'Active' : 'Inactive'}
-        </Badge>
-      </TableCell>
-      <TableCell>
-        {hasLimits ? (
-          <span className="text-xs text-muted-foreground">
-            {apiKey.consumption_limits_usd != null && `$${apiKey.consumption_limits_usd} USD`}
-            {apiKey.consumption_limits_usd != null && apiKey.consumption_limits_diem != null && ' · '}
-            {apiKey.consumption_limits_diem != null && `${apiKey.consumption_limits_diem} DIEM`}
-            {apiKey.limit_period && ` / ${apiKey.limit_period.toLowerCase()}`}
-          </span>
-        ) : (
-          <span className="text-xs text-muted-foreground">Unlimited</span>
-        )}
-        {(apiKey.current_period_usage_usd != null || apiKey.current_period_usage_diem != null) && (
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            Current: {apiKey.current_period_usage_usd != null && `$${Number(apiKey.current_period_usage_usd).toFixed(2)} USD`}
-            {apiKey.current_period_usage_usd != null && apiKey.current_period_usage_diem != null && ' · '}
-            {apiKey.current_period_usage_diem != null && `${Number(apiKey.current_period_usage_diem).toFixed(4)} DIEM`}
-          </div>
-        )}
-      </TableCell>
-      <TableCell className="text-sm text-muted-foreground">
-        {formatDate(apiKey.created_at)}
-      </TableCell>
-      <TableCell className="text-sm text-muted-foreground">
-        {apiKey.last_used_at ? formatDate(apiKey.last_used_at) : '—'}
-      </TableCell>
-      <TableCell className="text-right">
-        <div className="flex justify-end gap-1">
-          <button
-            type="button"
-            onClick={onEdit}
-            aria-label={`Edit ${apiKey.name}`}
-            className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
-          >
-            <Pencil className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            aria-label={`Delete ${apiKey.name}`}
-            className="rounded-md p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-          >
-            <Trash2 className="w-4 h-4" />
-          </button>
-        </div>
-      </TableCell>
-    </TableRow>
-  )
-}
-
 function SecretDisplayModal({
   secret,
   onClose,
@@ -393,6 +346,8 @@ function SecretDisplayModal({
   onClose: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  const titleId = useId()
+  const secretInputId = useId()
 
   const onCopy = async () => {
     try {
@@ -406,13 +361,13 @@ function SecretDisplayModal({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent aria-labelledby="secret-title" className="max-w-lg">
+      <DialogContent aria-labelledby={titleId} className="max-w-lg">
         <div className="flex items-start gap-3">
           <div className="rounded-full bg-warning/10 p-2 text-warning">
             <AlertTriangle className="w-5 h-5" />
           </div>
           <div className="flex-1 space-y-2">
-            <DialogTitle id="secret-title" className="text-lg font-semibold">
+            <DialogTitle id={titleId} className="text-lg font-semibold">
               Save this API key now
             </DialogTitle>
             <p className="text-sm text-muted-foreground">
@@ -427,11 +382,12 @@ function SecretDisplayModal({
           </div>
         </div>
         <div className="mt-4 space-y-2">
-          <label className="text-xs font-medium text-muted-foreground">
+          <label htmlFor={secretInputId} className="text-xs font-medium text-muted-foreground">
             API key secret
           </label>
           <div className="flex items-stretch gap-2">
             <Input
+              id={secretInputId}
               readOnly
               value={secret.apiKey}
               className="flex-1 bg-muted font-mono"

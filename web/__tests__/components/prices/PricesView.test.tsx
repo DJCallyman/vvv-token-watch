@@ -31,19 +31,20 @@ describe('PricesView — loading', () => {
 
   it('shows loading text', () => {
     render(<PricesView />)
-    expect(screen.getByText(/loading prices/i)).toBeInTheDocument()
+    expect(screen.getByText('Loading token prices').closest('[aria-live="polite"]')).toHaveAttribute('aria-busy', 'true')
   })
 })
 
 describe('PricesView — error', () => {
   beforeEach(() => {
-    mockUsePrices.mockReturnValue({ data: undefined, isLoading: false, isError: true } as any)
+    mockUsePrices.mockReturnValue({ data: undefined, isLoading: false, isError: true, refetch: jest.fn() } as any)
     mockUsePriceHistory.mockReturnValue({ data: undefined, isLoading: false, isError: false } as any)
   })
 
-  it('shows error message', () => {
+  it('shows a retryable error state', () => {
     render(<PricesView />)
-    expect(screen.getByText(/failed to load prices/i)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /could not load token prices/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
   })
 })
 

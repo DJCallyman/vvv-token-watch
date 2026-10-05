@@ -1,10 +1,12 @@
 export { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from './card'
 export { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './table'
+export { DataTable, type DataTableColumn } from './data-table'
 export { Badge } from './badge'
 export { Button } from './button'
 export { Input } from './input'
 export { Select } from './select'
 export { Skeleton } from './skeleton'
+export { DataState } from './data-state'
 export {
   Dialog,
   DialogTrigger,

@@ -1,14 +1,12 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Model } from '@/lib/hooks'
+import type { Model } from '@/lib/hooks'
 import {
-  ColumnDefinition,
   getColumnsForType,
   loadColumnPreferences,
-  saveColumnPreferences,
-  SortConfig,
-  ModelType,
+  type SortConfig,
+  type ModelType,
 } from './columnConfig'
 import { ChevronUp, ChevronDown, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -90,7 +88,6 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
     modelSpec.context_length ||
     (flatModel.context_window as number | undefined) ||
     (flatModel.context_length as number | undefined)
-  const getMaxTokens = () => modelSpec.maxCompletionTokens || model.spec?.max_output_tokens
   const getPrivacy = () => modelSpec.privacy || model.spec?.privacy || flatModel.privacy
 
   switch (columnKey) {
@@ -537,25 +534,11 @@ export function ModelsComparisonTable({
     }))
   }, [])
 
-  const toggleColumn = useCallback((key: string) => {
-    setHiddenColumns(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      saveColumnPreferences(modelType, next)
-      return next
-    })
-  }, [modelType])
-
-  const isColumnHidden = useCallback((key: string) => hiddenColumns.has(key), [hiddenColumns])
-
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <div className="flex items-center justify-end p-2 bg-muted/50 border-b border-border">
         <button
+          type="button"
           onClick={onOpenColumnSelector}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md hover:bg-muted transition-colors"
         >

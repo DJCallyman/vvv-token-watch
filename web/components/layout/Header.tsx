@@ -2,7 +2,7 @@
 
 import { useAlertStream, useBalance, useUnacknowledgedAlertEvents } from '@/lib/hooks'
 import { formatCurrency, formatNumber } from '@/lib/utils'
-import { Activity, Bell, LogOut, Menu, Moon, RefreshCw, Sun } from 'lucide-react'
+import { Activity, Bell, LogOut, Menu, Moon, RefreshCw, Search, Sun } from 'lucide-react'
 import { useSidebarDrawer } from './SidebarDrawerContext'
 import { Badge } from '@/components/ui/badge'
 import { useTheme } from '@/components/ThemeProvider'
@@ -62,6 +62,14 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-4 sm:gap-6">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event('vvv:open-command-palette'))}
+          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Open command palette"
+        >
+          <Search className="w-4 h-4" />
+        </button>
         {balance && (
           <>
             <div className="text-right hidden md:block">

@@ -3,6 +3,7 @@
 import { useAPIKeyAnalytics, useAPIKeysUsage, useEpochUsage, useUsageTrends } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatNumber, formatCurrency, formatDate } from '@/lib/utils'
+import { DataState } from '@/components/ui/data-state'
 import { BarChart3, Activity, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import {
   LineChart,
@@ -16,8 +17,8 @@ import {
 } from 'recharts'
 
 export function UsageView() {
-  const { data: epochUsage, isLoading: epochLoading, isError: epochError } = useEpochUsage()
-  const { data: keysUsage, isLoading: keysLoading, isError: keysError } = useAPIKeysUsage()
+  const { data: epochUsage, isLoading: epochLoading, isError: epochError, refetch: refetchEpoch } = useEpochUsage()
+  const { data: keysUsage, isLoading: keysLoading, isError: keysError, refetch: refetchKeys } = useAPIKeysUsage()
   const { data: keyAnalytics } = useAPIKeyAnalytics(7)
   const { data: trends, isLoading: trendsLoading } = useUsageTrends('epoch')
 
@@ -80,9 +81,12 @@ export function UsageView() {
       </div>
 
       {isError && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Failed to load usage data. Retrying automatically…
-        </div>
+        <DataState
+          kind={usage || keysUsage ? 'stale' : 'error'}
+          title={usage || keysUsage ? 'Showing last available usage data' : 'Could not load usage data'}
+          description="Refresh epoch usage and API-key totals to update this page."
+          onRetry={() => { void Promise.all([refetchEpoch(), refetchKeys()]) }}
+        />
       )}
 
       {isLoading ? (

@@ -18,7 +18,7 @@ import {
   Line,
   Legend,
 } from 'recharts'
-import { Activity, DollarSign, Clock, Zap, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react'
+import { Activity, DollarSign, Clock, Zap, TrendingUp, AlertCircle } from 'lucide-react'
 import { cn, formatCurrency, formatNumber as formatFixedNumber, getPriorityStyles } from '@/lib/utils'
 
 const CHART_COLORS = [
@@ -91,7 +91,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
     )
   }
 
-  const { model_usage, total_requests, total_tokens, total_cost, recommendations, source } = analytics
+  const { model_usage, recommendations, source } = analytics
   const isBillingAnalytics = source === 'billing/usage-analytics'
 
   // BUG-08: when using the lighter analytics endpoint, requests and latency are not provided
@@ -293,8 +293,8 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                     cy="50%"
                     outerRadius={110}
                   >
-                    {costBreakdown.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    {costBreakdown.map((entry) => (
+                      <Cell key={entry.fullName} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -437,8 +437,8 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                 </tr>
               </thead>
               <tbody>
-                {modelData.map((model, i) => (
-                  <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
+                {modelData.map((model) => (
+                  <tr key={model.fullName} className="border-b border-border/50 hover:bg-muted/30">
                     <td className="py-2 px-3 font-medium" title={model.fullName}>
                       {model.name}
                     </td>
@@ -502,11 +502,11 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {recommendations.map((rec, i) => {
+              {recommendations.map((rec) => {
                 const Icon = TYPE_ICONS[rec.type as keyof typeof TYPE_ICONS] || AlertCircle
                 return (
                   <div
-                    key={i}
+                    key={`${rec.type}-${rec.message}`}
                     className={cn(
                       "flex items-start gap-3 p-3 rounded-lg border",
                       getPriorityStyles(rec.priority as 'high' | 'medium' | 'low')

@@ -1,31 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { usePrices } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { Coins, Wallet } from 'lucide-react'
 import { PriceChart } from '@/components/prices/PriceChart'
+import { DataState } from '@/components/ui/data-state'
 
 type Currency = 'USD' | 'AUD'
 
 export function PricesView() {
-  const { data: prices, isLoading, isError } = usePrices()
+  const { data: prices, isLoading, isError, refetch } = usePrices()
   const [portfolioCurrency, setPortfolioCurrency] = useState<Currency>('USD')
+  const portfolioCurrencyId = useId()
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-muted-foreground">Loading prices...</div>
-      </div>
-    )
+    return <DataState kind="loading" title="Loading token prices" rows={3} />
   }
 
-  if (isError || !prices) {
+  if (!prices) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-destructive">Failed to load prices</div>
-      </div>
+      <DataState
+        kind="error"
+        title="Could not load token prices"
+        description="Prices may be temporarily unavailable. Try again to refresh them."
+        onRetry={() => { void refetch() }}
+      />
     )
   }
 
@@ -56,6 +57,15 @@ export function PricesView() {
           Live prices from VeniceStats with ECB-based AUD conversion
         </p>
       </div>
+
+      {isError && (
+        <DataState
+          kind="stale"
+          title="Showing the last loaded prices"
+          description="The latest price refresh failed. Your current values and history remain available."
+          onRetry={() => { void refetch() }}
+        />
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
@@ -153,9 +163,9 @@ export function PricesView() {
               </CardTitle>
               <CardDescription>Your combined token holdings</CardDescription>
             </div>
-            <label htmlFor="portfolio-currency" className="sr-only">Portfolio currency</label>
+            <label htmlFor={portfolioCurrencyId} className="sr-only">Portfolio currency</label>
             <select
-              id="portfolio-currency"
+              id={portfolioCurrencyId}
               value={portfolioCurrency}
               onChange={(e) => setPortfolioCurrency(e.target.value as Currency)}
               className="text-sm rounded-md border border-input bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"

@@ -4,27 +4,27 @@ import { useBalance, useEpochUsage } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatNumber, formatCurrency, formatDateTime } from '@/lib/utils'
 import { Wallet, TrendingUp, Clock, PieChart, Activity, AlertCircle } from 'lucide-react'
+import { DataState } from '@/components/ui/data-state'
 
 export function BalanceView() {
-  const { data: balance, isLoading: balanceLoading, isError: balanceError } = useBalance()
-  const { data: epochUsage, isLoading: epochLoading, isError: epochError } = useEpochUsage()
+  const { data: balance, isLoading: balanceLoading, isError: balanceError, refetch: refetchBalance } = useBalance()
+  const { data: epochUsage, isLoading: epochLoading, isError: epochError, refetch: refetchEpochUsage } = useEpochUsage()
 
   const isLoading = balanceLoading || epochLoading
   const isError = balanceError || epochError
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
-      </div>
-    )
+    return <DataState kind="loading" title="Loading balance and epoch usage" rows={3} />
   }
 
   if (isError && !balance && !epochUsage) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-destructive">Failed to load balance data</div>
-      </div>
+      <DataState
+        kind="error"
+        title="Could not load balance data"
+        description="Check your connection and retry to refresh account data."
+        onRetry={() => { void Promise.all([refetchBalance(), refetchEpochUsage()]) }}
+      />
     )
   }
 
@@ -47,6 +47,14 @@ export function BalanceView() {
 
   return (
     <div className="space-y-6">
+      {isError && (balance || epochUsage) && (
+        <DataState
+          kind="stale"
+          title="Showing the last available account data"
+          description="Some balance or usage values could not be refreshed."
+          onRetry={() => { void Promise.all([refetchBalance(), refetchEpochUsage()]) }}
+        />
+      )}
       <div>
         <h1 className="text-3xl font-bold text-foreground">Balance & Limits</h1>
         <p className="text-sm text-muted-foreground mt-1">

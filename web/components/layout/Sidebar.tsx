@@ -20,7 +20,7 @@ import {
   MessageSquare,
 } from 'lucide-react'
 
-const navigation = [
+export const navigationItems = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Models', href: '/models', icon: Cpu },
   { name: 'Usage', href: '/usage', icon: BarChart3 },
@@ -52,7 +52,7 @@ export function Sidebar() {
         </div>
       </div>
       <nav aria-label="Primary navigation" className="flex-1 px-3 py-4 space-y-1">
-        {navigation.map((item) => {
+        {navigationItems.map((item) => {
           const isActive = pathname === item.href
           return (
             <Link key={item.name} href={item.href} aria-current={isActive ? 'page' : undefined}
@@ -69,7 +69,14 @@ export function Sidebar() {
   return (
     <>
       <aside className="hidden md:flex w-64 bg-card border-r border-border flex-col">{content}</aside>
-      {open && <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setOpen(false)} />}
+      {open && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          className="fixed inset-0 z-40 cursor-default bg-black/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
+          onClick={() => setOpen(false)}
+        />
+      )}
       <aside className={cn('fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border flex flex-col transition-transform md:hidden', open ? 'translate-x-0' : '-translate-x-full')}>
         {content}
       </aside>

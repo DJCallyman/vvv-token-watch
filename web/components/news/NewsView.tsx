@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui'
 import { RefreshCw, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
+import { DataState } from '@/components/ui/data-state'
 
 export function NewsView() {
   const { data, isLoading, isError, isFetching, refetch } = useNews()
@@ -21,8 +22,16 @@ export function NewsView() {
   }
   return <div className="space-y-6">
     <div className="flex items-center justify-between"><div><h1 className="text-3xl font-bold">Token News</h1><p className="text-sm text-muted-foreground mt-1">Fresh VVV and DIEM context from Venice web search</p></div><button type="button" onClick={refreshNews} disabled={isFetching} className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className="w-4 h-4" /> {isFetching ? 'Refreshing…' : 'Refresh'}</button></div>
-    {isLoading && <p className="text-muted-foreground">Loading news…</p>}
-     {isError && <p className="text-destructive" role="alert">Failed to load news.</p>}
+    {isLoading && <DataState kind="loading" title="Loading token news" rows={4} />}
+    {isError && !data && <DataState kind="error" title="Could not load token news" description="Search results may be temporarily unavailable." onRetry={() => { void refreshNews() }} />}
+    {isError && data && <DataState kind="stale" title="Showing the last loaded news" description="The latest search refresh failed." onRetry={() => { void refreshNews() }} />}
+    {!isLoading && !isError && data?.articles.length === 0 && (
+      <DataState kind="empty" title="No recent token news" description="Refresh to search for recent VVV and DIEM coverage." action={(
+        <button type="button" onClick={() => { void refreshNews() }} className="text-sm text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          Refresh news
+        </button>
+      )} />
+    )}
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{data?.articles.map((item) => <Card key={`${item.url}-${item.title}`}><CardHeader><CardTitle className="text-lg">{item.title}</CardTitle><CardDescription>{item.source || 'Web'}{item.date ? ` · ${item.date}` : ''}</CardDescription></CardHeader><CardContent><p className="text-sm text-muted-foreground line-clamp-3">{item.snippet}</p><div className="mt-4 flex gap-3">{item.url && <><button type="button" onClick={() => setSelected(item.url)} className="text-sm text-primary hover:underline">Read article</button><a href={item.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">Open source <ExternalLink className="w-3 h-3" /></a></>}</div></CardContent></Card>)}</div>
      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
        <DialogContent className="max-w-3xl">
