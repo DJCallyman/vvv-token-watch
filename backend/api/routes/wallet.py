@@ -6,8 +6,6 @@ own data. Proofs are one-time, expiring, and chain-bound; replayed, expired,
 and wrong-network proofs are rejected.
 """
 
-from __future__ import annotations
-
 import logging
 from datetime import datetime, timezone
 from typing import Optional

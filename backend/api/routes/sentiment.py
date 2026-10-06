@@ -1,7 +1,5 @@
 """X/Twitter sentiment tracking through Venice search models (Phase 3)."""
 
-from __future__ import annotations
-
 import json
 import logging
 from typing import Any, Dict, List

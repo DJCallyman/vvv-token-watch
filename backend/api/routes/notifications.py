@@ -1,7 +1,5 @@
 """External notification channel and delivery endpoints (Slice 2.4)."""
 
-from __future__ import annotations
-
 import logging
 from typing import Any, Dict, Literal, Optional
 

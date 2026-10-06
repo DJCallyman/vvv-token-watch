@@ -1,7 +1,5 @@
 """Whitepaper, report, and document parsing workflows (Phase 3)."""
 
-from __future__ import annotations
-
 import base64
 import binascii
 import io
