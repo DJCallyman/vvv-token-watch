@@ -148,6 +148,12 @@ class VeniceAPIClient:
                     json=json_body,
                     timeout=timeout,
                 )
+                try:
+                    from backend.core import telemetry
+
+                    telemetry.record_response(endpoint, response.headers)
+                except Exception:
+                    logger.debug("Failed to record Venice telemetry", exc_info=True)
                 return response
         # Unreachable: AsyncRetrying exhausted attempts and reraise=True would
         # have raised. Defensive return for type checkers.

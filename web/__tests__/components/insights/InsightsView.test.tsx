@@ -3,14 +3,31 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { InsightsView } from '@/components/insights/InsightsView'
 import { api, type MarketDecisions } from '@/lib/api'
 import { toast } from 'sonner'
+import {
+  useAnalyzeXSentiment,
+  useBriefing,
+  useEvaluateSignal,
+  useMarketInfographic,
+  useSignals,
+  useVideoRecapStatus,
+} from '@/lib/hooks'
 
 jest.mock('@/lib/api', () => {
   const actual = jest.requireActual('@/lib/api')
-  return { ...actual, api: { analyzeMarket: jest.fn() } }
+  return { ...actual, api: { ...actual.api, analyzeMarket: jest.fn() } }
 })
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }))
+jest.mock('@/lib/hooks', () => ({
+  useAnalyzeXSentiment: jest.fn(),
+  useBriefing: jest.fn(),
+  useEvaluateSignal: jest.fn(),
+  useMarketInfographic: jest.fn(),
+  useSignals: jest.fn(),
+  useVideoRecapStatus: jest.fn(),
+}))
 
 const mockAnalyzeMarket = api.analyzeMarket as jest.MockedFunction<typeof api.analyzeMarket>
+const mutationStub = () => ({ mutate: jest.fn(), isPending: false, data: undefined })
 
 export const analysisFixture = {
   summary: 'Markets are calm.',
@@ -45,6 +62,12 @@ export const decisionsFixture: MarketDecisions = {
 
 beforeEach(() => {
   jest.clearAllMocks()
+  jest.mocked(useAnalyzeXSentiment).mockReturnValue(mutationStub() as never)
+  jest.mocked(useBriefing).mockReturnValue(mutationStub() as never)
+  jest.mocked(useEvaluateSignal).mockReturnValue(mutationStub() as never)
+  jest.mocked(useMarketInfographic).mockReturnValue(mutationStub() as never)
+  jest.mocked(useSignals).mockReturnValue({ data: { signals: [], count: 0 }, isLoading: false, isError: false } as never)
+  jest.mocked(useVideoRecapStatus).mockReturnValue({ data: undefined } as never)
 })
 
 describe('InsightsView — decisions card', () => {

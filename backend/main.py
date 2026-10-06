@@ -9,7 +9,31 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import get_settings
 from backend.database import init_db, engine
 from backend.limiter import limiter
-from backend.api.routes import usage, balance, prices, models, health, analytics, benchmark, onchain, alerts, api_keys, characters, news, insights, assistant, settings as settings_routes
+from backend.api.routes import (
+    usage,
+    balance,
+    prices,
+    models,
+    health,
+    analytics,
+    benchmark,
+    onchain,
+    alerts,
+    api_keys,
+    characters,
+    news,
+    insights,
+    assistant,
+    settings as settings_routes,
+    notifications,
+    watchlists,
+    observability,
+    wallet,
+    signals,
+    sentiment,
+    media,
+    documents,
+)
 from backend.api.deps import verify_auth
 
 settings = get_settings()
@@ -168,6 +192,14 @@ app.include_router(news.router, prefix="/api", tags=["news"], dependencies=[Depe
 app.include_router(insights.router, prefix="/api", tags=["insights"], dependencies=[Depends(verify_auth)])
 app.include_router(assistant.router, prefix="/api", tags=["assistant"], dependencies=[Depends(verify_auth)])
 app.include_router(settings_routes.router, prefix="/api", tags=["settings"], dependencies=[Depends(verify_auth)])
+app.include_router(notifications.router, prefix="/api", tags=["notifications"], dependencies=[Depends(verify_auth)])
+app.include_router(watchlists.router, prefix="/api", tags=["watchlists"], dependencies=[Depends(verify_auth)])
+app.include_router(observability.router, prefix="/api", tags=["observability"], dependencies=[Depends(verify_auth)])
+app.include_router(wallet.router, prefix="/api", tags=["wallet"], dependencies=[Depends(verify_auth)])
+app.include_router(signals.router, prefix="/api", tags=["signals"], dependencies=[Depends(verify_auth)])
+app.include_router(sentiment.router, prefix="/api", tags=["sentiment"], dependencies=[Depends(verify_auth)])
+app.include_router(media.router, prefix="/api", tags=["media"], dependencies=[Depends(verify_auth)])
+app.include_router(documents.router, prefix="/api", tags=["documents"], dependencies=[Depends(verify_auth)])
 
 
 @app.get("/")

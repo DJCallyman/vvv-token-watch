@@ -565,6 +565,8 @@ export interface UsageTrendsResponse {
 }
 
 export interface OnchainSupply {
+  chain?: string
+  token_symbol?: string
   network: string
   token_address: string
   staking_contract: string
@@ -580,6 +582,8 @@ export interface OnchainSupply {
 }
 
 export interface OnchainStaking {
+  chain?: string
+  token_symbol?: string
   network: string
   token_address: string
   staking_contract: string
@@ -601,6 +605,8 @@ export interface OnchainStaking {
 }
 
 export interface OnchainBalance {
+  chain?: string
+  token_symbol?: string
   network: string
   address: string
   token_address: string
@@ -637,6 +643,8 @@ export interface AlertConfig {
   threshold: number
   comparison: string
   enabled: boolean
+  window_seconds?: number | null
+  min_samples?: number | null
   created_at: string | null
   updated_at: string | null
 }
@@ -648,6 +656,348 @@ export interface AlertEvent {
   message: string
   value: number
   acknowledged: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Slice 2.2 signal alerts
+// ---------------------------------------------------------------------------
+
+export type AlertType =
+  | 'usage_percent'
+  | 'balance_threshold'
+  | 'price_threshold'
+  | 'rate_of_change'
+  | 'anomaly'
+
+export interface AlertMetricOption {
+  value: string
+  label: string
+}
+
+export const ALERT_METRICS: Record<AlertType, AlertMetricOption[]> = {
+  usage_percent: [
+    { value: 'diem_usage_percent', label: 'DIEM usage %' },
+    { value: 'usd_usage_percent', label: 'USD usage %' },
+  ],
+  balance_threshold: [
+    { value: 'diem_balance', label: 'DIEM balance' },
+    { value: 'usd_balance', label: 'USD balance' },
+  ],
+  price_threshold: [
+    { value: 'vvv_price_usd', label: 'VVV price (USD)' },
+    { value: 'diem_price_usd', label: 'DIEM price (USD)' },
+  ],
+  rate_of_change: [
+    { value: 'vvv_price_usd', label: 'VVV price (USD)' },
+    { value: 'diem_price_usd', label: 'DIEM price (USD)' },
+    { value: 'diem_balance', label: 'DIEM balance' },
+    { value: 'usd_balance', label: 'USD balance' },
+    { value: 'diem_usage_percent', label: 'DIEM usage %' },
+    { value: 'usd_usage_percent', label: 'USD usage %' },
+  ],
+  anomaly: [
+    { value: 'vvv_price_usd', label: 'VVV price (USD)' },
+    { value: 'diem_price_usd', label: 'DIEM price (USD)' },
+    { value: 'diem_balance', label: 'DIEM balance' },
+    { value: 'usd_balance', label: 'USD balance' },
+    { value: 'diem_usage_percent', label: 'DIEM usage %' },
+    { value: 'usd_usage_percent', label: 'USD usage %' },
+  ],
+}
+
+// ---------------------------------------------------------------------------
+// Slice 2.4 notifications
+// ---------------------------------------------------------------------------
+
+export type NotificationChannelKind =
+  | 'discord'
+  | 'slack'
+  | 'telegram'
+  | 'webhook'
+  | 'email'
+  | 'browser_push'
+
+export interface NotificationChannel {
+  id: number
+  kind: NotificationChannelKind | string
+  name: string
+  enabled: boolean
+  destination: string | null
+  webhook_url_masked: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+export interface NotificationProvider {
+  kind: NotificationChannelKind | string
+  available: boolean
+}
+
+export interface NotificationDelivery {
+  id: number
+  alert_event_id: number
+  channel_id: number
+  channel_name: string | null
+  channel_kind: string | null
+  status: 'pending' | 'sent' | 'failed' | 'skipped' | string
+  attempts: number
+  last_error: string | null
+  next_attempt_at: string | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+// ---------------------------------------------------------------------------
+// Slice 2.5 / 2.6 on-chain views and watchlists
+// ---------------------------------------------------------------------------
+
+export interface WatchlistItem {
+  id: number
+  chain: string
+  token: string
+  address: string
+  label: string | null
+  created_at: string | null
+}
+
+export interface OnchainStakingEvent {
+  direction: 'stake' | 'unstake' | string
+  counterparty: string
+  value: string
+  value_human: number
+  tx_hash: string | null
+  block_number: string | null
+  log_index: string | null
+}
+
+export interface OnchainStakingEventsResponse {
+  chain: string
+  network: string
+  token_symbol: string
+  staking_contract: string
+  address: string | null
+  events: OnchainStakingEvent[]
+  count: number
+  truncated: boolean
+  from_block: string
+  to_block: string
+  source: string
+  note: string
+}
+
+export interface OnchainHolder {
+  chain: string
+  address: string
+  source: string
+  holdings: {
+    vvv_wallet: number
+    svvv_total: number
+    svvv_locked: number
+    pending_rewards: number
+    diem_wallet: number
+    diem_staked: number
+  }
+  all_holders_available: boolean
+  note: string
+}
+
+export interface ChainTokenInfo {
+  symbol: string
+  key: string
+  address: string | null
+  decimals: number
+  data_sources: string[]
+}
+
+export interface ChainInfo {
+  key: string
+  chain_id: number
+  display_name: string
+  rpc_network: string
+  explorer_base_url: string
+  tokens: ChainTokenInfo[]
+}
+
+export interface ChainsResponse {
+  approved_chains: string[]
+  chains: ChainInfo[]
+}
+
+// ---------------------------------------------------------------------------
+// Slice 2.7 observability
+// ---------------------------------------------------------------------------
+
+export interface RateLimitSnapshot {
+  status: 'ok' | 'unavailable' | string
+  reason?: string
+  note?: string
+  fields?: Record<string, { value: string; endpoint: string; timestamp: string }>
+  last_seen_at?: string | null
+}
+
+export interface UpstreamRateLimitEvents {
+  status: 'ok' | 'unavailable' | string
+  reason?: string
+  detail?: string
+  events?: Array<Record<string, unknown>>
+  count?: number
+  source?: string
+  note?: string
+}
+
+export interface RateLimitsResponse {
+  app_limiter: { status: string; note: string }
+  upstream_headers: RateLimitSnapshot
+  upstream_events: UpstreamRateLimitEvents
+}
+
+export interface RpcCostSnapshot {
+  status: 'ok' | 'unavailable' | string
+  reason?: string
+  note?: string
+  totals?: { cost_usd: number; credits: number; count: number }
+  latest?: { cost_usd: number | null; credits: number | null }
+  sample_count?: number
+  samples?: Array<{ endpoint: string; cost_usd: number | null; credits: number | null; timestamp: string }>
+  source?: string
+}
+
+export interface BillingCoverage {
+  status: 'confirmed' | 'unverified' | 'unavailable' | string
+  reason?: string
+  detail?: string
+  scanned?: number
+  rpc_entries?: number
+  note?: string
+}
+
+export interface RpcCostsResponse {
+  per_call: RpcCostSnapshot
+  billing_coverage: BillingCoverage
+  account_reconciliation: { status: string; note: string }
+}
+
+export interface ObservabilitySummary {
+  headers: RateLimitSnapshot
+  rate_limits: RateLimitSnapshot
+  rpc_costs: RpcCostSnapshot
+  upstream_events: UpstreamRateLimitEvents
+  generated_at: string
+}
+
+// ---------------------------------------------------------------------------
+// Slice 2.8 wallet session
+// ---------------------------------------------------------------------------
+
+export interface WalletChallenge {
+  challenge_id: number
+  address: string
+  chain_id: number
+  message: string
+  expires_at: string
+}
+
+export interface WalletSessionInfo {
+  token: string
+  address: string
+  chain_id: number
+  expires_at: string
+}
+
+export interface WalletBalance {
+  address: string
+  chain: string
+  chain_id: number
+  holdings: OnchainHolder['holdings'] | null
+  holdings_error: string | null
+  onchain: OnchainBalance | null
+  onchain_error: string | null
+  sources: string[]
+  read_only: boolean
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 signals / sentiment / media / documents
+// ---------------------------------------------------------------------------
+
+export interface SignalRecord {
+  id: number
+  kind: string
+  subject: string
+  direction: 'bullish' | 'bearish' | 'neutral' | string
+  confidence: number
+  rationale: string
+  sources: string[]
+  metrics: Record<string, unknown>
+  entry_price_usd: number | null
+  outcome_status: 'pending' | 'hit' | 'miss' | string
+  outcome_value_usd: number | null
+  outcome_note: string | null
+  evaluated_at: string | null
+  created_at: string | null
+}
+
+export interface XSentimentResponse {
+  direction: 'bullish' | 'bearish' | 'neutral' | string
+  confidence: number
+  summary: string
+  drivers: string[]
+  posts: NewsArticle[]
+  sources: string[]
+  model: string
+  signal_id: number | null
+  source: string
+  note: string
+}
+
+export interface NewsSearchResult extends NewsArticle {
+  score: number
+}
+
+export interface NewsAskResponse {
+  answer: string
+  sources: string[]
+  retrieved: NewsSearchResult[]
+  model?: string
+}
+
+export interface DocumentParseResponse {
+  filename: string
+  format: string
+  input_kind: string
+  characters: number
+  truncated: boolean
+  extracted_text: string
+  summary: string
+  key_points: string[]
+  risk_factors: string[]
+  model: string
+  note: string
+}
+
+export interface BriefingResponse {
+  text: string
+  audio_b64: string
+  mime: string
+  voice: string
+  model: string
+}
+
+export interface VideoRecapQueueResponse {
+  queue_id: string
+  model: string
+  prompt: string
+  status: string
+}
+
+export interface VideoRecapStatusResponse {
+  queue_id: string
+  model: string
+  status: 'queued' | 'pending' | 'completed' | 'error' | string
+  video_url?: string
+  bytes?: number
+  generated_at?: string
+  metadata?: Record<string, unknown>
 }
 
 export interface NewsArticle { title: string; url: string | null; snippet: string; date?: string | null; source?: string | null }
@@ -666,11 +1016,46 @@ export type DecisionsStatus = 'ok' | 'unavailable' | string
 
 export interface AlertConfigCreate {
   name: string
-  alert_type: 'usage_percent' | 'balance_threshold' | 'price_threshold'
+  alert_type: AlertType
   metric: string
   threshold: number
   comparison?: 'gte' | 'lte'
   enabled?: boolean
+  window_seconds?: number | null
+  min_samples?: number | null
+}
+
+export interface NotificationChannelCreate {
+  name: string
+  kind?: NotificationChannelKind
+  enabled?: boolean
+  webhook_url?: string
+  url?: string
+  telegram_bot_token?: string
+  telegram_chat_id?: string
+  email_to?: string
+  subscription?: {
+    endpoint: string
+    keys: { p256dh: string; auth: string }
+  }
+}
+
+export interface WatchlistCreate {
+  address: string
+  chain?: string
+  token?: string
+  label?: string | null
+}
+
+export interface SignalCreate {
+  kind?: 'sentiment' | 'x_sentiment' | 'manual' | 'analysis'
+  subject?: string
+  direction: 'bullish' | 'bearish' | 'neutral'
+  confidence: number
+  rationale?: string
+  sources?: string[]
+  metrics?: Record<string, unknown>
+  entry_price_usd?: number | null
 }
 
 export const api = {
@@ -829,11 +1214,264 @@ export const api = {
     })
   },
 
-  async evaluateAlerts(metrics: Record<string, number>): Promise<{ created: number; events: AlertEvent[] }> {
-    return fetchAPI<{ created: number; events: AlertEvent[] }>('/api/alerts/evaluate', {
+  async evaluateAlerts(
+    metrics: Record<string, number>,
+    history: Record<string, Array<{ timestamp: string | null; value: number }>> = {},
+  ): Promise<{ created: number; events: AlertEvent[]; skipped?: Array<{ alert_id: number; name: string; metric: string; reason: string }> }> {
+    return fetchAPI<{ created: number; events: AlertEvent[]; skipped?: Array<{ alert_id: number; name: string; metric: string; reason: string }> }>('/api/alerts/evaluate', {
       method: 'POST',
-      body: JSON.stringify({ metrics }),
+      body: JSON.stringify({ metrics, history }),
     })
+  },
+
+  // Slice 2.4 — notification channels and durable deliveries
+  async getNotificationProviders(): Promise<{ providers: NotificationProvider[] }> {
+    return fetchAPI<{ providers: NotificationProvider[] }>('/api/notifications/providers')
+  },
+
+  async getVapidPublicKey(): Promise<{ status: string; key?: string; reason?: string }> {
+    return fetchAPI<{ status: string; key?: string; reason?: string }>(
+      '/api/notifications/vapid-public-key',
+    )
+  },
+
+  async getNotificationChannels(): Promise<{ channels: NotificationChannel[]; count: number }> {
+    return fetchAPI<{ channels: NotificationChannel[]; count: number }>('/api/notifications/channels')
+  },
+
+  async createNotificationChannel(body: NotificationChannelCreate): Promise<NotificationChannel> {
+    return fetchAPI<NotificationChannel>('/api/notifications/channels', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async updateNotificationChannel(
+    id: number,
+    body: Partial<NotificationChannelCreate>,
+  ): Promise<NotificationChannel> {
+    return fetchAPI<NotificationChannel>(`/api/notifications/channels/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async deleteNotificationChannel(id: number): Promise<{ deleted: boolean; id: number }> {
+    return fetchAPI<{ deleted: boolean; id: number }>(`/api/notifications/channels/${id}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async testNotificationChannel(id: number): Promise<{ status: string; error?: string }> {
+    return fetchAPI<{ status: string; error?: string }>(`/api/notifications/channels/${id}/test`, {
+      method: 'POST',
+    })
+  },
+
+  async getNotificationDeliveries(
+    status?: string,
+    alertEventId?: number,
+  ): Promise<{ deliveries: NotificationDelivery[]; count: number }> {
+    const params = new URLSearchParams()
+    if (status) params.set('status', status)
+    if (alertEventId != null) params.set('alert_event_id', String(alertEventId))
+    const qs = params.toString()
+    return fetchAPI<{ deliveries: NotificationDelivery[]; count: number }>(
+      `/api/notifications/deliveries${qs ? `?${qs}` : ''}`,
+    )
+  },
+
+  async retryNotificationDelivery(id: number): Promise<NotificationDelivery> {
+    return fetchAPI<NotificationDelivery>(`/api/notifications/deliveries/${id}/retry`, {
+      method: 'POST',
+    })
+  },
+
+  // Slice 2.5 — watchlists, staking events, holder lookup
+  async getWatchlist(): Promise<{ items: WatchlistItem[]; count: number }> {
+    return fetchAPI<{ items: WatchlistItem[]; count: number }>('/api/watchlists')
+  },
+
+  async createWatchlistItem(body: WatchlistCreate): Promise<WatchlistItem> {
+    return fetchAPI<WatchlistItem>('/api/watchlists', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async deleteWatchlistItem(id: number): Promise<{ deleted: boolean; id: number }> {
+    return fetchAPI<{ deleted: boolean; id: number }>(`/api/watchlists/${id}`, {
+      method: 'DELETE',
+    })
+  },
+
+  async getStakingEvents(
+    blocks = 10000,
+    address?: string,
+    chain = 'base-mainnet',
+    token = 'vvv',
+  ): Promise<OnchainStakingEventsResponse> {
+    const params = new URLSearchParams({ blocks: String(blocks), chain, token })
+    if (address) params.set('address', address)
+    return fetchAPI<OnchainStakingEventsResponse>(`/api/onchain/staking/events?${params.toString()}`)
+  },
+
+  async getHolderLookup(address: string, chain = 'base-mainnet'): Promise<OnchainHolder> {
+    return fetchAPI<OnchainHolder>(
+      `/api/onchain/holders/${encodeURIComponent(address)}?chain=${chain}`,
+    )
+  },
+
+  async getChains(): Promise<ChainsResponse> {
+    return fetchAPI<ChainsResponse>('/api/onchain/chains')
+  },
+
+  // Slice 2.7 — observability
+  async getRateLimits(): Promise<RateLimitsResponse> {
+    return fetchAPI<RateLimitsResponse>('/api/observability/rate-limits')
+  },
+
+  async getRpcCosts(): Promise<RpcCostsResponse> {
+    return fetchAPI<RpcCostsResponse>('/api/observability/rpc-costs')
+  },
+
+  async getObservabilitySummary(): Promise<ObservabilitySummary> {
+    return fetchAPI<ObservabilitySummary>('/api/observability/summary')
+  },
+
+  // Slice 2.8 — wallet session (read-only)
+  async createWalletChallenge(address: string, chainId = 8453): Promise<WalletChallenge> {
+    return fetchAPI<WalletChallenge>('/api/wallet/challenge', {
+      method: 'POST',
+      body: JSON.stringify({ address, chain_id: chainId }),
+    })
+  },
+
+  async verifyWalletChallenge(challengeId: number, signature: string): Promise<WalletSessionInfo> {
+    return fetchAPI<WalletSessionInfo>('/api/wallet/verify', {
+      method: 'POST',
+      body: JSON.stringify({ challenge_id: challengeId, signature }),
+    })
+  },
+
+  async getWalletBalance(token: string): Promise<WalletBalance> {
+    return fetchAPI<WalletBalance>('/api/wallet/balance', {
+      headers: { 'X-Wallet-Token': token },
+    })
+  },
+
+  async getWalletTransactions(token: string, blocks = 10000): Promise<OnchainTransfersResponse> {
+    return fetchAPI<OnchainTransfersResponse>(`/api/wallet/transactions?blocks=${blocks}`, {
+      headers: { 'X-Wallet-Token': token },
+    })
+  },
+
+  async logoutWallet(token: string): Promise<{ logged_out: boolean }> {
+    return fetchAPI<{ logged_out: boolean }>('/api/wallet/logout', {
+      method: 'POST',
+      headers: { 'X-Wallet-Token': token },
+    })
+  },
+
+  // Phase 3 — signals, sentiment, media, documents, semantic news
+  async getSignals(limit = 50): Promise<{ signals: SignalRecord[]; count: number }> {
+    return fetchAPI<{ signals: SignalRecord[]; count: number }>(`/api/signals?limit=${limit}`)
+  },
+
+  async createSignal(body: SignalCreate): Promise<SignalRecord> {
+    return fetchAPI<SignalRecord>('/api/signals', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async evaluateSignal(id: number, currentPriceUsd?: number): Promise<SignalRecord> {
+    return fetchAPI<SignalRecord>(`/api/signals/${id}/evaluate`, {
+      method: 'POST',
+      body: JSON.stringify(
+        currentPriceUsd != null ? { current_price_usd: currentPriceUsd } : {},
+      ),
+    })
+  },
+
+  async analyzeXSentiment(
+    query = 'VVV OR DIEM Venice AI crypto',
+    recordSignal = true,
+  ): Promise<XSentimentResponse> {
+    return fetchAPI<XSentimentResponse>('/api/sentiment/x', {
+      method: 'POST',
+      body: JSON.stringify({ query, record_signal: recordSignal }),
+    })
+  },
+
+  async searchNews(query: string, topK = 5): Promise<{ query: string; results: NewsSearchResult[]; count: number; model: string }> {
+    return fetchAPI<{ query: string; results: NewsSearchResult[]; count: number; model: string }>(
+      '/api/news/search',
+      { method: 'POST', body: JSON.stringify({ query, top_k: topK }) },
+    )
+  },
+
+  async askNews(question: string, topK = 5): Promise<NewsAskResponse> {
+    return fetchAPI<NewsAskResponse>('/api/news/ask', {
+      method: 'POST',
+      body: JSON.stringify({ question, top_k: topK }),
+    })
+  },
+
+  async parseDocument(body: { filename: string; text?: string; content_base64?: string }): Promise<DocumentParseResponse> {
+    return fetchAPI<DocumentParseResponse>('/api/documents/parse', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async askDocument(documentText: string, question: string): Promise<{ answer: string }> {
+    return fetchAPI<{ answer: string }>('/api/documents/ask', {
+      method: 'POST',
+      body: JSON.stringify({ document_text: documentText, question }),
+    })
+  },
+
+  async generateBriefing(text?: string): Promise<BriefingResponse> {
+    return fetchAPI<BriefingResponse>('/api/tts/briefing', {
+      method: 'POST',
+      body: JSON.stringify(text ? { text } : {}),
+    })
+  },
+
+  async generateAlertVoice(eventId: number): Promise<{ event_id: number; text: string; audio_b64: string; mime: string }> {
+    return fetchAPI<{ event_id: number; text: string; audio_b64: string; mime: string }>(
+      `/api/tts/alert/${eventId}`,
+      { method: 'POST' },
+    )
+  },
+
+  async generateMarketInfographic(body: {
+    summary?: string
+    direction?: 'bullish' | 'bearish' | 'neutral'
+    confidence?: number
+    key_points?: string[]
+  }): Promise<{ image_b64: string; prompt: string; signal_count: number }> {
+    return fetchAPI<{ image_b64: string; prompt: string; signal_count: number }>(
+      '/api/insights/infographic',
+      { method: 'POST', body: JSON.stringify(body) },
+    )
+  },
+
+  async queueVideoRecap(body: { prompt?: string; duration?: string; resolution?: string } = {}): Promise<VideoRecapQueueResponse> {
+    return fetchAPI<VideoRecapQueueResponse>('/api/video/recap', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  },
+
+  async getVideoRecap(queueId: string, model?: string): Promise<VideoRecapStatusResponse> {
+    const params = new URLSearchParams()
+    if (model) params.set('model', model)
+    const qs = params.toString()
+    return fetchAPI<VideoRecapStatusResponse>(
+      `/api/video/recap/${encodeURIComponent(queueId)}${qs ? `?${qs}` : ''}`,
+    )
   },
 
   async getNews(refresh = false): Promise<NewsResponse> {
@@ -842,8 +1480,8 @@ export const api = {
   async getNewsArticle(url: string): Promise<{ url: string; title: string; content: string }> {
     return fetchAPI<{ url: string; title: string; content: string }>(`/api/news/article?url=${encodeURIComponent(url)}`)
   },
-  async analyzeMarket(prices: Record<string, unknown> = {}, usage: Record<string, unknown> = {}): Promise<{ analysis: MarketAnalysis; articles: NewsArticle[]; decisions: MarketDecisions | null; decisions_status?: DecisionsStatus }> {
-    return fetchAPI<{ analysis: MarketAnalysis; articles: NewsArticle[]; decisions: MarketDecisions | null; decisions_status?: DecisionsStatus }>('/api/insights/analyze', { method: 'POST', body: JSON.stringify({ prices, usage }) })
+  async analyzeMarket(prices: Record<string, unknown> = {}, usage: Record<string, unknown> = {}): Promise<{ analysis: MarketAnalysis; articles: NewsArticle[]; decisions: MarketDecisions | null; decisions_status?: DecisionsStatus; signal_id?: number | null }> {
+    return fetchAPI<{ analysis: MarketAnalysis; articles: NewsArticle[]; decisions: MarketDecisions | null; decisions_status?: DecisionsStatus; signal_id?: number | null }>('/api/insights/analyze', { method: 'POST', body: JSON.stringify({ prices, usage }) })
   },
   async queryAssistant(query: string, history: Array<{ role: string; content: string }> = []): Promise<{ answer: string; tool_calls: unknown[] }> {
     return fetchAPI<{ answer: string; tool_calls: unknown[] }>('/api/assistant/query', { method: 'POST', body: JSON.stringify({ query, history }) })

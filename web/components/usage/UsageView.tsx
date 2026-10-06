@@ -6,6 +6,8 @@ import { formatNumber, formatCurrency, formatDate } from '@/lib/utils'
 import { DataState } from '@/components/ui/data-state'
 import { useDisplayPreferences } from '@/components/PreferencesProvider'
 import { BarChart3, Activity, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { ObservabilityCard } from '@/components/usage/ObservabilityCard'
+import { ExportMenu } from '@/components/ui/export-menu'
 import {
   LineChart,
   Line,
@@ -80,12 +82,33 @@ export function UsageView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Usage Analytics</h1>
-        <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-          <Activity className="w-4 h-4" />
-          {today}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Usage Analytics</h1>
+          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+            <Activity className="w-4 h-4" />
+            {today}
+          </p>
+        </div>
+        <ExportMenu
+          name="usage"
+          snapshot={() => ({
+            epoch: epochUsage ?? null,
+            keys: keysUsage ?? null,
+            key_analytics: keyAnalytics ?? null,
+            trends: trends ?? null,
+          })}
+          rows={() =>
+            (trends?.data ?? []).map((point) => ({
+              timestamp: point.timestamp,
+              scope: point.scope,
+              diem: point.diem,
+              usd: point.usd,
+              bundled_credits: point.bundled_credits,
+              earned_credits: point.earned_credits,
+            }))
+          }
+        />
       </div>
 
       {isError && (
@@ -374,6 +397,8 @@ export function UsageView() {
               </CardContent>
             </Card>
           )}
+
+          <ObservabilityCard />
         </>
       )}
     </div>

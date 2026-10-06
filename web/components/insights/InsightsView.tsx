@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toast } from 'sonner'
+import { AiToolsPanel } from '@/components/insights/AiToolsPanel'
+import { SignalHistory } from '@/components/insights/SignalHistory'
 
 // Sentiment score levels — must match backend _build_market_questions().
 const SENTIMENT_LEVELS = [
@@ -244,6 +246,8 @@ export function InsightsView() {
           Typed judgments unavailable — Venice&apos;s beta decision model didn&apos;t respond. The briefing above is unaffected.
         </p>
       )}
+      <AiToolsPanel analysis={analysis} />
+      <SignalHistory />
     </div>
   )
 }

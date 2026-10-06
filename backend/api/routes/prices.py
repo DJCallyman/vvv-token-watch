@@ -11,7 +11,7 @@ from backend.core.venicestats_client import VeniceStatsError
 from backend.database import get_db
 from backend.limiter import limiter
 from backend.services.price_history_service import get_price_history, record_price_snapshot
-from backend.services import alert_engine
+from backend.services import alert_engine, notification_service
 from backend.services.app_settings import get_effective_settings
 
 logger = logging.getLogger(__name__)
@@ -176,7 +176,19 @@ async def get_prices(
 
         if price_alert_metrics:
             try:
-                await alert_engine.evaluate_alerts(db, price_alert_metrics)
+                history: dict = {}
+                for token_id in ("vvv", "diem"):
+                    points = await get_price_history(db, token_id=token_id, range_key="24h")
+                    metric_key = f"{token_id}_price_usd"
+                    history[metric_key] = [
+                        {"timestamp": point.get("timestamp"), "value": point.get("price_usd")}
+                        for point in points
+                        if point.get("price_usd") is not None
+                    ]
+                events = await alert_engine.evaluate_alerts(
+                    db, price_alert_metrics, history
+                )
+                await notification_service.deliver_events(db, events)
             except Exception:
                 logger.exception("Alert evaluation failed during price poll")
 

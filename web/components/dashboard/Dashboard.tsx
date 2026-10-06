@@ -9,6 +9,7 @@ import { HeroBalanceCard } from './HeroBalanceCard'
 import { TodayUsageCard } from './TodayUsageCard'
 import { PriceCards } from './PriceCards'
 import { UsageLeaderboardCard } from './UsageLeaderboardCard'
+import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist'
 
 const DEFAULT_LAYOUT: DashboardWidget[] = [
   'balance',
@@ -91,6 +92,7 @@ export function Dashboard() {
 
   return (
     <section aria-label="Dashboard" className="space-y-4">
+      <OnboardingChecklist />
       <div className="flex justify-end">
         <Button
           type="button"

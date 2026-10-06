@@ -8,6 +8,7 @@ import { RefreshCw, ExternalLink } from 'lucide-react'
 import { toast } from 'sonner'
 import { DataState } from '@/components/ui/data-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { NewsSearchPanel } from '@/components/news/NewsSearchPanel'
 
 export function NewsView() {
   const { data, isLoading, isError, isFetching, refetch } = useNews()
@@ -34,6 +35,7 @@ export function NewsView() {
       )} />
     )}
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{data?.articles.map((item) => <Card key={`${item.url}-${item.title}`}><CardHeader><CardTitle className="text-lg">{item.title}</CardTitle><CardDescription>{item.source || 'Web'}{item.date ? ` · ${item.date}` : ''}</CardDescription></CardHeader><CardContent><p className="text-sm text-muted-foreground line-clamp-3">{item.snippet}</p><div className="mt-4 flex gap-3">{item.url && <><button type="button" onClick={() => setSelected(item.url)} className="text-sm text-primary hover:underline">Read article</button><a href={item.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">Open source <ExternalLink className="w-3 h-3" /></a></>}</div></CardContent></Card>)}</div>
+    <NewsSearchPanel />
      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
        <DialogContent className="max-w-3xl">
          <DialogTitle>{article.data?.title || 'Article'}</DialogTitle>

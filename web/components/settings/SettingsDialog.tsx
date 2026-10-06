@@ -48,6 +48,7 @@ export function SettingsDialog() {
   const update = useUpdateSettings()
   const reset = useResetSettings()
   const [form, setForm] = useState<SettingsForm>(EMPTY_FORM)
+  const [formError, setFormError] = useState<string | null>(null)
   const billingReconciliationId = useId()
   const holdingSourceId = useId()
   const walletAddressId = useId()
@@ -79,6 +80,19 @@ export function SettingsDialog() {
 
   const submit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    setFormError(null)
+    const refreshInterval = Number(form.refresh_interval_seconds)
+    if (
+      !Number.isInteger(refreshInterval) ||
+      refreshInterval < 15 ||
+      refreshInterval > 900 ||
+      refreshInterval % 15 !== 0
+    ) {
+      setFormError(
+        'Refresh interval must be a whole number between 15 and 900 in 15-second steps.',
+      )
+      return
+    }
     update.mutate({
       coingecko_holding_amount: Number(form.coingecko_holding_amount),
       diem_holding_amount: Number(form.diem_holding_amount),
@@ -87,7 +101,7 @@ export function SettingsDialog() {
       benchmark_max_cost_usd: Number(form.benchmark_max_cost_usd),
       benchmark_enable_billing_reconciliation: form.benchmark_enable_billing_reconciliation,
       benchmark_judge_model: form.benchmark_judge_model.trim(),
-      refresh_interval_seconds: Number(form.refresh_interval_seconds),
+      refresh_interval_seconds: refreshInterval,
       in_app_notifications_enabled: form.in_app_notifications_enabled,
       display_currency: form.display_currency,
       timezone: form.timezone.trim(),
@@ -126,6 +140,11 @@ export function SettingsDialog() {
             <p className="text-sm text-muted-foreground">Loading settings...</p>
           ) : (
             <form onSubmit={submit} className="space-y-5">
+              {formError && (
+                <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {formError}
+                </p>
+              )}
               <section className="space-y-3">
                 <h3 className="font-medium">Display &amp; notifications</h3>
                 <label htmlFor={refreshIntervalId} className="space-y-1 text-sm">
@@ -232,7 +251,15 @@ export function SettingsDialog() {
                 </label>
               </section>
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => reset.mutate()} disabled={reset.isPending}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setFormError(null)
+                    reset.mutate()
+                  }}
+                  disabled={reset.isPending}
+                >
                   Reset defaults
                 </Button>
                 <Button type="submit" disabled={update.isPending}>

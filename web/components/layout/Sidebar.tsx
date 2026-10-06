@@ -18,6 +18,7 @@ import {
   Newspaper,
   Brain,
   MessageSquare,
+  FileText,
 } from 'lucide-react'
 
 export const navigationItems = [
@@ -33,6 +34,7 @@ export const navigationItems = [
   { name: 'Benchmark', href: '/benchmark', icon: FlaskConical },
   { name: 'News', href: '/news', icon: Newspaper },
   { name: 'AI Insights', href: '/insights', icon: Brain },
+  { name: 'Documents', href: '/documents', icon: FileText },
   { name: 'Assistant', href: '/assistant', icon: MessageSquare },
 ]
 

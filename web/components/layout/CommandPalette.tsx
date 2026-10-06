@@ -3,13 +3,14 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { Moon, RefreshCw, Sun } from 'lucide-react'
+import { Moon, RefreshCw, Sun, Keyboard } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTheme } from '@/components/ThemeProvider'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { navigationItems } from './Sidebar'
+import { HELP_EVENT } from '@/components/help/HelpDialog'
 
 interface PaletteCommand {
   id: string
@@ -89,6 +90,16 @@ export function CommandPalette() {
         run: () => {
           toggleTheme()
           setOpen(false)
+        },
+      },
+      {
+        id: 'action:help',
+        label: 'Keyboard shortcuts & glossary',
+        keywords: 'help glossary keyboard shortcuts documentation',
+        icon: Keyboard,
+        run: () => {
+          setOpen(false)
+          window.dispatchEvent(new Event(HELP_EVENT))
         },
       },
     ], [queryClient, router, theme, toggleTheme])

@@ -23,6 +23,18 @@ const defaultSettings = {
   dashboard_layout: ['balance', 'usage', 'prices', 'usage_leaderboard'],
 }
 
+// The dashboard also renders the onboarding checklist, which uses <li>
+// elements; scope layout assertions to widgets that carry data-widget-id.
+const widgetIds = () =>
+  screen
+    .getAllByRole('listitem')
+    .map((item) => item.getAttribute('data-widget-id'))
+    .filter((id): id is string => id !== null)
+
+beforeEach(() => {
+  window.localStorage.clear()
+})
+
 describe('Dashboard layout preferences', () => {
   const mutateAsync = jest.fn()
 
@@ -79,5 +91,55 @@ describe('Dashboard layout preferences', () => {
         dashboard_layout: ['prices', 'balance', 'usage', 'usage_leaderboard'],
       })
     })
+  })
+
+  it('applies the stored layout on mount', () => {
+    mockUseSettings.mockReturnValue({
+      data: { dashboard_layout: ['prices', 'balance', 'usage', 'usage_leaderboard'] },
+      isLoading: false,
+    } as any)
+
+    render(<Dashboard />)
+
+    expect(widgetIds()).toEqual(['prices', 'balance', 'usage', 'usage_leaderboard'])
+  })
+
+  it('rolls back the optimistic layout when saving fails', async () => {
+    mutateAsync.mockRejectedValueOnce(new Error('save failed'))
+    render(<Dashboard />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move Token prices up' }))
+
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(widgetIds()).toEqual(['balance', 'usage', 'prices', 'usage_leaderboard'])
+    })
+  })
+
+  it('disables move controls at list bounds', () => {
+    render(<Dashboard />)
+
+    expect(screen.getByRole('button', { name: 'Move Account balance up' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Move API key usage down' })).toBeDisabled()
+  })
+
+  it('keeps every widget reachable at mobile and desktop viewport sizes', () => {
+    const { unmount } = render(<Dashboard />)
+    const grid = screen.getByRole('list', { name: 'Dashboard widgets' })
+    // Responsive single-column layout expands to a three-column grid on lg+.
+    expect(grid.className).toContain('grid-cols-1')
+    expect(grid.className).toContain('lg:grid-cols-3')
+    expect(widgetIds()).toHaveLength(4)
+
+    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 375 })
+    window.dispatchEvent(new Event('resize'))
+    expect(widgetIds()).toHaveLength(4)
+
+    unmount()
+    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 1440 })
+    render(<Dashboard />)
+    expect(widgetIds()).toHaveLength(4)
   })
 })

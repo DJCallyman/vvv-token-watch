@@ -7,6 +7,7 @@ import { formatCurrency, formatNumber } from '@/lib/utils'
 import { Coins, Wallet } from 'lucide-react'
 import { PriceChart } from '@/components/prices/PriceChart'
 import { DataState } from '@/components/ui/data-state'
+import { ExportMenu } from '@/components/ui/export-menu'
 import { useDisplayPreferences } from '@/components/PreferencesProvider'
 import type { DisplayCurrency } from '@/lib/api'
 
@@ -52,11 +53,35 @@ export function PricesView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Token Prices</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Live prices from VeniceStats with ECB-based AUD conversion
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Token Prices</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Live prices from VeniceStats with ECB-based AUD conversion
+          </p>
+        </div>
+        <ExportMenu
+          name="prices"
+          snapshot={() => prices as unknown as Record<string, unknown>}
+          rows={() => [
+            {
+              token: 'VVV',
+              usd: vvvPrice,
+              aud: vvvAud,
+              change_24h: prices.vvv?.change_24h,
+              market_cap: prices.vvv?.market_cap,
+              holdings: vvvHoldings,
+            },
+            {
+              token: 'DIEM',
+              usd: diemPrice,
+              aud: diemAud,
+              change_24h: prices.diem?.change_24h,
+              market_cap: prices.diem?.market_cap,
+              holdings: diemHoldings,
+            },
+          ]}
+        />
       </div>
 
       {isError && (

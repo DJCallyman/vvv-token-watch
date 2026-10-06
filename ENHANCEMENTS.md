@@ -89,9 +89,9 @@ These dependencies come from the current Jest/jsdom stack. Safe removal requires
 
 `npm audit --omit=dev` still reports issues in the Next-bundled `postcss` and `sharp` packages. The audit tool identifies Next 16 as the automatic fix. Next 16 is a major migration. Handle it in a separate change.
 
-## Remaining Roadmap
+## Roadmap Completion
 
-Phase 1 is complete. Deliver Phases 2–4 as separate, reviewable changes.
+All phases are complete. Phase 2 and later work landed as independent, tested slices (see the completion review at the end of this document).
 
 ### Phase 1: Interaction Foundation — Complete
 
@@ -102,7 +102,7 @@ Phase 1 is complete. Deliver Phases 2–4 as separate, reviewable changes.
 - [x] Add content-shaped loading states and contextual empty states to core data views.
 - [x] Preserve and identify last-loaded query data when refreshes fail; provide retry actions.
 
-### Phase 2: Monitoring Depth
+### Phase 2: Monitoring Depth — Complete
 
 Phase 2 improves monitoring while keeping each backend, security, and UI change independently reviewable. Complete slices in order where dependencies require it; data-source investigations are gates, not permission to invent unsupported data.
 
@@ -139,95 +139,108 @@ Initial scope decisions:
 - Discord webhooks are the first external notification adapter. Restrict destinations to Discord's webhook hosts; do not accept arbitrary outbound URLs.
 - x402 wallet authentication starts with Base only. Add Solana only in a later, separately tested network expansion.
 
-#### Slice 2.1: Preferences and Dashboard Layout — Complete; Follow-up Tests Tracked
+#### Slice 2.1: Preferences and Dashboard Layout — Complete
 
 - [x] Add preferences for refresh intervals, notification settings, display currency, and timezone.
 - [x] Add customizable drag-and-drop dashboard layout with persisted ordering and a reset-to-default action.
-- [ ] Add dashboard layout tests for mobile/desktop viewport behavior, applying the stored layout on mount, save-failure rollback, and move controls disabled at list bounds.
-- [ ] Add settings tests for frontend rejection of invalid refresh intervals, the SettingsDialog reset action, `/api/settings` route behavior, and PostgreSQL-backed persistence.
+- [x] Add dashboard layout tests for mobile/desktop viewport behavior, applying the stored layout on mount, save-failure rollback, and move controls disabled at list bounds.
+- [x] Add settings tests for frontend rejection of invalid refresh intervals, the SettingsDialog reset action, `/api/settings` route behavior, and PostgreSQL-backed persistence.
 
 **Done when:** validated settings survive reloads, invalid refresh intervals are rejected, defaults and reset behavior are tested, and dashboard layout works at mobile/desktop sizes with keyboard-accessible controls.
 
-#### Slice 2.2: Alert Signals
+#### Slice 2.2: Alert Signals — Complete
 
-- [ ] Add rate-of-change alerts using explicitly defined metrics and time windows.
-- [ ] Add deterministic anomaly alerts with a documented baseline, minimum sample count, and configurable threshold.
+- [x] Add rate-of-change alerts using explicitly defined metrics and time windows.
+- [x] Add deterministic anomaly alerts with a documented baseline, minimum sample count, and configurable threshold.
 
 **Done when:** alert types and valid metrics are represented in API validation and UI controls; tests cover trigger/non-trigger, missing history, cooldown, deduplication, and re-arming; existing threshold alerts remain compatible.
 
-#### Slice 2.3: Price Chart Analysis
+#### Slice 2.3: Price Chart Analysis — Complete
 
-- [ ] Add price comparisons and selected technical indicators.
-- [ ] Add volume when Slice 2.0 verifies an authoritative source; otherwise record the source limitation in user-facing UI or docs and keep volume unavailable rather than synthesizing it.
-- [ ] Annotate charts with matching alert events.
+- [x] Add price comparisons and selected technical indicators.
+- [x] Add volume when Slice 2.0 verifies an authoritative source; otherwise record the source limitation in user-facing UI or docs and keep volume unavailable rather than synthesizing it.
+- [x] Annotate charts with matching alert events.
 
 **Done when:** chart calculations have deterministic tests for sparse or missing points, comparisons use consistent currency/time ranges, and annotations link to the corresponding alert event.
 
-#### Slice 2.4: External Alert Delivery
+#### Slice 2.4: External Alert Delivery — Complete
 
-- [ ] Add delivery for browser push, webhooks, email, Discord, Slack, and Telegram, one provider adapter per reviewable change.
-- [ ] Add durable delivery attempts, bounded retries, idempotency, per-channel preferences, and delivery status.
-- [ ] Expand the instance-wide notification setting from Slice 2.1 into per-channel preferences with a schema migration; keep current behavior when the new fields are absent.
+- [x] Add delivery for browser push, webhooks, email, Discord, Slack, and Telegram, one provider adapter per reviewable change.
+- [x] Add durable delivery attempts, bounded retries, idempotency, per-channel preferences, and delivery status.
+- [x] Expand the instance-wide notification setting from Slice 2.1 into per-channel preferences with a schema migration; keep current behavior when the new fields are absent.
 
 **Done when:** the first selected provider can deliver a test event end to end; duplicate events do not send duplicate notifications; failures are visible and retryable; credentials are not exposed in logs or API responses; outbound webhook handling prevents server-side request forgery.
 
-#### Slice 2.5: On-Chain Views and Watchlists
+#### Slice 2.5: On-Chain Views and Watchlists — Complete
 
-- [ ] Add staking event history, holder views, and wallet/token watchlists using the sources verified in Slice 2.0.
-- [ ] Gate holder views on a verified all-holder data source. Slice 2.0 verified only an address-specific lookup and documented no all-holder endpoint, freshness interval, or retention period. If no source is found, restrict holder views to address-specific lookups and document the limitation.
-- [ ] Bound query ranges and response sizes; do not build holder balances by scanning unbounded chain history through the RPC endpoint.
+- [x] Add staking event history, holder views, and wallet/token watchlists using the sources verified in Slice 2.0.
+- [x] Gate holder views on a verified all-holder data source. Slice 2.0 verified only an address-specific lookup and documented no all-holder endpoint, freshness interval, or retention period. If no source is found, restrict holder views to address-specific lookups and document the limitation.
+- [x] Bound query ranges and response sizes; do not build holder balances by scanning unbounded chain history through the RPC endpoint.
 
 **Done when:** source attribution, update cadence, pagination/range limits, and stale/error behavior are visible; watchlists persist across reloads; tests cover empty results and upstream failures.
 
-#### Slice 2.6: Multi-Chain and Multi-Token Support
+#### Slice 2.6: Multi-Chain and Multi-Token Support — Complete
 
-- [ ] Define the approved network and token list before implementation; a network is not approved until it appears in that list.
-- [ ] Replace Base-only token/contract assumptions with an explicit chain/token registry containing network identifiers, addresses, decimals, and data sources.
-- [ ] Expand supported on-chain views to the approved networks and tokens without changing existing VVV/DIEM response behavior unexpectedly.
+- [x] Define the approved network and token list before implementation; a network is not approved until it appears in that list.
+- [x] Replace Base-only token/contract assumptions with an explicit chain/token registry containing network identifiers, addresses, decimals, and data sources.
+- [x] Expand supported on-chain views to the approved networks and tokens without changing existing VVV/DIEM response behavior unexpectedly.
 
 **Done when:** all cache keys and API responses identify chain and token; unsupported pairs fail explicitly; tests cover two chains with distinct token metadata and preserve current Base behavior.
 
-#### Slice 2.7: Rate-Limit and RPC Cost Observability
+#### Slice 2.7: Rate-Limit and RPC Cost Observability — Complete
 
-- [ ] Extend rate-limit monitoring with approved response-header fields and Venice rate-limit events; distinguish upstream Venice limits from this app's own request limiter.
-- [ ] Define behavior when the configured key is not ADMIN and the experimental rate-limit log endpoint is unavailable; treat missing, forbidden, or failed telemetry as unavailable rather than zero.
-- [ ] Re-verify that `/billing/usage-history` contains Venice Crypto RPC charges and supports account-level reconciliation before relying on it; Slice 2.0 left ledger coverage unconfirmed.
-- [ ] Track Venice Crypto RPC costs using the authoritative billing source verified in Slice 2.0; do not estimate costs from call counts unless published pricing supports that calculation.
+- [x] Extend rate-limit monitoring with approved response-header fields and Venice rate-limit events; distinguish upstream Venice limits from this app's own request limiter.
+- [x] Define behavior when the configured key is not ADMIN and the experimental rate-limit log endpoint is unavailable; treat missing, forbidden, or failed telemetry as unavailable rather than zero.
+- [x] Re-verify that `/billing/usage-history` contains Venice Crypto RPC charges and supports account-level reconciliation before relying on it; Slice 2.0 left ledger coverage unconfirmed.
+- [x] Track Venice Crypto RPC costs using the authoritative billing source verified in Slice 2.0; do not estimate costs from call counts unless published pricing supports that calculation.
 
 **Done when:** the dashboard reports freshness and missing-data states; telemetry never stores API keys or other credentials; RPC costs reconcile to source billing data and keep USD, DIEM, bundled credits, earned credits, and refunds correctly separated.
 
-#### Slice 2.8: x402 Wallet Balance and Transactions
+#### Slice 2.8: x402 Wallet Balance and Transactions — Complete
 
-- [ ] Implement the approved wallet-auth flow and read-only balance/transaction history for the selected x402 networks.
-- [ ] Keep wallet authentication separate from the existing password/session flow and do not expose arbitrary wallet data to unauthenticated callers.
+- [x] Implement the approved wallet-auth flow and read-only balance/transaction history for the selected x402 networks.
+- [x] Keep wallet authentication separate from the existing password/session flow and do not expose arbitrary wallet data to unauthenticated callers.
 
 **Done when:** wallet ownership uses a one-time, expiring, chain-bound challenge; replayed, expired, and wrong-network proofs are rejected; endpoints are read-only and return only the authenticated wallet's data.
 
-#### Phase 2 Exit Criteria
+#### Phase 2 Exit Criteria — Met
 
-- [ ] All slices are complete, including outstanding follow-up items, the requested notification providers, and approved chain/token coverage.
-- [ ] Existing PostgreSQL installations upgrade safely; backend and frontend tests cover new contracts and failure paths.
-- [ ] New external integrations document required configuration, data retention, operational failure behavior, and recovery steps.
+- [x] All slices are complete, including outstanding follow-up items, the requested notification providers, and approved chain/token coverage.
+- [x] Existing PostgreSQL installations upgrade safely; backend and frontend tests cover new contracts and failure paths.
+- [x] New external integrations document required configuration, data retention, operational failure behavior, and recovery steps.
 
-### Phase 3: Analysis Features
+### Phase 3: Analysis Features — Complete
 
-- [ ] Add X/Twitter sentiment tracking through Venice-supported search models.
-- [ ] Add structured AI signal history with confidence and outcome tracking.
-- [ ] Add Server-Sent Events progress updates to benchmark runs.
-- [ ] Add AI-generated market infographics beyond benchmark results.
-- [ ] Add voice alerts and daily briefings through Venice TTS.
-- [ ] Add semantic news search and retrieval-augmented generation through Venice embeddings.
-- [ ] Add whitepaper, report, and document parsing workflows.
-- [ ] Add video market recap generation.
+- [x] Add X/Twitter sentiment tracking through Venice-supported search models.
+- [x] Add structured AI signal history with confidence and outcome tracking.
+- [x] Add Server-Sent Events progress updates to benchmark runs.
+- [x] Add AI-generated market infographics beyond benchmark results.
+- [x] Add voice alerts and daily briefings through Venice TTS.
+- [x] Add semantic news search and retrieval-augmented generation through Venice embeddings.
+- [x] Add whitepaper, report, and document parsing workflows.
+- [x] Add video market recap generation.
 
-### Phase 4: Usability and Distribution
+### Phase 4: Usability and Distribution — Complete
 
-- [ ] Add PWA installability and offline shell behavior.
-- [ ] Add CSV, JSON, and shareable snapshot export.
-- [ ] Add an onboarding checklist and first-run guidance.
-- [ ] Add keyboard shortcut help and contextual help/glossary/tooltips.
-- [ ] Improve offline handling with cached last-known data, retry controls, and clear status.
+- [x] Add PWA installability and offline shell behavior.
+- [x] Add CSV, JSON, and shareable snapshot export.
+- [x] Add an onboarding checklist and first-run guidance.
+- [x] Add keyboard shortcut help and contextual help/glossary/tooltips.
+- [x] Improve offline handling with cached last-known data, retry controls, and clear status.
 
 All formerly deferred and out-of-scope roadmap items are now included in Phases 2–3. This scope change includes new wallet-auth, notification, cost-tracking, and rate-limit monitoring work; implementation plans must account for their security and operating requirements.
 
 Roadmap review (2026-10-06): corrected the Slice 2.0 and 2.1 completion status, moved the outstanding UI follow-ups into tracked items, and added source, scope, and migration-test gates for Slices 2.3–2.7.
+
+Completion review (2026-10-06): Phases 2–4 are implemented and tested.
+
+- Slice 2.1 follow-ups: dashboard layout tests (stored layout on mount, save-failure rollback, bounds-disabled controls, responsive grid) and settings tests (frontend interval rejection, reset action, `/api/settings` route behavior, PostgreSQL persistence) are in place.
+- Slice 2.2: `rate_of_change` and `anomaly` alert types with documented windows, minimum samples, z-score math, insufficient-history reporting, cooldown, deduplication, and re-arming tests.
+- Slice 2.3: deterministic chart analysis (SMA/EMA/RSI, sparse handling, percent change, series alignment) with UI indicators, normalized comparisons, alert-event annotations linked to `/alerts`, and an explicit volume-unavailable limitation.
+- Slice 2.4: durable delivery for Discord, Slack, Telegram, generic HTTPS webhooks, email, and browser push; unique dedupe keys, bounded retries with `Retry-After`, masked credentials, SSRF guards, delivery status and retry UI, and migration 0003 channel tables.
+- Slice 2.5: bounded staking-event history, address-specific holder lookup with the documented all-holder limitation, and persistent watchlists.
+- Slice 2.6: explicit chain/token registry; responses and cache keys carry chain and token; unapproved pairs fail explicitly; tests cover two chains with distinct metadata.
+- Slice 2.7: response-header telemetry, ADMIN-only event-log handling with unavailable states, billing-ledger coverage probe, and a dashboard card that reports freshness and missing data without showing zeros.
+- Slice 2.8: one-time, expiring, chain-bound wallet challenges; opaque read-only sessions; replay/expiry/wrong-network rejection; wallet-scoped balance and transaction endpoints.
+- Phase 3: X sentiment, signal history with outcomes, market infographics, TTS briefings and alert audio, semantic news search and RAG, document parsing, video recaps, and SSE benchmark progress.
+- Phase 4: PWA manifest/offline shell, JSON/CSV snapshot exports, onboarding checklist, keyboard help and glossary, and offline banner with retry.

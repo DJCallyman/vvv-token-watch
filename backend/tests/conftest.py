@@ -113,7 +113,9 @@ class FakeVeniceAPIClient:
         assert queue, f"Exhausted queue for {method} {target}"
         return queue.pop(0)
 
-    async def get(self, endpoint: str, params: Optional[Dict] = None) -> FakeResponse:
+    async def get(
+        self, endpoint: str, params: Optional[Dict] = None, timeout: float = 30.0
+    ) -> FakeResponse:
         self.calls.append(("GET", endpoint, params, None))
         return self._pop("GET", endpoint)
 
@@ -142,15 +144,21 @@ class FakeVeniceAPIClient:
             resp.raise_for_status()
         return resp.json()
 
-    async def post(self, endpoint: str, data: Optional[Dict] = None) -> FakeResponse:
+    async def post(
+        self, endpoint: str, data: Optional[Dict] = None, timeout: float = 30.0
+    ) -> FakeResponse:
         self.calls.append(("POST", endpoint, None, data))
         return self._pop("POST", endpoint)
 
-    async def put(self, endpoint: str, data: Optional[Dict] = None) -> FakeResponse:
+    async def put(
+        self, endpoint: str, data: Optional[Dict] = None, timeout: float = 30.0
+    ) -> FakeResponse:
         self.calls.append(("PUT", endpoint, None, data))
         return self._pop("PUT", endpoint)
 
-    async def patch(self, endpoint: str, data: Optional[Dict] = None) -> FakeResponse:
+    async def patch(
+        self, endpoint: str, data: Optional[Dict] = None, timeout: float = 30.0
+    ) -> FakeResponse:
         self.calls.append(("PATCH", endpoint, None, data))
         return self._pop("PATCH", endpoint)
 

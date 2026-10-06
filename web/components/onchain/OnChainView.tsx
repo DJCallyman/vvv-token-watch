@@ -7,6 +7,11 @@ import { DataState } from '@/components/ui/data-state'
 import { formatNumber } from '@/lib/utils'
 import { ArrowDownLeft, ArrowUpRight, Blocks, Coins, ExternalLink, Landmark, Search } from 'lucide-react'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { WatchlistCard } from '@/components/onchain/WatchlistCard'
+import { StakingEventsCard } from '@/components/onchain/StakingEventsCard'
+import { HolderLookupCard } from '@/components/onchain/HolderLookupCard'
+import { WalletSessionCard } from '@/components/onchain/WalletSessionCard'
+import { ExportMenu } from '@/components/ui/export-menu'
 
 export function OnChainView() {
   const { data: supply, isLoading: supplyLoading, isError: supplyError, refetch: refetchSupply } = useOnchainSupply()
@@ -19,11 +24,32 @@ export function OnChainView() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">On-Chain VVV</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Supply &amp; staking via VeniceStats · wallet data via Venice crypto RPC
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">On-Chain VVV</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Supply &amp; staking via VeniceStats · wallet data via Venice crypto RPC
+          </p>
+        </div>
+        <ExportMenu
+          name="onchain"
+          snapshot={() => ({
+            supply: supply ?? null,
+            staking: staking ?? null,
+            wallet_balance: balance ?? null,
+            transfers: transfers ?? null,
+          })}
+          rows={() =>
+            (transfers?.transfers ?? []).map((tx) => ({
+              direction: tx.direction,
+              from: tx.from,
+              to: tx.to,
+              value: tx.value_human,
+              tx_hash: tx.tx_hash,
+              block_number: tx.block_number,
+            }))
+          }
+        />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -215,6 +241,15 @@ export function OnChainView() {
           </CardContent>
         </Card>
       )}
+
+      <StakingEventsCard address={lookup} />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <WatchlistCard />
+        <HolderLookupCard />
+      </div>
+
+      <WalletSessionCard />
     </div>
   )
 }

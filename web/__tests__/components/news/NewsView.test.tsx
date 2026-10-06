@@ -1,21 +1,31 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { toast } from 'sonner'
 import { NewsView } from '@/components/news/NewsView'
-import { useNews, useNewsArticle } from '@/lib/hooks'
+import { useAskNews, useNews, useNewsArticle, useNewsSearch } from '@/lib/hooks'
 
 jest.mock('@/lib/hooks', () => ({
   useNews: jest.fn(),
   useNewsArticle: jest.fn(),
+  useNewsSearch: jest.fn(),
+  useAskNews: jest.fn(),
 }))
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }))
 
 const mockUseNews = useNews as jest.MockedFunction<typeof useNews>
 const mockUseNewsArticle = useNewsArticle as jest.MockedFunction<typeof useNewsArticle>
+const mockUseNewsSearch = useNewsSearch as jest.MockedFunction<typeof useNewsSearch>
+const mockUseAskNews = useAskNews as jest.MockedFunction<typeof useAskNews>
 
 beforeEach(() => {
   jest.clearAllMocks()
   mockUseNewsArticle.mockReturnValue(
     { data: undefined, isLoading: false } as unknown as ReturnType<typeof useNewsArticle>,
+  )
+  mockUseNewsSearch.mockReturnValue(
+    { mutate: jest.fn(), isPending: false, data: undefined } as unknown as ReturnType<typeof useNewsSearch>,
+  )
+  mockUseAskNews.mockReturnValue(
+    { mutate: jest.fn(), isPending: false, data: undefined } as unknown as ReturnType<typeof useAskNews>,
   )
 })
 

@@ -5,19 +5,20 @@ from __future__ import annotations
 import logging
 import asyncio
 import json
-from typing import List, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import AsyncSessionLocal, get_db
-from backend.models.db import AlertEvent
+from backend.models.db import AlertConfig, AlertEvent
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sse_starlette.sse import EventSourceResponse
 from backend.limiter import limiter
-from backend.services import alert_engine
+from backend.services import alert_engine, notification_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -25,24 +26,47 @@ router = APIRouter()
 
 class AlertConfigCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
-    alert_type: str = Field(..., pattern="^(usage_percent|balance_threshold|price_threshold)$")
+    alert_type: str = Field(
+        ...,
+        pattern="^(usage_percent|balance_threshold|price_threshold|rate_of_change|anomaly)$",
+    )
     metric: str = Field(..., min_length=1, max_length=64)
     threshold: float
     comparison: str = Field("gte", pattern="^(gte|lte)$")
     enabled: bool = True
+    window_seconds: Optional[int] = Field(None, ge=60, le=2_592_000)
+    min_samples: Optional[int] = Field(None, ge=2, le=1000)
+
+    @model_validator(mode="after")
+    def _validate_signal_definition(self):
+        error = alert_engine.validate_alert_definition(
+            self.alert_type,
+            self.metric,
+            self.window_seconds,
+            self.min_samples,
+        )
+        if error:
+            raise ValueError(error)
+        return self
 
 
 class AlertConfigUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=128)
-    alert_type: Optional[str] = Field(None, pattern="^(usage_percent|balance_threshold|price_threshold)$")
+    alert_type: Optional[str] = Field(
+        None,
+        pattern="^(usage_percent|balance_threshold|price_threshold|rate_of_change|anomaly)$",
+    )
     metric: Optional[str] = Field(None, min_length=1, max_length=64)
     threshold: Optional[float] = None
     comparison: Optional[str] = Field(None, pattern="^(gte|lte)$")
     enabled: Optional[bool] = None
+    window_seconds: Optional[int] = Field(None, ge=60, le=2_592_000)
+    min_samples: Optional[int] = Field(None, ge=2, le=1000)
 
 
 class EvaluateRequest(BaseModel):
     metrics: dict[str, float]
+    history: Dict[str, List[Dict[str, Any]]] = Field(default_factory=dict)
 
 
 def _config_dict(row) -> dict:
@@ -54,6 +78,8 @@ def _config_dict(row) -> dict:
         "threshold": row.threshold,
         "comparison": row.comparison,
         "enabled": row.enabled,
+        "window_seconds": row.window_seconds,
+        "min_samples": row.min_samples,
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
@@ -68,6 +94,12 @@ def _event_dict(row) -> dict:
         "value": row.value,
         "acknowledged": row.acknowledged,
     }
+
+
+async def _deliver_created_events(db: AsyncSession, events: List[AlertEvent]) -> None:
+    if not events:
+        return
+    await notification_service.deliver_events(db, events)
 
 
 @router.get("/alerts")
@@ -97,6 +129,8 @@ async def create_alert(
             threshold=body.threshold,
             comparison=body.comparison,
             enabled=body.enabled,
+            window_seconds=body.window_seconds,
+            min_samples=body.min_samples,
         )
         return _config_dict(row)
     except Exception:
@@ -111,13 +145,19 @@ async def update_alert(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        row = await alert_engine.update_alert_config(
-            db,
-            alert_id,
-            **body.model_dump(exclude_unset=True),
-        )
-        if row is None:
+        existing = await db.get(AlertConfig, alert_id)
+        if existing is None:
             raise HTTPException(404, f"Alert {alert_id} not found")
+        fields = body.model_dump(exclude_unset=True)
+        error = alert_engine.validate_alert_definition(
+            fields.get("alert_type", existing.alert_type),
+            fields.get("metric", existing.metric),
+            fields.get("window_seconds", existing.window_seconds),
+            fields.get("min_samples", existing.min_samples),
+        )
+        if error:
+            raise HTTPException(422, error)
+        row = await alert_engine.update_alert_config(db, alert_id, **fields)
         return _config_dict(row)
     except HTTPException:
         raise
@@ -198,10 +238,21 @@ async def evaluate_alerts(
     body: EvaluateRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Evaluate enabled alerts against provided metrics (used by pollers)."""
+    """Evaluate enabled alerts against provided metrics and history.
+
+    ``history`` is optional and only used by ``rate_of_change`` and
+    ``anomaly`` alerts: ``{metric: [{"timestamp": iso, "value": number}]}``.
+    """
     try:
-        events = await alert_engine.evaluate_alerts(db, body.metrics)
-        return {"created": len(events), "events": [_event_dict(e) for e in events]}
+        events, skipped = await alert_engine.evaluate_alerts_detailed(
+            db, body.metrics, body.history
+        )
+        await _deliver_created_events(db, events)
+        return {
+            "created": len(events),
+            "events": [_event_dict(e) for e in events],
+            "skipped": skipped,
+        }
     except Exception:
         logger.exception("Failed to evaluate alerts")
         raise HTTPException(500, "Failed to evaluate alerts")

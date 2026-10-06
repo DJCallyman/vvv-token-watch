@@ -1,12 +1,19 @@
 import React from 'react'
 import { fireEvent, render, screen } from '../../test-utils'
 import { PricesView } from '@/components/prices/PricesView'
-import { usePrices, usePriceHistory, useUpdateSettings } from '@/lib/hooks'
+import { useAlertEvents, useAlerts, usePrices, usePriceHistory, useUpdateSettings } from '@/lib/hooks'
 
 jest.mock('@/lib/hooks')
 const mockUsePrices = usePrices as jest.MockedFunction<typeof usePrices>
 const mockUsePriceHistory = usePriceHistory as jest.MockedFunction<typeof usePriceHistory>
 const mockUseUpdateSettings = useUpdateSettings as jest.MockedFunction<typeof useUpdateSettings>
+const mockUseAlerts = useAlerts as jest.MockedFunction<typeof useAlerts>
+const mockUseAlertEvents = useAlertEvents as jest.MockedFunction<typeof useAlertEvents>
+
+beforeEach(() => {
+  mockUseAlerts.mockReturnValue({ data: { alerts: [], count: 0 } } as any)
+  mockUseAlertEvents.mockReturnValue({ data: { events: [], count: 0 } } as any)
+})
 
 const pricesData = {
   vvv: { usd: 2.50, aud: 3.85 },

@@ -32,22 +32,51 @@ AsyncSessionLocal = async_sessionmaker(
 Base = declarative_base()
 
 
+# Tables created by baseline revision 0001_initial. Later migrations add more
+# tables/columns; an existing pre-Alembic database only needs the baseline
+# shape to be safely stamped at 0001 and then upgraded.
+_BASELINE_TABLES = {
+    "usage_snapshots",
+    "price_snapshots",
+    "alert_configs",
+    "alert_events",
+    "billing_entries",
+    "app_settings",
+}
+
+# Columns added by post-baseline migrations. They may be absent from an
+# existing pre-Alembic database; the migrations add them.
+_POST_BASELINE_COLUMNS = {
+    "usage_snapshots": {"earned_credits"},        # 0002_earned_credits
+    "alert_configs": {"window_seconds", "min_samples"},  # 0003_phase2_monitoring
+}
+
+
 def _validate_existing_schema(connection) -> None:
-    """Reject unsafe Alembic baselines for partially initialized databases."""
+    """Reject unsafe Alembic baselines for partially initialized databases.
+
+    Only the baseline (0001) shape is required. Tables and columns introduced
+    by later migrations are allowed to be missing; ``upgrade`` adds them.
+    """
     inspector = inspect(connection)
     existing_tables = set(inspector.get_table_names())
-    expected_tables = set(Base.metadata.tables)
-    missing_tables = expected_tables - existing_tables
-    missing_columns = []
+    baseline_present = existing_tables & _BASELINE_TABLES
 
+    if not baseline_present:
+        # Nothing recognizable: treat as a fresh database instead of refusing.
+        return
+
+    missing_tables = _BASELINE_TABLES - existing_tables
+    missing_columns = []
     for table_name, table in Base.metadata.tables.items():
-        if table_name not in existing_tables:
+        if table_name not in _BASELINE_TABLES or table_name not in existing_tables:
             continue
         existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
+        allowed_missing = _POST_BASELINE_COLUMNS.get(table_name, set())
         for column in table.columns:
-            if column.name not in existing_columns and not (
-                table_name == "usage_snapshots" and column.name == "earned_credits"
-            ):
+            if column.name in allowed_missing:
+                continue
+            if column.name not in existing_columns:
                 missing_columns.append(f"{table_name}.{column.name}")
 
     if missing_tables or missing_columns:

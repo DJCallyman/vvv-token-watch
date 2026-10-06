@@ -200,7 +200,7 @@ async def test_get_prices_uses_venicestats(
 
     alerts_seen = {}
 
-    async def fake_evaluate(db, metrics):
+    async def fake_evaluate(db, metrics, history=None):
         alerts_seen.update(metrics)
         return []
 
@@ -245,7 +245,7 @@ async def test_get_prices_degrades_without_fx(session, metrics_only, monkeypatch
     monkeypatch.setattr(app_settings, "get_effective_settings", fake_effective)
     monkeypatch.setattr(prices_routes, "get_effective_settings", fake_effective)
 
-    async def fake_evaluate(db, metrics):
+    async def fake_evaluate(db, metrics, history=None):
         return []
 
     monkeypatch.setattr(prices_routes.alert_engine, "evaluate_alerts", fake_evaluate)
@@ -280,7 +280,7 @@ async def test_get_prices_wallet_source_uses_onchain_balance(
 
     alerts_seen = {}
 
-    async def fake_evaluate(db, metrics):
+    async def fake_evaluate(db, metrics, history=None):
         alerts_seen.update(metrics)
         return []
 
@@ -346,7 +346,7 @@ async def test_get_prices_wallet_source_falls_back_on_failure(
     monkeypatch.setattr(app_settings, "get_effective_settings", fake_effective)
     monkeypatch.setattr(prices_routes, "get_effective_settings", fake_effective)
 
-    async def fake_evaluate(db, metrics):
+    async def fake_evaluate(db, metrics, history=None):
         return []
 
     monkeypatch.setattr(prices_routes.alert_engine, "evaluate_alerts", fake_evaluate)
