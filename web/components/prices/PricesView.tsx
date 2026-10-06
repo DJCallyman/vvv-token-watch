@@ -40,8 +40,12 @@ export function PricesView() {
   const vvvHoldings = prices.holdings?.vvv || 0
   const diemHoldings = prices.holdings?.diem || 0
 
-  const vvvValueUsd = prices.portfolio?.vvv_value_usd || (vvvPrice * vvvHoldings)
-  const diemValueUsd = prices.portfolio?.diem_value_usd || (diemPrice * diemHoldings)
+  // The API reports `portfolio.vvv_value_usd` for unstaked wallet VVV only,
+  // while `holdings.vvv` is the full position (wallet + staked sVVV +
+  // unclaimed rewards). Derive both currencies from the displayed quantity so
+  // the USD total matches the AUD total and the token count shown.
+  const vvvValueUsd = vvvPrice * vvvHoldings
+  const diemValueUsd = diemPrice * diemHoldings
 
   const vvvValueAud = vvvAud != null ? vvvAud * vvvHoldings : null
   const diemValueAud = diemAud != null ? diemAud * diemHoldings : null

@@ -131,6 +131,34 @@ describe('PricesView — success', () => {
     expect(screen.getByText('$6,875.00')).toBeInTheDocument()
   })
 
+  it('values the full wallet position in USD, not just unstaked VVV', () => {
+    // Wallet source: holdings.vvv = 100 unstaked + 200 sVVV + 5 rewards.
+    // The API's portfolio.vvv_value_usd only covers the 100 unstaked VVV.
+    mockUsePrices.mockReturnValue({
+      data: {
+        vvv: { usd: 2.5, aud: 3.85 },
+        diem: { usd: 0.01, aud: 0.015 },
+        holdings: { vvv: 305, diem: 4 },
+        portfolio: {
+          vvv_value_usd: 250,
+          svvv_value_usd: 500,
+          unclaimed_rewards_value_usd: 12.5,
+          diem_value_usd: 0.04,
+          total_usd: 762.54,
+        },
+      },
+      isLoading: false,
+      isError: false,
+    } as any)
+
+    render(<PricesView />)
+
+    // 305 * 2.50 = 762.50 in both the holdings line and the portfolio tile.
+    expect(screen.getAllByText('$762.50').length).toBeGreaterThan(0)
+    // The wallet-only subtotal must not be shown as the total.
+    expect(screen.queryByText('$250.00')).not.toBeInTheDocument()
+  })
+
   it('renders portfolio DIEM value', () => {
     render(<PricesView />)
     // formatCurrency(5.0) → "$5.00"
