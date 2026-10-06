@@ -98,14 +98,41 @@ export function UsageView() {
       )}
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardContent className="flex items-center justify-center h-24">
-                <div className="animate-pulse text-muted-foreground">Loading...</div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="space-y-6">
+          <div role="region" aria-label="Loading usage summary" aria-busy="true" className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {['diem', 'usd', 'keys', 'trend'].map((item) => (
+              <Card key={item} className="animate-pulse">
+                <CardContent className="space-y-3 py-4">
+                  <div className="h-4 w-2/3 rounded bg-muted" />
+                  <div className="h-8 w-1/2 rounded bg-muted" />
+                  <div className="h-3 w-1/3 rounded bg-muted" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Epoch Usage Trend</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TrendChartSkeleton label="Loading usage trends" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>7-Day Usage Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div role="region" aria-label="Loading 7-day usage summary" aria-busy="true" className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-pulse">
+                {['diem', 'usd', 'rate'].map((item) => (
+                  <div key={item} className="space-y-3">
+                    <div className="h-4 w-2/3 rounded bg-muted" />
+                    <div className="h-8 w-1/2 rounded bg-muted" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       ) : (
         <>
@@ -196,9 +223,7 @@ export function UsageView() {
             </CardHeader>
             <CardContent>
               {trendsLoading && (
-                <div className="h-56 flex items-center justify-center animate-pulse text-muted-foreground">
-                  Loading trends…
-                </div>
+                <TrendChartSkeleton label="Loading usage trends" />
               )}
               {!trendsLoading && trendChartData.length === 0 && (
                 <div className="h-56 flex items-center justify-center text-sm text-muted-foreground">
@@ -351,6 +376,23 @@ export function UsageView() {
           )}
         </>
       )}
+    </div>
+  )
+}
+
+function TrendChartSkeleton({ label }: { label: string }) {
+  return (
+    <div role="region" aria-label={label} aria-busy="true" className="h-56 animate-pulse space-y-3">
+      <div className="flex h-48 items-end gap-3 border-b border-l border-border px-4 pb-3">
+        {[38, 62, 48, 76, 54, 88, 68, 44].map((height) => (
+          <div key={height} className="flex-1 rounded-t bg-muted" style={{ height: `${height}%` }} />
+        ))}
+      </div>
+      <div className="flex justify-between px-4">
+        <div className="h-3 w-12 rounded bg-muted" />
+        <div className="h-3 w-12 rounded bg-muted" />
+        <div className="h-3 w-12 rounded bg-muted" />
+      </div>
     </div>
   )
 }

@@ -3,9 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CharactersView } from '@/components/characters/CharactersView'
 import { useCharacters } from '@/lib/hooks'
+import { toast } from 'sonner'
 import type { Character, GetCharactersParams } from '@/lib/api'
 
 jest.mock('@/lib/hooks')
+jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }))
 
 const mockUseCharacters = useCharacters as jest.MockedFunction<
   typeof useCharacters
@@ -72,11 +74,13 @@ function setupChars(
       data: { data: dataOverrides.characters ?? SAMPLE_CHARACTERS, object: 'list' as const },
       isLoading: opts.isLoading ?? false,
       isError: opts.isError ?? false,
-      refetch: jest.fn(),
+      refetch: mockRefetch,
       isFetching: false,
     } as ReturnType<typeof useCharacters>
   })
 }
+
+const mockRefetch = jest.fn()
 
 describe('CharactersView — loading', () => {
   beforeEach(() => {
@@ -105,6 +109,7 @@ describe('CharactersView — error', () => {
 
 describe('CharactersView — populated', () => {
   beforeEach(() => {
+    mockRefetch.mockResolvedValue({ isError: false })
     setupChars()
   })
 
@@ -118,6 +123,25 @@ describe('CharactersView — populated', () => {
     render(<CharactersView />)
     expect(screen.getByText('Alan Watts')).toBeInTheDocument()
     expect(screen.getByText('Ada Lovelace')).toBeInTheDocument()
+  })
+
+  it('notifies after a successful refresh', async () => {
+    const user = userEvent.setup()
+    render(<CharactersView />)
+
+    await user.click(screen.getByRole('button', { name: /refresh characters/i }))
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Characters refreshed'))
+  })
+
+  it('notifies when refresh fails', async () => {
+    const user = userEvent.setup()
+    mockRefetch.mockResolvedValue({ isError: true })
+    render(<CharactersView />)
+
+    await user.click(screen.getByRole('button', { name: /refresh characters/i }))
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to refresh characters'))
   })
 
   it('emits search param when typing (with debounce)', async () => {

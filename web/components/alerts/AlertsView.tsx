@@ -207,7 +207,17 @@ export function AlertsView() {
           </CardHeader>
           <CardContent>
             {alertsLoading && (
-              <div className="animate-pulse text-muted-foreground">Loading alerts…</div>
+              <div role="region" aria-label="Loading configured alerts" aria-busy="true" className="animate-pulse space-y-3">
+                {[0, 1, 2].map((item) => (
+                  <div key={item} className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-2/5 rounded bg-muted" />
+                      <div className="h-3 w-3/5 rounded bg-muted" />
+                    </div>
+                    <div className="h-8 w-8 rounded bg-muted" />
+                  </div>
+                ))}
+              </div>
             )}
             {alertsError && (
               <div className="text-destructive text-sm">Failed to load alerts</div>
@@ -254,7 +264,17 @@ export function AlertsView() {
         </CardHeader>
         <CardContent>
           {eventsLoading && (
-            <div className="animate-pulse text-muted-foreground">Loading events…</div>
+            <div role="region" aria-label="Loading recent alert events" aria-busy="true" className="animate-pulse space-y-3">
+              {[0, 1, 2].map((item) => (
+                <div key={item} className="flex items-center justify-between gap-3 rounded-md border border-border p-3">
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-3/4 rounded bg-muted" />
+                    <div className="h-3 w-2/5 rounded bg-muted" />
+                  </div>
+                  <div className="h-7 w-14 rounded bg-muted" />
+                </div>
+              ))}
+            </div>
           )}
           {eventsData && eventsData.events.length === 0 && (
             <p className="text-sm text-muted-foreground">No alert events yet.</p>

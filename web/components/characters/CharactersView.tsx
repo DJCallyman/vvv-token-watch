@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { CharacterCard } from './CharacterCard'
 import { CharacterDetailDrawer } from './CharacterDetailDrawer'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 
 const SORT_OPTIONS: { value: CharacterSortBy; label: string }[] = [
   { value: 'featured', label: 'Featured' },
@@ -88,6 +89,19 @@ export function CharactersView() {
     setIncludeAdult(false)
   }
 
+  const handleRefresh = async () => {
+    try {
+      const result = await refetch()
+      if (result.isError) {
+        toast.error('Failed to refresh characters')
+      } else {
+        toast.success('Characters refreshed')
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to refresh characters')
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -152,7 +166,7 @@ export function CharactersView() {
             </select>
             <button
               type="button"
-              onClick={() => refetch()}
+              onClick={() => void handleRefresh()}
               disabled={isFetching}
               className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm hover:bg-accent disabled:opacity-50"
               aria-label="Refresh characters"

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { api } from '@/lib/api'
+import { toast } from 'sonner'
 
 interface LogLine {
   text: string
@@ -205,8 +206,10 @@ export function BenchmarkProgress({ jobId, onComplete, onError, onCancelled }: P
     try {
       await api.cancelBenchmark(jobId)
       markCancelled()
-    } catch {
-      pushLine('Failed to cancel benchmark', 'error')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to cancel benchmark'
+      pushLine(message, 'error')
+      toast.error(message)
     } finally {
       setCancelling(false)
     }

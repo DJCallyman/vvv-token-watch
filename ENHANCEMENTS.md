@@ -110,13 +110,18 @@ Database changes must upgrade existing PostgreSQL installations. `create_all` cr
 
 #### Slice 2.0: Foundation and Source Verification — Complete
 
-- [x] Finish the Phase 1 follow-ups: feedback for all user-initiated async actions, visible keyboard focus on header controls, and content-shaped loading states in remaining data views.
+- [x] Add visible keyboard focus to header controls.
+- [x] Finish the Phase 1 feedback follow-up: add success and error feedback for infographic generation, benchmark cost estimates, CharactersView refresh, and benchmark cancel failures.
+- [x] Finish the Phase 1 loading-state follow-up: add content-shaped loading states in AlertsView, the UsageView summary and trends, BenchmarkView results, and ModelAnalytics.
 - [x] Decide whether preferences are instance-wide or account-specific. Use instance-wide preferences initially unless multi-user authentication is added.
 - [x] Establish and test the schema migration path against an existing PostgreSQL database before adding tables or columns.
 - [x] Verify authoritative sources and retention limits for price volume, staking events, holder data, Venice Crypto RPC charges, and rate-limit headers/events.
 - [x] Select the first external notification channel and define the initial x402 wallet/network scope; keep the remaining requested channels and supported networks in scope for follow-on slices.
+- [x] Document how to run the PostgreSQL migration integration test locally, including its dedicated disposable database requirement.
 
 **Done when:** the three UI follow-ups have focused tests; each source-dependent feature has a documented source, freshness/retention limits, and failure behavior; and schema changes can be applied without losing existing data.
+
+**Review note (2026-10-06):** the keyboard-focus, feedback, and loading-state follow-ups are complete with focused tests. The local migration-test recipe is documented in `backend/migrations/README.md`.
 
 Source investigation (2026-10-06):
 
@@ -134,10 +139,12 @@ Initial scope decisions:
 - Discord webhooks are the first external notification adapter. Restrict destinations to Discord's webhook hosts; do not accept arbitrary outbound URLs.
 - x402 wallet authentication starts with Base only. Add Solana only in a later, separately tested network expansion.
 
-#### Slice 2.1: Preferences and Dashboard Layout — Complete
+#### Slice 2.1: Preferences and Dashboard Layout — Complete; Follow-up Tests Tracked
 
 - [x] Add preferences for refresh intervals, notification settings, display currency, and timezone.
 - [x] Add customizable drag-and-drop dashboard layout with persisted ordering and a reset-to-default action.
+- [ ] Add dashboard layout tests for mobile/desktop viewport behavior, applying the stored layout on mount, save-failure rollback, and move controls disabled at list bounds.
+- [ ] Add settings tests for frontend rejection of invalid refresh intervals, the SettingsDialog reset action, `/api/settings` route behavior, and PostgreSQL-backed persistence.
 
 **Done when:** validated settings survive reloads, invalid refresh intervals are rejected, defaults and reset behavior are tested, and dashboard layout works at mobile/desktop sizes with keyboard-accessible controls.
 
@@ -151,7 +158,7 @@ Initial scope decisions:
 #### Slice 2.3: Price Chart Analysis
 
 - [ ] Add price comparisons and selected technical indicators.
-- [ ] Add volume when Slice 2.0 verifies an authoritative source; otherwise record the source limitation and keep volume unavailable rather than synthesizing it.
+- [ ] Add volume when Slice 2.0 verifies an authoritative source; otherwise record the source limitation in user-facing UI or docs and keep volume unavailable rather than synthesizing it.
 - [ ] Annotate charts with matching alert events.
 
 **Done when:** chart calculations have deterministic tests for sparse or missing points, comparisons use consistent currency/time ranges, and annotations link to the corresponding alert event.
@@ -160,18 +167,21 @@ Initial scope decisions:
 
 - [ ] Add delivery for browser push, webhooks, email, Discord, Slack, and Telegram, one provider adapter per reviewable change.
 - [ ] Add durable delivery attempts, bounded retries, idempotency, per-channel preferences, and delivery status.
+- [ ] Expand the instance-wide notification setting from Slice 2.1 into per-channel preferences with a schema migration; keep current behavior when the new fields are absent.
 
 **Done when:** the first selected provider can deliver a test event end to end; duplicate events do not send duplicate notifications; failures are visible and retryable; credentials are not exposed in logs or API responses; outbound webhook handling prevents server-side request forgery.
 
 #### Slice 2.5: On-Chain Views and Watchlists
 
 - [ ] Add staking event history, holder views, and wallet/token watchlists using the sources verified in Slice 2.0.
+- [ ] Gate holder views on a verified all-holder data source. Slice 2.0 verified only an address-specific lookup and documented no all-holder endpoint, freshness interval, or retention period. If no source is found, restrict holder views to address-specific lookups and document the limitation.
 - [ ] Bound query ranges and response sizes; do not build holder balances by scanning unbounded chain history through the RPC endpoint.
 
 **Done when:** source attribution, update cadence, pagination/range limits, and stale/error behavior are visible; watchlists persist across reloads; tests cover empty results and upstream failures.
 
 #### Slice 2.6: Multi-Chain and Multi-Token Support
 
+- [ ] Define the approved network and token list before implementation; a network is not approved until it appears in that list.
 - [ ] Replace Base-only token/contract assumptions with an explicit chain/token registry containing network identifiers, addresses, decimals, and data sources.
 - [ ] Expand supported on-chain views to the approved networks and tokens without changing existing VVV/DIEM response behavior unexpectedly.
 
@@ -180,6 +190,8 @@ Initial scope decisions:
 #### Slice 2.7: Rate-Limit and RPC Cost Observability
 
 - [ ] Extend rate-limit monitoring with approved response-header fields and Venice rate-limit events; distinguish upstream Venice limits from this app's own request limiter.
+- [ ] Define behavior when the configured key is not ADMIN and the experimental rate-limit log endpoint is unavailable; treat missing, forbidden, or failed telemetry as unavailable rather than zero.
+- [ ] Re-verify that `/billing/usage-history` contains Venice Crypto RPC charges and supports account-level reconciliation before relying on it; Slice 2.0 left ledger coverage unconfirmed.
 - [ ] Track Venice Crypto RPC costs using the authoritative billing source verified in Slice 2.0; do not estimate costs from call counts unless published pricing supports that calculation.
 
 **Done when:** the dashboard reports freshness and missing-data states; telemetry never stores API keys or other credentials; RPC costs reconcile to source billing data and keep USD, DIEM, bundled credits, earned credits, and refunds correctly separated.
@@ -193,7 +205,7 @@ Initial scope decisions:
 
 #### Phase 2 Exit Criteria
 
-- [ ] All slices are complete, including the requested notification providers and approved chain/token coverage.
+- [ ] All slices are complete, including outstanding follow-up items, the requested notification providers, and approved chain/token coverage.
 - [ ] Existing PostgreSQL installations upgrade safely; backend and frontend tests cover new contracts and failure paths.
 - [ ] New external integrations document required configuration, data retention, operational failure behavior, and recovery steps.
 
@@ -217,3 +229,5 @@ Initial scope decisions:
 - [ ] Improve offline handling with cached last-known data, retry controls, and clear status.
 
 All formerly deferred and out-of-scope roadmap items are now included in Phases 2–3. This scope change includes new wallet-auth, notification, cost-tracking, and rate-limit monitoring work; implementation plans must account for their security and operating requirements.
+
+Roadmap review (2026-10-06): corrected the Slice 2.0 and 2.1 completion status, moved the outstanding UI follow-ups into tracked items, and added source, scope, and migration-test gates for Slices 2.3–2.7.

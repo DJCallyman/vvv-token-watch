@@ -59,20 +59,61 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
 
   if (analyticsLoading || dailyLoading) {
     return (
-      <div className={cn("space-y-6", className)}>
+      <div role="region" aria-label="Loading model analytics" aria-busy="true" className={cn("space-y-6", className)}>
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Model Analytics</h2>
-          <div className="animate-pulse h-8 w-32 bg-muted rounded" />
+          <div className="h-6 w-40 animate-pulse rounded bg-muted" />
+          <div className="flex gap-2">
+            <div className="h-9 w-28 animate-pulse rounded bg-muted" />
+            <div className="h-9 w-32 animate-pulse rounded bg-muted" />
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardContent className="py-6">
-                <div className="animate-pulse h-16 bg-muted rounded" />
+          {['requests', 'tokens', 'cost', 'models'].map((item) => (
+            <Card key={item} className="animate-pulse">
+              <CardContent className="space-y-3 py-4">
+                <div className="h-4 w-2/3 rounded bg-muted" />
+                <div className="h-8 w-1/2 rounded bg-muted" />
+                <div className="h-3 w-1/3 rounded bg-muted" />
               </CardContent>
             </Card>
           ))}
         </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {['usage-by-model', 'cost-distribution'].map((item) => (
+            <Card key={item} className="animate-pulse">
+              <CardHeader className="pb-2">
+                <div className="h-5 w-40 rounded bg-muted" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-72 rounded bg-muted/50" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card className="animate-pulse">
+          <CardHeader className="pb-2">
+            <div className="h-5 w-36 rounded bg-muted" />
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 rounded bg-muted/50" />
+          </CardContent>
+        </Card>
+        <Card className="animate-pulse">
+          <CardHeader className="pb-2">
+            <div className="h-5 w-40 rounded bg-muted" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {['one', 'two', 'three', 'four', 'five'].map((row) => (
+                <div key={row} className="grid grid-cols-4 gap-4 border-b border-border/50 py-3 last:border-0">
+                  {['model', 'tokens', 'cost', 'latency'].map((column) => (
+                    <div key={column} className="h-4 rounded bg-muted" />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
