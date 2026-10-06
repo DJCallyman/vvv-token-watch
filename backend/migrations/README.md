@@ -1,45 +1,44 @@
 # Database migrations
 
-The API applies Alembic migrations during startup. A fresh PostgreSQL database
-is created by the initial migration. For an existing unversioned installation,
-startup verifies that the current application tables and columns are present,
-stamps the initial baseline without changing table data, and then applies
-forward migrations. The baseline allows the historical `earned_credits`
-column to be absent; the next migration adds it without dropping data.
+The API runs Alembic migrations at startup. A fresh PostgreSQL database is
+created by the initial migration. If an existing installation has no version
+record,
+startup checks that the application tables and columns exist. Startup then
+stamps the initial baseline without changing table data and runs forward
+migrations. The baseline allows the historical `earned_credits` column to be
+absent. The next migration adds this column without dropping data.
 
-Back up the database before upgrading. If the existing schema is incomplete or
-does not match the supported baseline, startup stops and logs the missing
-tables or columns. Reconcile that schema before restarting; do not stamp an
+Back up the database before an upgrade. If the schema is incomplete or does
+not match the supported baseline, startup stops and logs the missing tables or
+columns. Reconcile the schema before you restart the API. Do not stamp an
 unverified database.
 
-For a fresh database, migrations can also be applied manually from the
-repository root with:
+For a fresh database, run the migrations from the repository root:
 
 ```bash
 python -m alembic -c backend/alembic.ini upgrade head
 ```
 
-To run the PostgreSQL migration integration test, set
-`MIGRATION_TEST_DATABASE_URL` to a dedicated, disposable PostgreSQL database.
-The test drops and recreates the application tables in that database. Never
-point it at the normal development or production database.
+Set `MIGRATION_TEST_DATABASE_URL` to a dedicated, disposable PostgreSQL
+database to run the migration integration test. The test drops and recreates
+the application tables in that database. Do not use the normal development or
+production database.
 
-For local development, start the PostgreSQL service and create a separate test
-database. Activate the project's Python environment first. If the test
-dependencies are not installed, install them from the repository root:
+Activate the project's Python environment. If the test dependencies are not
+installed, install them from the repository root:
 
 ```bash
 pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 ```
 
-Start PostgreSQL and wait until it accepts connections:
+Start PostgreSQL. Then make sure it accepts connections:
 
 ```bash
 docker compose -f docker-compose.dev.yml up -d postgres
 docker compose -f docker-compose.dev.yml exec -T postgres pg_isready -U vvvwatch -d vvvwatch
 ```
 
-Then create the dedicated database:
+Create the dedicated test database:
 
 ```bash
 docker compose -f docker-compose.dev.yml exec -T postgres psql -U vvvwatch -d postgres \
@@ -53,8 +52,8 @@ MIGRATION_TEST_DATABASE_URL=postgresql+asyncpg://vvvwatch:vvvwatch@localhost:543
 	PYTHONPATH=. pytest backend/tests/test_migrations.py -v
 ```
 
-The test skips when `MIGRATION_TEST_DATABASE_URL` is unset. After the test,
-remove the dedicated database if you no longer need it:
+The test skips if `MIGRATION_TEST_DATABASE_URL` is unset. After the test, drop
+the dedicated database if you no longer need it:
 
 ```bash
 docker compose -f docker-compose.dev.yml exec -T postgres psql -U vvvwatch -d postgres \
