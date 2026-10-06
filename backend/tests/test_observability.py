@@ -6,7 +6,7 @@ import pytest
 
 from backend.api.routes import observability
 from backend.core import telemetry
-from tests.conftest import FakeResponse, FakeVeniceAPIClient
+from backend.tests.conftest import FakeResponse, FakeVeniceAPIClient
 
 
 @pytest.fixture(autouse=True)

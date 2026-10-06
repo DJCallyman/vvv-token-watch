@@ -13,7 +13,7 @@ from backend.api.routes.watchlists import WatchlistCreate
 from backend.database import Base
 from backend.core import venicestats_client
 from backend.core.venicestats_client import VeniceStatsError
-from tests.conftest import FakeResponse
+from backend.tests.conftest import FakeResponse
 
 ADDRESS = "0x" + "ab" * 20
 STAKING = onchain.STAKING_CONTRACT
@@ -55,7 +55,7 @@ def _queue_meta_calls(fake):
 
 @pytest.mark.asyncio
 async def test_staking_events_classifies_direction_and_bounds_range():
-    from tests.conftest import FakeVeniceAPIClient
+    from backend.tests.conftest import FakeVeniceAPIClient
 
     fake = FakeVeniceAPIClient()
     fake.queue("crypto/rpc", [
@@ -83,7 +83,7 @@ async def test_staking_events_classifies_direction_and_bounds_range():
 
 @pytest.mark.asyncio
 async def test_staking_events_empty_result():
-    from tests.conftest import FakeVeniceAPIClient
+    from backend.tests.conftest import FakeVeniceAPIClient
 
     fake = FakeVeniceAPIClient()
     fake.queue("crypto/rpc", [_rpc_result(hex(5000)), _rpc_result([]), _rpc_result([])])
@@ -99,7 +99,7 @@ async def test_staking_events_empty_result():
 
 @pytest.mark.asyncio
 async def test_staking_events_upstream_failure_reports_error():
-    from tests.conftest import FakeVeniceAPIClient
+    from backend.tests.conftest import FakeVeniceAPIClient
 
     fake = FakeVeniceAPIClient()
     fake.queue("crypto/rpc", [FakeResponse(status_code=502, json_data={})])
@@ -114,7 +114,7 @@ async def test_staking_events_upstream_failure_reports_error():
 
 @pytest.mark.asyncio
 async def test_staking_events_reject_unapproved_chain():
-    from tests.conftest import FakeVeniceAPIClient
+    from backend.tests.conftest import FakeVeniceAPIClient
 
     with pytest.raises(HTTPException) as exc:
         await onchain.get_staking_events(

@@ -46,7 +46,7 @@ def _chat_response(payload: dict) -> dict:
 
 @pytest.mark.asyncio
 async def test_x_sentiment_scores_and_records_signal(session, monkeypatch):
-    from tests.conftest import FakeResponse, FakeVeniceAPIClient
+    from backend.tests.conftest import FakeResponse, FakeVeniceAPIClient
 
     fake = FakeVeniceAPIClient()
     fake.queue("augment/search", [FakeResponse(json_data={"data": [
@@ -76,7 +76,7 @@ async def test_x_sentiment_scores_and_records_signal(session, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_x_sentiment_normalizes_unknown_direction(session, monkeypatch):
-    from tests.conftest import FakeResponse, FakeVeniceAPIClient
+    from backend.tests.conftest import FakeResponse, FakeVeniceAPIClient
 
     fake = FakeVeniceAPIClient()
     fake.queue("augment/search", [FakeResponse(json_data={"data": []})])
