@@ -39,10 +39,6 @@ build/
 *.tmp
 *.log
 *.out
-*log.*
-!web/components/ui/dialog.tsx
-!web/components/ui/alert-dialog.tsx
-!web/components/settings/SettingsDialog.tsx
 archive
 crash-dump.log
 benchmark*.json
@@ -96,4 +92,3 @@ backend/**/__pycache__/
 
 # Other dev files
 plan.md
-enhancement*.md

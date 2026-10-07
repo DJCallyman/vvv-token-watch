@@ -20,6 +20,11 @@ SETTING_KEYS = (
     "benchmark_max_cost_usd",
     "benchmark_enable_billing_reconciliation",
     "benchmark_judge_model",
+    "refresh_interval_seconds",
+    "in_app_notifications_enabled",
+    "display_currency",
+    "timezone",
+    "dashboard_layout",
 )
 
 
@@ -32,6 +37,11 @@ def environment_defaults(settings: Settings) -> dict[str, Any]:
         "benchmark_max_cost_usd": settings.BENCHMARK_MAX_COST_USD,
         "benchmark_enable_billing_reconciliation": settings.BENCHMARK_ENABLE_BILLING_RECONCILIATION,
         "benchmark_judge_model": settings.BENCHMARK_JUDGE_MODEL,
+        "refresh_interval_seconds": 60,
+        "in_app_notifications_enabled": True,
+        "display_currency": "USD",
+        "timezone": "local",
+        "dashboard_layout": ["balance", "usage", "prices", "usage_leaderboard"],
     }
 
 

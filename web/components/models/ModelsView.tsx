@@ -1,17 +1,18 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { useModels, Model } from '@/lib/hooks'
+import { useModels, type Model } from '@/lib/hooks'
 import { Card, CardContent } from '@/components/ui/card'
+import { DataState } from '@/components/ui/data-state'
 import { ModelCard } from './ModelCard'
 import { ModelsComparisonTable } from './ModelsComparisonTable'
 import { ColumnSelector } from './ColumnSelector'
 import { ModelAnalytics } from './ModelAnalytics'
 import { TraitsPanel } from './TraitsPanel'
 import { CompatibilityMappingPanel } from './CompatibilityMappingPanel'
-import { Search, Filter, X, LayoutGrid, List, Table, ChevronDown, ChevronUp, DollarSign, BarChart3, ListX } from 'lucide-react'
+import { Search, X, LayoutGrid, List, Table, ChevronDown, ChevronUp, DollarSign, BarChart3, ListX } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ModelType, loadColumnPreferences } from './columnConfig'
+import { type ModelType, loadColumnPreferences } from './columnConfig'
 import type { TraitModelType } from '@/lib/api'
 
 type ViewMode = 'grid' | 'list' | 'table'
@@ -46,7 +47,7 @@ interface CapabilityFilter {
 type SupportedTraitModelType = Exclude<TraitModelType, 'music' | 'all'>
 
 export function ModelsView() {
-  const { data, isLoading, isError } = useModels()
+  const { data, isLoading, isError, refetch } = useModels()
   const [tab, setTab] = useState<TabMode>('browse')
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
@@ -296,37 +297,37 @@ export function ModelsView() {
           <h1 className="text-2xl font-bold tracking-tight">Models</h1>
           <p className="text-sm text-muted-foreground">Loading models...</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Card key={i}>
-              <CardContent className="h-40 flex items-center justify-center">
-                <div className="animate-pulse text-muted-foreground">Loading...</div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <DataState kind="loading" title="Loading the model catalog" rows={6} />
       </div>
     )
   }
 
-  if (isError || !data) {
+  if (!data) {
     return (
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Models</h1>
-          <p className="text-sm text-muted-foreground">Failed to load models</p>
         </div>
-        <Card>
-          <CardContent className="h-40 flex items-center justify-center">
-            <div className="text-destructive">Failed to load models. Please check your API connection.</div>
-          </CardContent>
-        </Card>
+        <DataState
+          kind="error"
+          title="Could not load models"
+          description="Check your connection or retry to refresh the Venice model catalog."
+          onRetry={() => { void refetch() }}
+        />
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
+      {isError && (
+        <DataState
+          kind="stale"
+          title="Showing the last loaded model catalog"
+          description="The latest model refresh failed. Retry when the Venice API is available."
+          onRetry={() => { void refetch() }}
+        />
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Models</h1>
@@ -336,6 +337,7 @@ export function ModelsView() {
         </div>
         <div className="flex items-center gap-1 border rounded-md p-1">
           <button
+            type="button"
             onClick={() => setTab('browse')}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded transition-colors",
@@ -346,6 +348,7 @@ export function ModelsView() {
             Browse
           </button>
           <button
+            type="button"
             onClick={() => setTab('analytics')}
             className={cn(
               "flex items-center gap-1.5 px-3 py-1.5 text-sm rounded transition-colors",
@@ -373,6 +376,7 @@ export function ModelsView() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
+              aria-label="Search models, traits, and capabilities"
               placeholder="Search models, traits, capabilities..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -380,6 +384,7 @@ export function ModelsView() {
             />
             {search && (
               <button
+                type="button"
                 onClick={() => setSearch('')}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
@@ -390,6 +395,7 @@ export function ModelsView() {
 
           <div className="flex gap-2">
             <select
+              aria-label="Filter models by type"
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
               className="px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -403,6 +409,7 @@ export function ModelsView() {
             </select>
 
             <select
+              aria-label="Filter models by trait"
               value={traitFilter}
               onChange={(e) => setTraitFilter(e.target.value)}
               className="px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -416,6 +423,7 @@ export function ModelsView() {
             </select>
 
             <select
+              aria-label="Sort models"
               value={sortMode}
               onChange={(e) => setSortMode(e.target.value as SortMode)}
               className="px-3 py-2 rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -428,6 +436,7 @@ export function ModelsView() {
         </div>
 
         <button
+          type="button"
           onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
           className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
@@ -493,6 +502,7 @@ export function ModelsView() {
                 <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                 <input
                   type="number"
+                  aria-label="Maximum input price per million tokens"
                   placeholder="No limit"
                   value={maxPriceFilter}
                   onChange={(e) => setMaxPriceFilter(e.target.value)}
@@ -503,6 +513,7 @@ export function ModelsView() {
 
             {(Object.values(capabilityFilter).some(Boolean) || maxPriceFilter) && (
               <button
+                type="button"
                 onClick={() => {
                   setCapabilityFilter({
                     vision: false,
@@ -533,6 +544,7 @@ export function ModelsView() {
             </span>
             {activeFilters > 0 && (
               <button
+                type="button"
                 onClick={clearFilters}
                 className="text-xs text-primary hover:underline"
               >
@@ -543,6 +555,7 @@ export function ModelsView() {
 
           <div className="flex items-center gap-1 border rounded-md p-1">
             <button
+              type="button"
               onClick={() => setViewMode('grid')}
               className={cn(
                 "p-1.5 rounded",
@@ -553,6 +566,7 @@ export function ModelsView() {
               <LayoutGrid className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('list')}
               className={cn(
                 "p-1.5 rounded",
@@ -563,6 +577,7 @@ export function ModelsView() {
               <List className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode('table')}
               className={cn(
                 "p-1.5 rounded",
@@ -576,18 +591,16 @@ export function ModelsView() {
         </div>
 
       {filteredModels.length === 0 ? (
-        <Card>
-          <CardContent className="h-40 flex flex-col items-center justify-center gap-2">
-            <Filter className="w-8 h-8 text-muted-foreground" />
-            <p className="text-muted-foreground">No models match your filters</p>
-            <button
-              onClick={clearFilters}
-              className="text-sm text-primary hover:underline"
-            >
+        <DataState
+          kind="empty"
+          title="No models match your filters"
+          description="Try a different search or remove some filters."
+          action={(
+            <button type="button" onClick={clearFilters} className="text-sm text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
               Clear all filters
             </button>
-          </CardContent>
-        </Card>
+          )}
+        />
       ) : viewMode === 'table' ? (
         <ModelsComparisonTable
           models={filteredModels}

@@ -34,6 +34,11 @@ const settingsData = {
   benchmark_max_cost_usd: 5,
   benchmark_enable_billing_reconciliation: false,
   benchmark_judge_model: 'zai-org-glm-5-2',
+  refresh_interval_seconds: 60,
+  in_app_notifications_enabled: true,
+  display_currency: 'USD',
+  timezone: 'local',
+  dashboard_layout: ['balance', 'usage', 'prices', 'usage_leaderboard'],
 }
 
 function mockSettingsHooks() {
@@ -117,5 +122,23 @@ describe('Header — success', () => {
     render(<Header />)
     // formatCurrency(11.25) → "$11.25"
     expect(screen.getByText('$11.25')).toBeInTheDocument()
+  })
+
+  it('shows visible keyboard focus on header controls', () => {
+    render(<Header />)
+
+    const controls = [
+      screen.getByRole('button', { name: 'Open navigation' }),
+      screen.getByRole('button', { name: 'Open command palette' }),
+      screen.getByRole('link', { name: 'Alerts' }),
+      screen.getByRole('button', { name: /Switch to (light|dark) mode/ }),
+      screen.getByRole('button', { name: 'Open settings' }),
+      screen.getByRole('button', { name: 'Refresh all data' }),
+      screen.getByRole('button', { name: 'Sign out' }),
+    ]
+
+    controls.forEach((control) => {
+      expect(control).toHaveClass('focus-visible:ring-2')
+    })
   })
 })

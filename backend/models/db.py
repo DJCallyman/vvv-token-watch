@@ -71,11 +71,15 @@ class AlertConfig(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(128), nullable=False)
     alert_type: Mapped[str] = mapped_column(String(64), nullable=False)
-    # usage_percent | balance_threshold | price_threshold
+    # usage_percent | balance_threshold | price_threshold | rate_of_change | anomaly
     metric: Mapped[str] = mapped_column(String(64), nullable=False)
     # e.g. diem_usage_percent, diem_balance, vvv_price_usd
     threshold: Mapped[float] = mapped_column(Float, nullable=False)
     comparison: Mapped[str] = mapped_column(String(8), default="gte")  # gte | lte
+    # Signal configuration (Slice 2.2). Only meaningful for rate_of_change and
+    # anomaly alert types. NULL preserves legacy threshold behavior.
+    window_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    min_samples: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -145,6 +149,129 @@ class AppSettings(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
     values: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
+class NotificationChannel(Base):
+    """Per-channel notification destination (Slice 2.4).
+
+    ``config`` stores adapter-specific JSON. Secrets (Discord webhook URLs)
+    are never returned by the API or written to logs; API responses expose a
+    masked URL only.
+    """
+
+    __tablename__ = "notification_channels"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False, default="discord")
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    config: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
+class NotificationDelivery(Base):
+    """Durable delivery attempt for an alert event (Slice 2.4).
+
+    ``dedupe_key`` is unique so re-evaluating an alert cannot enqueue or send
+    the same event to the same channel twice.
+    """
+
+    __tablename__ = "notification_deliveries"
+    __table_args__ = (
+        UniqueConstraint("dedupe_key", name="uq_notification_delivery_dedupe"),
+        Index("ix_notification_deliveries_status_next", "status", "next_attempt_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    alert_event_id: Mapped[int] = mapped_column(
+        ForeignKey("alert_events.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    channel_id: Mapped[int] = mapped_column(
+        ForeignKey("notification_channels.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    next_attempt_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    dedupe_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
+class WatchlistItem(Base):
+    """Persisted wallet/address watchlist entry (Slice 2.5)."""
+
+    __tablename__ = "watchlist_items"
+    __table_args__ = (
+        UniqueConstraint("chain", "address", name="uq_watchlist_chain_address"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    chain: Mapped[str] = mapped_column(String(64), nullable=False, default="base-mainnet")
+    token: Mapped[str] = mapped_column(String(32), nullable=False, default="vvv")
+    address: Mapped[str] = mapped_column(String(42), nullable=False)
+    label: Mapped[Optional[str]] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class WalletChallenge(Base):
+    """One-time, expiring, chain-bound SIWE-style challenge (Slice 2.8)."""
+
+    __tablename__ = "wallet_challenges"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    address: Mapped[str] = mapped_column(String(42), nullable=False, index=True)
+    chain_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    nonce: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class WalletSession(Base):
+    """Opaque read-only wallet session, stored as a SHA-256 hash (Slice 2.8)."""
+
+    __tablename__ = "wallet_sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    address: Mapped[str] = mapped_column(String(42), nullable=False, index=True)
+    chain_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SignalRecord(Base):
+    """Structured AI signal with confidence and outcome tracking (Phase 3)."""
+
+    __tablename__ = "signal_records"
+    __table_args__ = (
+        Index("ix_signal_records_created", "created_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)  # sentiment | x_sentiment | manual
+    subject: Mapped[str] = mapped_column(String(32), nullable=False, default="vvv")
+    direction: Mapped[str] = mapped_column(String(16), nullable=False)  # bullish | bearish | neutral
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    sources: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    metrics: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    entry_price_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    outcome_status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    outcome_value_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    outcome_note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    evaluated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 # NOTE: A previous incarnation of the project defined a BenchmarkRun ORM model
 # here for persisting in-memory benchmark job metadata across restarts. The

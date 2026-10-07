@@ -3,7 +3,11 @@
 import { useAPIKeyAnalytics, useAPIKeysUsage, useEpochUsage, useUsageTrends } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatNumber, formatCurrency, formatDate } from '@/lib/utils'
+import { DataState } from '@/components/ui/data-state'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 import { BarChart3, Activity, TrendingUp, TrendingDown, Minus } from 'lucide-react'
+import { ObservabilityCard } from '@/components/usage/ObservabilityCard'
+import { ExportMenu } from '@/components/ui/export-menu'
 import {
   LineChart,
   Line,
@@ -16,8 +20,9 @@ import {
 } from 'recharts'
 
 export function UsageView() {
-  const { data: epochUsage, isLoading: epochLoading, isError: epochError } = useEpochUsage()
-  const { data: keysUsage, isLoading: keysLoading, isError: keysError } = useAPIKeysUsage()
+  const { timezone } = useDisplayPreferences()
+  const { data: epochUsage, isLoading: epochLoading, isError: epochError, refetch: refetchEpoch } = useEpochUsage()
+  const { data: keysUsage, isLoading: keysLoading, isError: keysError, refetch: refetchKeys } = useAPIKeysUsage()
   const { data: keyAnalytics } = useAPIKeyAnalytics(7)
   const { data: trends, isLoading: trendsLoading } = useUsageTrends('epoch')
 
@@ -31,6 +36,7 @@ export function UsageView() {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    ...(timezone === 'local' ? {} : { timeZone: timezone }),
   })
 
   const isLoading = usageLoading || keysLoading
@@ -63,7 +69,12 @@ export function UsageView() {
   const trend = getUsageTrend()
   const trendChartData = trendPoints.map((p) => ({
     time: p.timestamp
-      ? new Date(p.timestamp).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric' })
+      ? new Date(p.timestamp).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          ...(timezone === 'local' ? {} : { timeZone: timezone }),
+        })
       : '',
     diem: p.diem,
     usd: p.usd,
@@ -71,29 +82,80 @@ export function UsageView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Usage Analytics</h1>
-        <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
-          <Activity className="w-4 h-4" />
-          {today}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Usage Analytics</h1>
+          <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+            <Activity className="w-4 h-4" />
+            {today}
+          </p>
+        </div>
+        <ExportMenu
+          name="usage"
+          snapshot={() => ({
+            epoch: epochUsage ?? null,
+            keys: keysUsage ?? null,
+            key_analytics: keyAnalytics ?? null,
+            trends: trends ?? null,
+          })}
+          rows={() =>
+            (trends?.data ?? []).map((point) => ({
+              timestamp: point.timestamp,
+              scope: point.scope,
+              diem: point.diem,
+              usd: point.usd,
+              bundled_credits: point.bundled_credits,
+              earned_credits: point.earned_credits,
+            }))
+          }
+        />
       </div>
 
       {isError && (
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Failed to load usage data. Retrying automatically…
-        </div>
+        <DataState
+          kind={usage || keysUsage ? 'stale' : 'error'}
+          title={usage || keysUsage ? 'Showing last available usage data' : 'Could not load usage data'}
+          description="Refresh epoch usage and API-key totals to update this page."
+          onRetry={() => { void Promise.all([refetchEpoch(), refetchKeys()]) }}
+        />
       )}
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardContent className="flex items-center justify-center h-24">
-                <div className="animate-pulse text-muted-foreground">Loading...</div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="space-y-6">
+          <div role="region" aria-label="Loading usage summary" aria-busy="true" className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            {['diem', 'usd', 'keys', 'trend'].map((item) => (
+              <Card key={item} className="animate-pulse">
+                <CardContent className="space-y-3 py-4">
+                  <div className="h-4 w-2/3 rounded bg-muted" />
+                  <div className="h-8 w-1/2 rounded bg-muted" />
+                  <div className="h-3 w-1/3 rounded bg-muted" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Epoch Usage Trend</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TrendChartSkeleton label="Loading usage trends" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>7-Day Usage Summary</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div role="region" aria-label="Loading 7-day usage summary" aria-busy="true" className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-pulse">
+                {['diem', 'usd', 'rate'].map((item) => (
+                  <div key={item} className="space-y-3">
+                    <div className="h-4 w-2/3 rounded bg-muted" />
+                    <div className="h-8 w-1/2 rounded bg-muted" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       ) : (
         <>
@@ -184,9 +246,7 @@ export function UsageView() {
             </CardHeader>
             <CardContent>
               {trendsLoading && (
-                <div className="h-56 flex items-center justify-center animate-pulse text-muted-foreground">
-                  Loading trends…
-                </div>
+                <TrendChartSkeleton label="Loading usage trends" />
               )}
               {!trendsLoading && trendChartData.length === 0 && (
                 <div className="h-56 flex items-center justify-center text-sm text-muted-foreground">
@@ -260,7 +320,7 @@ export function UsageView() {
               {usage?.epoch_start && (
                 <div className="mt-6 pt-4 border-t border-border">
                   <p className="text-sm text-muted-foreground">
-                    Epoch started: {formatDate(usage.epoch_start)}
+                    Epoch started: {formatDate(usage.epoch_start, timezone)}
                   </p>
                 </div>
               )}
@@ -337,8 +397,27 @@ export function UsageView() {
               </CardContent>
             </Card>
           )}
+
+          <ObservabilityCard />
         </>
       )}
+    </div>
+  )
+}
+
+function TrendChartSkeleton({ label }: { label: string }) {
+  return (
+    <div role="region" aria-label={label} aria-busy="true" className="h-56 animate-pulse space-y-3">
+      <div className="flex h-48 items-end gap-3 border-b border-l border-border px-4 pb-3">
+        {[38, 62, 48, 76, 54, 88, 68, 44].map((height) => (
+          <div key={height} className="flex-1 rounded-t bg-muted" style={{ height: `${height}%` }} />
+        ))}
+      </div>
+      <div className="flex justify-between px-4">
+        <div className="h-3 w-12 rounded bg-muted" />
+        <div className="h-3 w-12 rounded bg-muted" />
+        <div className="h-3 w-12 rounded bg-muted" />
+      </div>
     </div>
   )
 }

@@ -88,7 +88,7 @@ describe('ApiKeysView — error', () => {
 
   it('shows error message', () => {
     render(<ApiKeysView />)
-    expect(screen.getByText(/failed to load api keys/i)).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(/could not load api keys/i)
   })
 })
 
@@ -381,7 +381,7 @@ describe('ApiKeysView — search and filter', () => {
     render(<ApiKeysView />)
     await user.type(screen.getByPlaceholderText(/search by name/i), 'nonexistent')
     await waitFor(() => {
-      expect(screen.getByText(/no keys match your filters/i)).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: /no keys match these filters/i })).toBeInTheDocument()
     })
   })
 })

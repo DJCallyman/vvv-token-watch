@@ -3,12 +3,19 @@ uvicorn[standard]==0.34.0
 pydantic==2.10.4
 pydantic-settings==2.7.0
 sqlalchemy[asyncio]==2.0.36
+alembic==1.14.1
 asyncpg==0.30.0
 python-dotenv==1.0.1
 tenacity==9.0.0
 httpx==0.28.1
 sse-starlette==2.2.1
 slowapi==0.1.9
+# EIP-191 personal_sign verification for the read-only x402 wallet session.
+eth-account==0.14.0
+# PDF text extraction for document parsing workflows.
+pypdf==5.1.0
+# Web Push (VAPID) delivery for browser notifications.
+pywebpush==2.5.0
 
 # dev
 pytest==8.3.4

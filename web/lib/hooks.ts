@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type GetCharactersParams, type TraitModelType } from '@/lib/api'
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 // ---------------------------------------------------------------------------
@@ -44,19 +44,26 @@ export function useBenchmarkStatus(jobId: string | null, enabled: boolean) {
 }
 
 export function useBalance() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['balance'],
     queryFn: api.getBalance,
-    refetchInterval: 30000,
+    refetchInterval: refreshInterval,
   })
 }
 
-export function useSettings() {
+export function useSettings(enabled = true) {
   return useQuery({
     queryKey: ['settings'],
     queryFn: api.getSettings,
+    enabled,
     staleTime: 5 * 60 * 1000,
   })
+}
+
+function useRefreshInterval() {
+  const { data: settings } = useSettings()
+  return (settings?.refresh_interval_seconds ?? 60) * 1000
 }
 
 export function useUpdateSettings() {
@@ -90,26 +97,29 @@ export function useResetSettings() {
 }
 
 export function useDailyUsage(date?: string) {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['dailyUsage', date],
     queryFn: () => api.getDailyUsage(date),
-    refetchInterval: 30000,
+    refetchInterval: refreshInterval,
   })
 }
 
 export function useEpochUsage() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['epochUsage'],
     queryFn: api.getEpochUsage,
-    refetchInterval: 30000,
+    refetchInterval: refreshInterval,
   })
 }
 
 export function useAPIKeysUsage() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['apiKeysUsage'],
     queryFn: api.getAPIKeysUsage,
-    refetchInterval: 60000,
+    refetchInterval: refreshInterval,
   })
 }
 
@@ -185,10 +195,11 @@ export function useCharacter(slug: string | null) {
 }
 
 export function usePrices() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['prices'],
     queryFn: api.getPrices,
-    refetchInterval: 60000,
+    refetchInterval: refreshInterval,
   })
 }
 
@@ -229,34 +240,38 @@ export function useModelCompatibilityMapping(
 }
 
 export function usePriceHistory(token: 'vvv' | 'diem' = 'vvv', range: string = '7d') {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['priceHistory', token, range],
     queryFn: () => api.getPriceHistory(token, range),
-    refetchInterval: 60_000,
+    refetchInterval: refreshInterval,
   })
 }
 
 export function useUsageTrends(scope: 'epoch' | 'daily' = 'epoch') {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['usageTrends', scope],
     queryFn: () => api.getUsageTrends(scope),
-    refetchInterval: 60_000,
+    refetchInterval: refreshInterval,
   })
 }
 
 export function useOnchainSupply() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['onchainSupply'],
     queryFn: api.getOnchainSupply,
-    refetchInterval: 60_000,
+    refetchInterval: refreshInterval,
   })
 }
 
 export function useOnchainStaking() {
+  const refreshInterval = useRefreshInterval()
   return useQuery({
     queryKey: ['onchainStaking'],
     queryFn: api.getOnchainStaking,
-    refetchInterval: 60_000,
+    refetchInterval: refreshInterval,
   })
 }
 
@@ -303,6 +318,13 @@ export function useAlertEvents(unacknowledgedOnly = false) {
 
 export function useAlertStream() {
   const queryClient = useQueryClient()
+  const { data: settings } = useSettings()
+  const notificationsEnabled = settings?.in_app_notifications_enabled ?? true
+  const notificationsEnabledRef = useRef(notificationsEnabled)
+  useEffect(() => {
+    notificationsEnabledRef.current = notificationsEnabled
+  }, [notificationsEnabled])
+
   useEffect(() => {
     if (typeof window === 'undefined' || typeof EventSource === 'undefined') return
     let source: EventSource | null = null
@@ -313,7 +335,13 @@ export function useAlertStream() {
       source = new EventSource('/api/alerts/stream')
       source.onmessage = (event) => {
         try {
-          if (JSON.parse(event.data).type === 'event') queryClient.invalidateQueries({ queryKey: ['alertEvents'] })
+          const payload = JSON.parse(event.data)
+          if (payload.type === 'event') {
+            queryClient.invalidateQueries({ queryKey: ['alertEvents'] })
+            if (notificationsEnabledRef.current) {
+              toast.info(payload.message || 'A new alert was triggered')
+            }
+          }
         } catch { /* Ignore malformed stream events. */ }
       }
       source.onerror = () => { source?.close(); retry = setTimeout(connect, 5000) }
@@ -325,6 +353,322 @@ export function useAlertStream() {
 
 export function useNews() {
   return useQuery({ queryKey: ['news'], queryFn: () => api.getNews(), staleTime: 10 * 60_000, refetchInterval: 15 * 60_000 })
+}
+
+// ---------------------------------------------------------------------------
+// Slice 2.4 — notification channels and deliveries
+// ---------------------------------------------------------------------------
+
+export function useNotificationChannels() {
+  return useQuery({
+    queryKey: ['notificationChannels'],
+    queryFn: api.getNotificationChannels,
+    staleTime: 60_000,
+  })
+}
+
+export function useNotificationProviders() {
+  return useQuery({
+    queryKey: ['notificationProviders'],
+    queryFn: api.getNotificationProviders,
+    staleTime: 5 * 60_000,
+  })
+}
+
+export function useVapidPublicKey() {
+  return useQuery({
+    queryKey: ['vapidPublicKey'],
+    queryFn: api.getVapidPublicKey,
+    staleTime: 5 * 60_000,
+    retry: false,
+  })
+}
+
+export function useCreateNotificationChannel() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.createNotificationChannel,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notificationChannels'] })
+      toast.success('Notification channel added')
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Failed to add notification channel'),
+  })
+}
+
+export function useDeleteNotificationChannel() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.deleteNotificationChannel,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notificationChannels'] })
+      toast.success('Notification channel removed')
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Failed to remove notification channel'),
+  })
+}
+
+export function useTestNotificationChannel() {
+  return useMutation({
+    mutationFn: api.testNotificationChannel,
+    onSuccess: (data) => {
+      if (data.status === 'sent') toast.success('Test notification sent')
+      else toast.error(data.error || 'Test notification failed')
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Test notification failed'),
+  })
+}
+
+export function useNotificationDeliveries(status?: string) {
+  return useQuery({
+    queryKey: ['notificationDeliveries', status],
+    queryFn: () => api.getNotificationDeliveries(status),
+    refetchInterval: 30_000,
+  })
+}
+
+export function useRetryNotificationDelivery() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.retryNotificationDelivery,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notificationDeliveries'] })
+      toast.success('Delivery retry queued')
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Failed to retry delivery'),
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Slice 2.5 / 2.6 — chains, watchlists, staking events, holder lookup
+// ---------------------------------------------------------------------------
+
+export function useChains() {
+  return useQuery({
+    queryKey: ['chains'],
+    queryFn: api.getChains,
+    staleTime: 30 * 60_000,
+  })
+}
+
+export function useWatchlist() {
+  return useQuery({
+    queryKey: ['watchlist'],
+    queryFn: api.getWatchlist,
+    staleTime: 60_000,
+  })
+}
+
+export function useCreateWatchlistItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.createWatchlistItem,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] })
+      toast.success('Added to watchlist')
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Failed to add to watchlist'),
+  })
+}
+
+export function useDeleteWatchlistItem() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: api.deleteWatchlistItem,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['watchlist'] })
+      toast.success('Removed from watchlist')
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Failed to remove from watchlist'),
+  })
+}
+
+export function useStakingEvents(blocks = 10000, address?: string | null) {
+  return useQuery({
+    queryKey: ['stakingEvents', blocks, address],
+    queryFn: () => api.getStakingEvents(blocks, address ?? undefined),
+    staleTime: 60_000,
+  })
+}
+
+export function useHolderLookup(address: string | null) {
+  return useQuery({
+    queryKey: ['holderLookup', address],
+    queryFn: () => api.getHolderLookup(address!),
+    enabled: !!address,
+    staleTime: 60_000,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Slice 2.7 — observability
+// ---------------------------------------------------------------------------
+
+export function useObservabilitySummary() {
+  return useQuery({
+    queryKey: ['observabilitySummary'],
+    queryFn: api.getObservabilitySummary,
+    refetchInterval: 120_000,
+    retry: false,
+  })
+}
+
+export function useRateLimits() {
+  return useQuery({
+    queryKey: ['rateLimits'],
+    queryFn: api.getRateLimits,
+    staleTime: 60_000,
+    retry: false,
+  })
+}
+
+export function useRpcCosts() {
+  return useQuery({
+    queryKey: ['rpcCosts'],
+    queryFn: api.getRpcCosts,
+    staleTime: 60_000,
+    retry: false,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Slice 2.8 — wallet session
+// ---------------------------------------------------------------------------
+
+export function useWalletBalance(token: string | null) {
+  return useQuery({
+    queryKey: ['walletBalance', token],
+    queryFn: () => api.getWalletBalance(token!),
+    enabled: !!token,
+    staleTime: 30_000,
+    retry: false,
+  })
+}
+
+export function useWalletTransactions(token: string | null, blocks = 10000) {
+  return useQuery({
+    queryKey: ['walletTransactions', token, blocks],
+    queryFn: () => api.getWalletTransactions(token!, blocks),
+    enabled: !!token,
+    staleTime: 60_000,
+    retry: false,
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3 — signals, sentiment, media, documents, semantic news
+// ---------------------------------------------------------------------------
+
+export function useSignals(limit = 50) {
+  return useQuery({
+    queryKey: ['signals', limit],
+    queryFn: () => api.getSignals(limit),
+    refetchInterval: 60_000,
+  })
+}
+
+export function useEvaluateSignal() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, currentPriceUsd }: { id: number; currentPriceUsd?: number }) =>
+      api.evaluateSignal(id, currentPriceUsd),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['signals'] })
+      toast.success('Signal outcome evaluated')
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Failed to evaluate signal'),
+  })
+}
+
+export function useAnalyzeXSentiment() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (query?: string) => api.analyzeXSentiment(query),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['signals'] })
+      toast.success('X sentiment analyzed')
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'X sentiment analysis failed'),
+  })
+}
+
+export function useNewsSearch() {
+  return useMutation({
+    mutationFn: ({ query, topK }: { query: string; topK?: number }) =>
+      api.searchNews(query, topK),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Semantic search failed'),
+  })
+}
+
+export function useAskNews() {
+  return useMutation({
+    mutationFn: ({ question, topK }: { question: string; topK?: number }) =>
+      api.askNews(question, topK),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'News Q&A failed'),
+  })
+}
+
+export function useParseDocument() {
+  return useMutation({
+    mutationFn: api.parseDocument,
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Document parsing failed'),
+  })
+}
+
+export function useBriefing() {
+  return useMutation({
+    mutationFn: (text?: string) => api.generateBriefing(text),
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Briefing generation failed'),
+  })
+}
+
+export function useAlertVoice() {
+  const [playing, setPlaying] = useState<number | null>(null)
+  const mutation = useMutation({
+    mutationFn: api.generateAlertVoice,
+    onSuccess: (data) => {
+      if (typeof window === 'undefined') return
+      const audio = new Audio(`data:${data.mime};base64,${data.audio_b64}`)
+      void audio.play().catch(() => {
+        toast.error('Could not play alert audio')
+      })
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Alert voice generation failed'),
+  })
+  return { ...mutation, playing, setPlaying }
+}
+
+export function useMarketInfographic() {
+  return useMutation({
+    mutationFn: api.generateMarketInfographic,
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : 'Infographic generation failed'),
+  })
+}
+
+export function useVideoRecapStatus(queueId: string | null, model?: string) {
+  return useQuery({
+    queryKey: ['videoRecap', queueId, model],
+    queryFn: () => api.getVideoRecap(queueId!, model),
+    enabled: !!queueId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === 'completed' || status === 'error' ? false : 10_000
+    },
+  })
 }
 
 export function useNewsArticle(url: string | null) {

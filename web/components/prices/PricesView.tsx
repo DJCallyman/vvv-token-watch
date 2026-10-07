@@ -1,31 +1,34 @@
 'use client'
 
-import { useState } from 'react'
-import { usePrices } from '@/lib/hooks'
+import { useId } from 'react'
+import { usePrices, useUpdateSettings } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { Coins, Wallet } from 'lucide-react'
 import { PriceChart } from '@/components/prices/PriceChart'
-
-type Currency = 'USD' | 'AUD'
+import { DataState } from '@/components/ui/data-state'
+import { ExportMenu } from '@/components/ui/export-menu'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
+import type { DisplayCurrency } from '@/lib/api'
 
 export function PricesView() {
-  const { data: prices, isLoading, isError } = usePrices()
-  const [portfolioCurrency, setPortfolioCurrency] = useState<Currency>('USD')
+  const { data: prices, isLoading, isError, refetch } = usePrices()
+  const { currency: portfolioCurrency } = useDisplayPreferences()
+  const updateSettings = useUpdateSettings()
+  const portfolioCurrencyId = useId()
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-pulse text-muted-foreground">Loading prices...</div>
-      </div>
-    )
+    return <DataState kind="loading" title="Loading token prices" rows={3} />
   }
 
-  if (isError || !prices) {
+  if (!prices) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-destructive">Failed to load prices</div>
-      </div>
+      <DataState
+        kind="error"
+        title="Could not load token prices"
+        description="Prices may be temporarily unavailable. Try again to refresh them."
+        onRetry={() => { void refetch() }}
+      />
     )
   }
 
@@ -37,8 +40,12 @@ export function PricesView() {
   const vvvHoldings = prices.holdings?.vvv || 0
   const diemHoldings = prices.holdings?.diem || 0
 
-  const vvvValueUsd = prices.portfolio?.vvv_value_usd || (vvvPrice * vvvHoldings)
-  const diemValueUsd = prices.portfolio?.diem_value_usd || (diemPrice * diemHoldings)
+  // The API reports `portfolio.vvv_value_usd` for unstaked wallet VVV only,
+  // while `holdings.vvv` is the full position (wallet + staked sVVV +
+  // unclaimed rewards). Derive both currencies from the displayed quantity so
+  // the USD total matches the AUD total and the token count shown.
+  const vvvValueUsd = vvvPrice * vvvHoldings
+  const diemValueUsd = diemPrice * diemHoldings
 
   const vvvValueAud = vvvAud != null ? vvvAud * vvvHoldings : null
   const diemValueAud = diemAud != null ? diemAud * diemHoldings : null
@@ -50,12 +57,45 @@ export function PricesView() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Token Prices</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Live prices from VeniceStats with ECB-based AUD conversion
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Token Prices</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Live prices from VeniceStats with ECB-based AUD conversion
+          </p>
+        </div>
+        <ExportMenu
+          name="prices"
+          snapshot={() => prices as unknown as Record<string, unknown>}
+          rows={() => [
+            {
+              token: 'VVV',
+              usd: vvvPrice,
+              aud: vvvAud,
+              change_24h: prices.vvv?.change_24h,
+              market_cap: prices.vvv?.market_cap,
+              holdings: vvvHoldings,
+            },
+            {
+              token: 'DIEM',
+              usd: diemPrice,
+              aud: diemAud,
+              change_24h: prices.diem?.change_24h,
+              market_cap: prices.diem?.market_cap,
+              holdings: diemHoldings,
+            },
+          ]}
+        />
       </div>
+
+      {isError && (
+        <DataState
+          kind="stale"
+          title="Showing the last loaded prices"
+          description="The latest price refresh failed. Your current values and history remain available."
+          onRetry={() => { void refetch() }}
+        />
+      )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
@@ -153,11 +193,14 @@ export function PricesView() {
               </CardTitle>
               <CardDescription>Your combined token holdings</CardDescription>
             </div>
-            <label htmlFor="portfolio-currency" className="sr-only">Portfolio currency</label>
+            <label htmlFor={portfolioCurrencyId} className="sr-only">Portfolio currency</label>
             <select
-              id="portfolio-currency"
+              id={portfolioCurrencyId}
               value={portfolioCurrency}
-              onChange={(e) => setPortfolioCurrency(e.target.value as Currency)}
+              disabled={updateSettings.isPending}
+              onChange={(event) => {
+                updateSettings.mutate({ display_currency: event.target.value as DisplayCurrency })
+              }}
               className="text-sm rounded-md border border-input bg-background px-3 py-1.5 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="USD">USD</option>

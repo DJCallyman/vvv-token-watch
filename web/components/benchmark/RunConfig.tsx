@@ -6,6 +6,7 @@ import { TestSelector } from './TestSelector'
 import { api, BenchmarkEstimateResponse, BenchmarkStartParams } from '@/lib/api'
 import { DEFAULT_BENCHMARK_TEST_IDS } from '@/lib/benchmark-tests'
 import { useBenchmarkModels } from '@/lib/hooks'
+import { toast } from 'sonner'
 
 interface Props {
   onStart: (params: BenchmarkStartParams) => void
@@ -63,8 +64,11 @@ export function RunConfig({ onStart, isRunning }: Props) {
       const result = await api.estimateBenchmark(params)
       setEstimate(result)
       setPendingParams(params)
+      toast.success('Benchmark cost estimate ready')
     } catch (e) {
-      setEstimateError(e instanceof Error ? e.message : 'Failed to estimate cost')
+      const message = e instanceof Error ? e.message : 'Failed to estimate cost'
+      setEstimateError(message)
+      toast.error(message)
     } finally {
       setEstimating(false)
     }

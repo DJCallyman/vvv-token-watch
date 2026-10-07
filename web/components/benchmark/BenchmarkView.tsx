@@ -144,9 +144,25 @@ export function BenchmarkView() {
           </div>
 
           {runLoading && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground py-8 justify-center">
-              <span className="w-4 h-4 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-              Loading results…
+            <div role="region" aria-label="Loading benchmark results" aria-busy="true" className="animate-pulse space-y-4">
+              <div className="flex gap-4">
+                <div className="h-4 w-32 rounded bg-muted" />
+                <div className="h-4 w-24 rounded bg-muted" />
+              </div>
+              <div className="overflow-hidden rounded-md border border-border">
+                <div className="grid grid-cols-4 gap-4 border-b border-border bg-muted/30 px-4 py-3">
+                  {['model', 'score', 'tokens', 'cost'].map((item) => (
+                    <div key={item} className="h-3 rounded bg-muted" />
+                  ))}
+                </div>
+                {['alpha', 'bravo', 'charlie', 'delta', 'echo'].map((row) => (
+                  <div key={row} className="grid grid-cols-4 gap-4 border-b border-border/50 px-4 py-4 last:border-0">
+                    {['model', 'score', 'tokens', 'cost'].map((column) => (
+                      <div key={column} className={`h-4 rounded bg-muted ${column === 'model' ? 'w-3/4' : 'w-1/2'}`} />
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

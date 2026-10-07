@@ -58,6 +58,25 @@ class Settings(BaseSettings):
     # API text:default trait, which is not suitable for judging.
     BENCHMARK_JUDGE_MODEL: str = "zai-org-glm-5-2"
     ASSISTANT_MODEL: str = "venice-uncensored-1-2"
+    # Embeddings used for semantic news search and document RAG.
+    EMBEDDING_MODEL: str = "text-embedding-bge-m3"
+    # Text-to-speech model used for voice alerts and daily briefings.
+    TTS_MODEL: str = "tts-kokoro"
+    TTS_VOICE: str = "af_sky"
+    # Video model used for market recap generation (async queue/retrieve).
+    VIDEO_MODEL: str = "wan-2.5-preview-text-to-video"
+
+    # Slice 2.4 notification providers. Email is unavailable until SMTP_HOST
+    # is configured; browser push is unavailable until VAPID keys are set.
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM: Optional[str] = None
+    SMTP_USE_TLS: bool = True
+    VAPID_PUBLIC_KEY: Optional[str] = None
+    VAPID_PRIVATE_KEY: Optional[str] = None
+    VAPID_SUBJECT: Optional[str] = None
 
     # When false (default), interactive API docs (/docs, /redoc, /openapi.json)
     # are disabled. Set true only for local development.

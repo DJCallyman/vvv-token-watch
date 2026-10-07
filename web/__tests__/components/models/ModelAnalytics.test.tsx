@@ -66,6 +66,16 @@ beforeEach(() => {
 })
 
 describe('ModelAnalytics', () => {
+  it('renders content-shaped loading placeholders', () => {
+    mockUseAnalytics.mockReturnValue({ data: undefined, isLoading: true, isError: false } as any)
+    mockUseDailyAnalytics.mockReturnValue({ data: undefined, isLoading: true, isError: false } as any)
+
+    render(<ModelAnalytics />)
+
+    expect(screen.getByRole('region', { name: 'Loading model analytics' })).toHaveAttribute('aria-busy', 'true')
+    expect(screen.getByRole('region', { name: 'Loading model analytics' }).querySelectorAll('.h-72')).toHaveLength(2)
+  })
+
   it('renders music filters and keeps currency breakdowns separate', () => {
     render(<ModelAnalytics />)
 

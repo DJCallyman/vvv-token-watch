@@ -2,22 +2,43 @@
 
 import { usePrices } from '@/lib/hooks'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 import { formatCurrency, formatNumber } from '@/lib/utils'
 import { Coins, Info, TrendingUp } from 'lucide-react'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 
 export function PriceCards() {
   const { data: prices, isLoading, isError } = usePrices()
+  const { currency } = useDisplayPreferences()
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {[1, 2, 3].map((i) => (
-          <Card key={i}>
-            <CardContent className="flex items-center justify-center h-32">
-              <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div aria-live="polite" aria-busy="true" className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <span className="sr-only">Loading prices</span>
+        {[0, 1].map((card) => (
+          <Card key={card}>
+            <CardHeader className="pb-2">
+              <Skeleton aria-hidden="true" className="h-5 w-28" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Skeleton aria-hidden="true" className="h-8 w-32" />
+              <Skeleton aria-hidden="true" className="h-4 w-20" />
+              <Skeleton aria-hidden="true" className="h-3 w-24" />
             </CardContent>
           </Card>
         ))}
+        <Card>
+          <CardHeader className="pb-2">
+            <Skeleton aria-hidden="true" className="h-4 w-36" />
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Skeleton aria-hidden="true" className="h-9 w-36" />
+            <Skeleton aria-hidden="true" className="h-2 w-full" />
+            {[0, 1, 2].map((row) => (
+              <Skeleton key={row} aria-hidden="true" className="h-4 w-full" />
+            ))}
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -33,6 +54,10 @@ export function PriceCards() {
   }
 
   const portfolio = prices.portfolio
+  const vvvCurrency = currency === 'AUD' && prices.vvv?.aud != null ? 'AUD' : 'USD'
+  const diemCurrency = currency === 'AUD' && prices.diem?.aud != null ? 'AUD' : 'USD'
+  const vvvPrice = vvvCurrency === 'AUD' ? prices.vvv?.aud : prices.vvv?.usd
+  const diemPrice = diemCurrency === 'AUD' ? prices.diem?.aud : prices.diem?.usd
   const grossExposureUsd = portfolio?.gross_exposure_usd ?? portfolio?.total_usd ?? 0
   const netWorthUsd = portfolio?.net_worth_usd ?? portfolio?.total_usd ?? 0
   const diemUnlockOffsetUsd = portfolio?.diem_unlock_offset_usd ?? 0
@@ -65,7 +90,7 @@ export function PriceCards() {
         </CardHeader>
         <CardContent>
           <p className="text-2xl font-bold text-foreground">
-            {formatCurrency(prices.vvv?.usd || 0)}
+            {formatCurrency(vvvPrice || 0, vvvCurrency)}
           </p>
           {typeof prices.vvv?.change_24h === 'number' && (
             <p
@@ -98,7 +123,7 @@ export function PriceCards() {
         </CardHeader>
         <CardContent>
           <p className="text-2xl font-bold text-foreground">
-            {formatCurrency(prices.diem?.usd || 0)}
+            {formatCurrency(diemPrice || 0, diemCurrency)}
           </p>
           {typeof prices.diem?.change_24h === 'number' && (
             <p

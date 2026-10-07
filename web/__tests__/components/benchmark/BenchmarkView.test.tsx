@@ -1,11 +1,12 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { BenchmarkView } from '@/components/benchmark/BenchmarkView'
 import { api } from '@/lib/api'
+import { useBenchmarkRuns, useBenchmarkRun } from '@/lib/hooks'
 import { toast } from 'sonner'
 
 jest.mock('@/lib/hooks', () => ({
-  useBenchmarkRuns: () => ({ data: { runs: [] }, isLoading: false, refetch: jest.fn().mockResolvedValue({ isError: false }) }),
-  useBenchmarkRun: () => ({ data: undefined, isLoading: false }),
+  useBenchmarkRuns: jest.fn(),
+  useBenchmarkRun: jest.fn(),
 }))
 jest.mock('@/lib/api', () => ({ api: { startBenchmark: jest.fn() } }))
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn(), info: jest.fn() } }))
@@ -32,7 +33,27 @@ jest.mock('@/components/benchmark/BenchmarkProgress', () => ({
   ),
 }))
 
-beforeEach(() => jest.clearAllMocks())
+beforeEach(() => {
+  jest.clearAllMocks()
+  jest.mocked(useBenchmarkRuns).mockReturnValue({
+    data: { runs: [] },
+    isLoading: false,
+    refetch: jest.fn().mockResolvedValue({ isError: false }),
+  } as never)
+  jest.mocked(useBenchmarkRun).mockReturnValue({ data: undefined, isLoading: false } as never)
+})
+
+it('renders a results-shaped loading state while a benchmark run loads', async () => {
+  jest.mocked(useBenchmarkRuns).mockReturnValue({
+    data: { runs: [{ run_id: 'run-1' }] },
+    isLoading: false,
+    refetch: jest.fn().mockResolvedValue({ isError: false }),
+  } as never)
+  jest.mocked(useBenchmarkRun).mockReturnValue({ data: undefined, isLoading: true } as never)
+  render(<BenchmarkView />)
+
+  expect(await screen.findByRole('region', { name: 'Loading benchmark results' })).toHaveAttribute('aria-busy', 'true')
+})
 
 async function startRun() {
   jest.mocked(api.startBenchmark).mockResolvedValue({ job_id: 'job-1' } as never)

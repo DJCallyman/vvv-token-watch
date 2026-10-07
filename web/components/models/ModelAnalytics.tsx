@@ -18,7 +18,7 @@ import {
   Line,
   Legend,
 } from 'recharts'
-import { Activity, DollarSign, Clock, Zap, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react'
+import { Activity, DollarSign, Clock, Zap, TrendingUp, AlertCircle } from 'lucide-react'
 import { cn, formatCurrency, formatNumber as formatFixedNumber, getPriorityStyles } from '@/lib/utils'
 
 const CHART_COLORS = [
@@ -59,20 +59,61 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
 
   if (analyticsLoading || dailyLoading) {
     return (
-      <div className={cn("space-y-6", className)}>
+      <div role="region" aria-label="Loading model analytics" aria-busy="true" className={cn("space-y-6", className)}>
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold">Model Analytics</h2>
-          <div className="animate-pulse h-8 w-32 bg-muted rounded" />
+          <div className="h-6 w-40 animate-pulse rounded bg-muted" />
+          <div className="flex gap-2">
+            <div className="h-9 w-28 animate-pulse rounded bg-muted" />
+            <div className="h-9 w-32 animate-pulse rounded bg-muted" />
+          </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardContent className="py-6">
-                <div className="animate-pulse h-16 bg-muted rounded" />
+          {['requests', 'tokens', 'cost', 'models'].map((item) => (
+            <Card key={item} className="animate-pulse">
+              <CardContent className="space-y-3 py-4">
+                <div className="h-4 w-2/3 rounded bg-muted" />
+                <div className="h-8 w-1/2 rounded bg-muted" />
+                <div className="h-3 w-1/3 rounded bg-muted" />
               </CardContent>
             </Card>
           ))}
         </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {['usage-by-model', 'cost-distribution'].map((item) => (
+            <Card key={item} className="animate-pulse">
+              <CardHeader className="pb-2">
+                <div className="h-5 w-40 rounded bg-muted" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-72 rounded bg-muted/50" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card className="animate-pulse">
+          <CardHeader className="pb-2">
+            <div className="h-5 w-36 rounded bg-muted" />
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 rounded bg-muted/50" />
+          </CardContent>
+        </Card>
+        <Card className="animate-pulse">
+          <CardHeader className="pb-2">
+            <div className="h-5 w-40 rounded bg-muted" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {['one', 'two', 'three', 'four', 'five'].map((row) => (
+                <div key={row} className="grid grid-cols-4 gap-4 border-b border-border/50 py-3 last:border-0">
+                  {['model', 'tokens', 'cost', 'latency'].map((column) => (
+                    <div key={column} className="h-4 rounded bg-muted" />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -91,7 +132,7 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
     )
   }
 
-  const { model_usage, total_requests, total_tokens, total_cost, recommendations, source } = analytics
+  const { model_usage, recommendations, source } = analytics
   const isBillingAnalytics = source === 'billing/usage-analytics'
 
   // BUG-08: when using the lighter analytics endpoint, requests and latency are not provided
@@ -145,7 +186,11 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
   const dailyHasTokens = dailyData?.daily_usage.some((day) => day.tokens != null) ?? false
 
   const dailyChartData = dailyData?.daily_usage.map((d) => ({
-    date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    date: new Date(d.date).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      timeZone: 'UTC',
+    }),
     tokens: d.tokens == null ? undefined : d.tokens / 1000,
     cost: dailyChartCurrency === 'USD' ? d.cost_usd ?? 0 : d.cost_diem ?? 0,
   })) || []
@@ -293,8 +338,8 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                     cy="50%"
                     outerRadius={110}
                   >
-                    {costBreakdown.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    {costBreakdown.map((entry) => (
+                      <Cell key={entry.fullName} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -437,8 +482,8 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
                 </tr>
               </thead>
               <tbody>
-                {modelData.map((model, i) => (
-                  <tr key={i} className="border-b border-border/50 hover:bg-muted/30">
+                {modelData.map((model) => (
+                  <tr key={model.fullName} className="border-b border-border/50 hover:bg-muted/30">
                     <td className="py-2 px-3 font-medium" title={model.fullName}>
                       {model.name}
                     </td>
@@ -502,11 +547,11 @@ export function ModelAnalytics({ className }: ModelAnalyticsProps) {
           </CardHeader>
           <CardContent>
             <div className="space-y-2">
-              {recommendations.map((rec, i) => {
+              {recommendations.map((rec) => {
                 const Icon = TYPE_ICONS[rec.type as keyof typeof TYPE_ICONS] || AlertCircle
                 return (
                   <div
-                    key={i}
+                    key={`${rec.type}-${rec.message}`}
                     className={cn(
                       "flex items-start gap-3 p-3 rounded-lg border",
                       getPriorityStyles(rec.priority as 'high' | 'medium' | 'low')

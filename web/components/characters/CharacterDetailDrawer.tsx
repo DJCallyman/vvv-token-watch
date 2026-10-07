@@ -5,6 +5,8 @@ import type { Character } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui'
 import { cn } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 
 export interface CharacterDetailDrawerProps {
   character: Character | null
@@ -12,6 +14,7 @@ export interface CharacterDetailDrawerProps {
 }
 
 export function CharacterDetailDrawer({ character, onClose }: CharacterDetailDrawerProps) {
+  const { timezone } = useDisplayPreferences()
   if (!character) return null
 
   const {
@@ -115,11 +118,11 @@ export function CharacterDetailDrawer({ character, onClose }: CharacterDetailDra
           <section className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
             <div>
               <span className="font-medium text-foreground">Created:</span>{' '}
-              {new Date(createdAt).toLocaleDateString()}
+              {formatDate(createdAt, timezone)}
             </div>
             <div>
               <span className="font-medium text-foreground">Updated:</span>{' '}
-              {new Date(updatedAt).toLocaleDateString()}
+              {formatDate(updatedAt, timezone)}
             </div>
           </section>
 

@@ -1,17 +1,16 @@
 'use client'
 
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { Model } from '@/lib/hooks'
+import type { Model } from '@/lib/hooks'
 import {
-  ColumnDefinition,
   getColumnsForType,
   loadColumnPreferences,
-  saveColumnPreferences,
-  SortConfig,
-  ModelType,
+  type SortConfig,
+  type ModelType,
 } from './columnConfig'
 import { ChevronUp, ChevronDown, Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 
 interface ModelsComparisonTableProps {
   models: Model[]
@@ -60,7 +59,11 @@ function hasCapability(capabilities: Record<string, unknown>, columnKey: string)
   return aliases.some((key) => Boolean(capabilities[key]))
 }
 
-function getCellValue(model: Model, columnKey: string): { display: string; sortValue: unknown } {
+function getCellValue(
+  model: Model,
+  columnKey: string,
+  timezone = 'local',
+): { display: string; sortValue: unknown } {
   const modelSpec = model.model_spec || model.spec || {}
   const flatModel = model as unknown as Record<string, unknown>
   // Support both full Venice model_spec and flat CachedModel list payloads
@@ -90,7 +93,6 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
     modelSpec.context_length ||
     (flatModel.context_window as number | undefined) ||
     (flatModel.context_length as number | undefined)
-  const getMaxTokens = () => modelSpec.maxCompletionTokens || model.spec?.max_output_tokens
   const getPrivacy = () => modelSpec.privacy || model.spec?.privacy || flatModel.privacy
 
   switch (columnKey) {
@@ -143,7 +145,10 @@ function getCellValue(model: Model, columnKey: string): { display: string; sortV
     case 'date_added':
       if (model.created) {
         const date = new Date(model.created * 1000)
-        display = date.toLocaleDateString()
+        display = date.toLocaleDateString(
+          undefined,
+          timezone === 'local' ? {} : { timeZone: timezone },
+        )
         sortValue = model.created
       }
       break
@@ -483,6 +488,7 @@ export function ModelsComparisonTable({
   onOpenColumnSelector,
   hiddenColumnsOverride,
 }: ModelsComparisonTableProps) {
+  const { timezone } = useDisplayPreferences()
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'model', direction: 'asc' })
   const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => 
     loadColumnPreferences(modelType)
@@ -509,8 +515,8 @@ export function ModelsComparisonTable({
   const sortedModels = useMemo(() => {
     const sorted = [...models]
     sorted.sort((a, b) => {
-      const aVal = getCellValue(a, sortConfig.key).sortValue
-      const bVal = getCellValue(b, sortConfig.key).sortValue
+      const aVal = getCellValue(a, sortConfig.key, timezone).sortValue
+      const bVal = getCellValue(b, sortConfig.key, timezone).sortValue
 
       let comparison = 0
       if (typeof aVal === 'number' && typeof bVal === 'number') {
@@ -528,7 +534,7 @@ export function ModelsComparisonTable({
       return sortConfig.direction === 'asc' ? comparison : -comparison
     })
     return sorted
-  }, [models, sortConfig])
+  }, [models, sortConfig, timezone])
 
   const handleSort = useCallback((key: string) => {
     setSortConfig(prev => ({
@@ -537,25 +543,11 @@ export function ModelsComparisonTable({
     }))
   }, [])
 
-  const toggleColumn = useCallback((key: string) => {
-    setHiddenColumns(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) {
-        next.delete(key)
-      } else {
-        next.add(key)
-      }
-      saveColumnPreferences(modelType, next)
-      return next
-    })
-  }, [modelType])
-
-  const isColumnHidden = useCallback((key: string) => hiddenColumns.has(key), [hiddenColumns])
-
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <div className="flex items-center justify-end p-2 bg-muted/50 border-b border-border">
         <button
+          type="button"
           onClick={onOpenColumnSelector}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md hover:bg-muted transition-colors"
         >
@@ -614,7 +606,7 @@ export function ModelsComparisonTable({
               className="border-b border-border hover:bg-muted/30 transition-colors"
             >
               {visibleColumns.map((column) => {
-                const { display, sortValue } = getCellValue(model, column.key)
+                const { display, sortValue } = getCellValue(model, column.key, timezone)
                 const isBoolean = typeof sortValue === 'number' && (sortValue === 0 || sortValue === 1) &&
                   ['vision', 'functions', 'web_search', 'reasoning', 'logprobs', 'response_schema',
                    'optimized_for_code', 'audio_input', 'video_input', 'audio', 'audio_configurable',

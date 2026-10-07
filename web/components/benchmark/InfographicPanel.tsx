@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { api } from '@/lib/api'
+import { toast } from 'sonner'
 
 interface Props {
   runId: string
@@ -19,8 +20,11 @@ export function InfographicPanel({ runId }: Props) {
     try {
       const result = await api.generateInfographic(runId)
       setImageB64(result.image_b64)
+      toast.success('Infographic generated')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to generate infographic')
+      const message = e instanceof Error ? e.message : 'Failed to generate infographic'
+      setError(message)
+      toast.error(message)
     } finally {
       setIsLoading(false)
     }

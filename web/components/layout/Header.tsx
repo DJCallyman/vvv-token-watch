@@ -2,7 +2,7 @@
 
 import { useAlertStream, useBalance, useUnacknowledgedAlertEvents } from '@/lib/hooks'
 import { formatCurrency, formatNumber } from '@/lib/utils'
-import { Activity, Bell, LogOut, Menu, Moon, RefreshCw, Sun } from 'lucide-react'
+import { Activity, Bell, LogOut, Menu, Moon, RefreshCw, Search, Sun } from 'lucide-react'
 import { useSidebarDrawer } from './SidebarDrawerContext'
 import { Badge } from '@/components/ui/badge'
 import { useTheme } from '@/components/ThemeProvider'
@@ -10,39 +10,53 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import Link from 'next/link'
 import { SettingsDialog } from '@/components/settings/SettingsDialog'
+import { toast } from 'sonner'
+import { useDisplayPreferences } from '@/components/PreferencesProvider'
 
 export function Header() {
   const { data: balance, isLoading, isError, dataUpdatedAt } = useBalance()
   const { data: alertEvents } = useUnacknowledgedAlertEvents()
   useAlertStream()
   const { theme, toggleTheme } = useTheme()
+  const { timezone } = useDisplayPreferences()
   const queryClient = useQueryClient()
   const [refreshing, setRefreshing] = useState(false)
   const { toggle } = useSidebarDrawer()
 
   const unacked = alertEvents?.count ?? 0
   const lastUpdated = dataUpdatedAt
-    ? new Date(dataUpdatedAt).toLocaleTimeString()
+    ? new Date(dataUpdatedAt).toLocaleTimeString(
+        undefined,
+        timezone === 'local' ? {} : { timeZone: timezone },
+      )
     : null
 
   const onRefresh = async () => {
     setRefreshing(true)
     try {
-      await queryClient.invalidateQueries()
+      await queryClient.invalidateQueries({}, { throwOnError: true })
+      toast.success('Data refreshed')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to refresh data')
     } finally {
       setRefreshing(false)
     }
   }
 
   const onLogout = async () => {
-    await fetch('/api/auth/logout', { method: 'POST' })
-    window.location.href = '/login'
+    try {
+      const response = await fetch('/api/auth/logout', { method: 'POST' })
+      if (!response.ok) throw new Error('Could not sign out')
+      window.location.href = '/login'
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to sign out')
+    }
   }
 
   return (
     <header className="h-16 border-b border-border bg-card px-4 sm:px-6 flex items-center justify-between gap-4">
       <div className="flex items-center gap-3">
-        <button type="button" onClick={toggle} className="md:hidden rounded-md p-2 text-muted-foreground hover:bg-accent" aria-label="Open navigation">
+        <button type="button" onClick={toggle} className="md:hidden rounded-md p-2 text-muted-foreground hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label="Open navigation">
           <Menu className="w-5 h-5" />
         </button>
         <Badge
@@ -62,6 +76,14 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-4 sm:gap-6">
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new Event('vvv:open-command-palette'))}
+          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Open command palette"
+        >
+          <Search className="w-4 h-4" />
+        </button>
         {balance && (
           <>
             <div className="text-right hidden md:block">
@@ -81,7 +103,7 @@ export function Header() {
 
         <Link
           href="/alerts"
-          className="relative rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="relative rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={unacked > 0 ? `${unacked} unacknowledged alerts` : 'Alerts'}
         >
           <Bell className="w-4 h-4" />
@@ -95,7 +117,7 @@ export function Header() {
         <button
           type="button"
           onClick={toggleTheme}
-          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         >
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
@@ -107,7 +129,7 @@ export function Header() {
           type="button"
           onClick={onRefresh}
           disabled={refreshing || isLoading}
-          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           aria-label="Refresh all data"
         >
           <RefreshCw className={`w-4 h-4 ${refreshing || isLoading ? 'animate-spin' : ''}`} />
@@ -116,7 +138,7 @@ export function Header() {
         <button
           type="button"
           onClick={onLogout}
-          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          className="rounded-md p-2 text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           aria-label="Sign out"
         >
           <LogOut className="w-4 h-4" />
